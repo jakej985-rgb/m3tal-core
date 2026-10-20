@@ -1,0 +1,24 @@
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Sat, 16 May 2026 03:24:09 +0000
+Description: M3TAL Core Repository
+Label: M3TAL
+Origin: M3TAL
+Suite: stable
+MD5Sum:
+ 717f7d0c6d04a19fdda04dc36017d815              169 Release
+ d41d8cd98f00b204e9800998ecf8427e                0 main/binary-amd64/Packages
+ 18f62064df87557bf1428004e504d07b               29 main/binary-amd64/Packages.gz
+SHA1:
+ 0f81e91e12a7978d4813e76ee306f8c9ee3f43c9              169 Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709                0 main/binary-amd64/Packages
+ 2ff7fd9a606658d8d087fcd04d9f2801881e2a7c               29 main/binary-amd64/Packages.gz
+SHA256:
+ e5615fa106d1fb778615f70fc35bb1d82727219379380fbe859cd1a8f74293e2              169 Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                0 main/binary-amd64/Packages
+ acff6989ef99fdf96006084e96ab9ec9011b9eb96b6771688a74d035f0bfbbca               29 main/binary-amd64/Packages.gz
+SHA512:
+ b08a107123de30c7efa9794b548c65adce118f213686ea18eaad9a13981d2ccffbd42056aea1cc83e78a7a0dfe95ad5b18656766b2fa91a4606cc35f44b907cf              169 Release
+ cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e                0 main/binary-amd64/Packages
+ 1790be5cd07562dbee43fb089d55521acf7b4e5b7e858bae3cce861ed9382d223f9e8f0b5ac2044f11971b93c7fcbdd1f189407e393336c5f6ea465cb784d8f3               29 main/binary-amd64/Packages.gz

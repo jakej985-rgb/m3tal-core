@@ -1,0 +1,21 @@
+apiVersion: m3tal/v1
+kind: Traefik
+metadata:
+  name: traefik-gateway
+  description: Unified Traefik configuration with default routing and basic authentication preset
+  version: 1.0.0
+  author: M3TAL Team
+spec:
+  routes:
+    - name: example-traefik-route
+      service: example-service
+      domain: example-traefik.local
+      port: 8082
+      entrypoints: web
+      middlewares:
+        - example-traefik-auth
+  middlewares:
+    - name: example-traefik-auth
+      type: basicauth
+      config:
+        users: "admin:$apr1$4n9dfa9d$Gj948dnf948nfa9dnf94n."

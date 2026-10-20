@@ -1,0 +1,20 @@
+[Unit]
+Description=M3TAL Orchestrator CLI
+Documentation=https://github.com/jakej985-rgb/m3tal-core
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/m3tal daemon
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-/etc/m3tal/.env
+StateDirectory=m3tal
+RuntimeDirectory=m3tal
+LogsDirectory=m3tal
+
+[Install]
+WantedBy=multi-user.target

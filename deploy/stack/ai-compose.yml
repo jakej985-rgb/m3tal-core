@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: m3tal-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    env_file:
+      - ../plugins/ai/ai.env
+    entrypoint: >
+      sh -c "
+      /bin/ollama serve &
+      sleep 5;
+      if [ -n \"$${AI_MODEL}\" ]; then
+        echo \"Pulling model $${AI_MODEL}...\"
+        /bin/ollama pull $${AI_MODEL} || true
+      fi;
+      if [ \"$${AI_WARMUP}\" = \"true\" ] && [ -n \"$${AI_MODEL}\" ]; then
+        echo \"Warming up model $${AI_MODEL}...\"
+        curl -s -X POST http://localhost:11434/api/generate -d \"{\\\"model\\\":\\\"$${AI_MODEL}\\\",\\\"prompt\\\":\\\"warmup\\\",\\\"stream\\\":false}\" || true
+      fi;
+      tail -f /dev/null
+      "
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+    name: m3tal_ollama_data

@@ -1,0 +1,17 @@
+apiVersion: m3tal/v1
+kind: Service
+metadata:
+  name: radarr
+  description: "Radarr movie downloader and manager"
+  version: "1.0.0"
+  author: "M3TAL Team"
+  requires:
+    - identity-provider
+  depends_on:
+    - traefik-gateway
+spec:
+  image: linuxserver/radarr:latest
+  ports:
+    - "7878:7878"
+  volumes:
+    - "/opt/radarr/config:/config"

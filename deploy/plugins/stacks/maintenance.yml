@@ -1,0 +1,10 @@
+apiVersion: m3tal/v1
+kind: Stack
+metadata:
+  name: maintenance
+  description: "System maintenance and monitoring tools"
+  version: "1.0.0"
+spec:
+  composePath: maintenance-compose.yml
+  priority: 4
+  category: ops

@@ -1,0 +1,17 @@
+apiVersion: m3tal/v1
+kind: Service
+metadata:
+  name: authelia
+  description: "Authelia Single Sign-On and Identity Provider"
+  version: "1.0.0"
+  author: "M3TAL Team"
+  provides:
+    - identity-provider
+  depends_on:
+    - traefik-gateway
+spec:
+  image: authelia/authelia:latest
+  ports:
+    - "9091:9091"
+  volumes:
+    - "/opt/authelia/config:/config"

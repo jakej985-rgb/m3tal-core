@@ -1,0 +1,11 @@
+apiVersion: m3tal/v1
+kind: Middleware
+metadata:
+  name: basicauth-default
+  description: "Default basic authentication middleware preset for Traefik"
+  version: "1.0.0"
+spec:
+  name: m3tal-auth
+  type: basicauth
+  config:
+    usersFile: /etc/traefik/users

@@ -1,0 +1,15 @@
+apiVersion: m3tal/v1
+kind: Traefik
+metadata:
+  name: traefik-gateway
+  description: "Traefik reverse proxy core ingress gateway"
+  version: "1.0.0"
+  author: "M3TAL Team"
+  provides:
+    - ingress-gateway
+spec:
+  routes:
+    - name: dashboard
+      service: traefik
+      domain: traefik.local
+      port: 8080

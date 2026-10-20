@@ -1,0 +1,12 @@
+apiVersion: m3tal/v1
+kind: Middleware
+metadata:
+  name: ratelimit-default
+  description: "Default rate limiting preset — 100 req/s average, 200 burst"
+  version: "1.0.0"
+spec:
+  name: m3tal-ratelimit
+  type: ratelimit
+  config:
+    average: "100"
+    burst: "200"

@@ -1,0 +1,156 @@
+name: Build and Publish DEB
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy-deb:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ""
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+
+      - name: Ensure Unique Version
+        id: check_version
+        run: |
+          git fetch --tags
+          VERSION=$(cat VERSION)
+          
+          if git tag -l | grep -q "^${VERSION}$"; then
+            echo "⚠️ Tag $VERSION already exists! Auto-bumping patch version..."
+            BASE=$(echo "$VERSION" | cut -d. -f1,2)
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="${BASE}.${NEW_PATCH}"
+            
+            echo "✅ Bumping to $NEW_VERSION"
+            echo "$NEW_VERSION" > VERSION
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add VERSION
+            git commit -m "chore: auto-bump version to $NEW_VERSION [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+            
+            VERSION=$NEW_VERSION
+          fi
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils gnupg2
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Set up Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'gui/package-lock.json'
+
+      - name: Build Web GUI
+        run: |
+          cd gui
+          npm ci
+          npm run build
+
+      - name: Build .deb package
+        run: ./scripts/build-deb.sh
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Checkout m3tal-apt-key repo to retain existing packages
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: jakej985-rgb/m3tal-apt-key
+          token: ${{ secrets.GH_PAT }}
+          path: repo
+        continue-on-error: true
+
+      - name: Remove nested .git directory
+        run: rm -rf repo/.git || true
+
+      - name: Update APT Repository
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./scripts/update-repo.sh
+
+      - name: Deploy APT repository to GitHub Pages
+        uses: peaceiris/actions-gh-pages@47f197a2200bb9de68ba5f48fad1c088eb1c4a32 # v4.0.0
+        with:
+          personal_token: ${{ secrets.GH_PAT }}
+          external_repository: jakej985-rgb/m3tal-apt-key
+          publish_dir: ./repo
+          publish_branch: main
+          force_orphan: false
+
+      - name: Checkout m3tal-plugin-page repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: jakej985-rgb/m3tal-plugin-page
+          token: ${{ secrets.GH_PAT }}
+          path: plugin-repo
+        continue-on-error: true
+
+      - name: Remove nested .git directory in plugin-repo
+        run: rm -rf plugin-repo/.git || true
+
+      - name: Generate and Sign Plugin Catalog
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mkdir -p plugin-repo
+          go build -o m3tal ./cli
+          ./m3tal plugin catalog --export plugin-repo/catalog.json
+          
+          # Sign the catalog
+          GPG_OPTS="-u B95A45C647577DEBCC877C49AF6190B0C01346DD"
+          if [ -n "$GPG_PASSPHRASE" ]; then
+              GPG_OPTS="$GPG_OPTS --batch --yes --pinentry-mode loopback --passphrase $GPG_PASSPHRASE"
+          fi
+          rm -f plugin-repo/catalog.json.sig
+          gpg --batch --no-tty $GPG_OPTS -abs -o plugin-repo/catalog.json.sig plugin-repo/catalog.json
+          touch plugin-repo/.nojekyll
+
+      - name: Deploy Plugins to GitHub Pages
+        uses: peaceiris/actions-gh-pages@47f197a2200bb9de68ba5f48fad1c088eb1c4a32 # v4.0.0
+        with:
+          personal_token: ${{ secrets.GH_PAT }}
+          external_repository: jakej985-rgb/m3tal-plugin-page
+          publish_dir: ./plugin-repo
+          publish_branch: main
+          force_orphan: false
+
+      - name: Create Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          files: "*.deb"
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

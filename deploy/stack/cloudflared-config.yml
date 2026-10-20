@@ -1,0 +1,11 @@
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: dash.${DOMAIN}
+    service: http://traefik:80
+
+  - hostname: api.${DOMAIN}
+    service: http://traefik:80
+
+  - service: http_status:404

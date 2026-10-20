@@ -1,0 +1,10 @@
+apiVersion: m3tal/v1
+kind: Stack
+metadata:
+  name: m3tal
+  description: "M3TAL dashboard and core services"
+  version: "1.0.0"
+spec:
+  composePath: m3tal-compose.yml
+  priority: 3
+  category: core

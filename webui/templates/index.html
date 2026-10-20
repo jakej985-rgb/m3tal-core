@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>M3TAL | Control Plane</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.6">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── TOP BAR ─────────────────────────────── -->
+<header class="topbar">
+    <div class="topbar-left">
+        <div class="server-icon">🖥</div>
+        <div>
+            <div class="server-name">M3TAL Media Server</div>
+            <div class="server-sub">AI-Powered Docker Control Plane</div>
+        </div>
+    </div>
+
+    <nav class="topbar-center">
+        <a href="/"            class="nav-link active">Dashboard</a>
+        <a href="/fleet"       class="nav-link">Fleet</a>
+        <a href="/plugins"     class="nav-link">Plugins</a>
+        <a href="/intelligence"class="nav-link">Intelligence</a>
+        <a href="/logs"        class="nav-link">Logs</a>
+        <a href="/logout"      class="nav-link danger">Logout</a>
+    </nav>
+
+    <div class="topbar-right">
+        <div class="status-online hide-mobile">
+            <div class="status-dot"></div>
+            ONLINE
+        </div>
+        <div class="live-clock hide-mobile" id="live-clock">00:00:00</div>
+        <button id="menu-toggle" class="menu-toggle" onclick="toggleDrawer()">☰</button>
+    </div>
+</header>
+
+<!-- ── MOBILE DRAWER ────────────────────────── -->
+<div id="mobile-drawer" class="mobile-drawer">
+    <div class="drawer-header">
+        <div class="server-name">M3TAL NAVIGATION</div>
+        <button class="drawer-close" onclick="toggleDrawer()">×</button>
+    </div>
+    <nav class="drawer-links">
+        <a href="/"            class="drawer-link active">Dashboard</a>
+        <a href="/fleet"       class="drawer-link">Fleet</a>
+        <a href="/plugins"     class="drawer-link">Plugins</a>
+        <a href="/intelligence"class="drawer-link">Intelligence</a>
+        <a href="/logs"        class="drawer-link">Logs</a>
+        <div class="drawer-divider"></div>
+        <a href="/logout"      class="drawer-link danger">Logout</a>
+    </nav>
+</div>
+
+<!-- ── PAGE ────────────────────────────────── -->
+<main class="page">
+
+    <!-- ── QUICK ACTIONS (Moved to Top) ── -->
+    <div class="action-bar" style="margin-bottom: 1.25rem;">
+        <button class="big-btn heal"   onclick="doGlobalAction('heal')">  🔄 Heal All</button>
+        <button class="big-btn scan"   onclick="doGlobalAction('scan')">  🧠 AI Scan</button>
+        <button class="big-btn status" onclick="doGlobalAction('status')">📊 Status</button>
+        <button class="big-btn reboot" onclick="doGlobalAction('reboot')">⏻ Reboot</button>
+    </div>
+
+    <!-- ── 1. SYSTEM OVERVIEW ── -->
+    <div class="panel collapsible-stats collapsed">
+        <div class="panel-head collapsible" onclick="togglePanel(this)">
+            <div class="panel-title">
+                <span class="panel-title-dot"></span>
+                System Overview
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="stats-row">
+                <!-- Row 1: Workloads -->
+                <div class="stat-card wide">
+                    <div class="stat-icon teal">📦</div>
+                    <div class="stat-info centered">
+                        <div class="stat-label">System Fleet</div>
+                        <div class="stat-split-grid">
+                            <div class="split-col">
+                                <div class="split-label">Containers</div>
+                                <div class="split-val" id="stat-fleet-count">0 / 0 UP</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Server Uptime</div>
+                                <div class="split-val" id="stat-fleet-uptime">0d 0h</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card wide" id="stat-ai-stability-card">
+                    <div class="stat-icon purple">🧠</div>
+                    <div class="stat-info centered">
+                        <div class="stat-label">AI Stability</div>
+                        <div class="stat-split-grid">
+                            <div class="split-col">
+                                <div class="split-label">Health</div>
+                                <div class="split-val" id="stat-ai-health-val">100%</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Agents</div>
+                                <div class="split-val">
+                                    <span id="system-verdict" class="badge running" style="font-size: 0.7rem; padding: 2px 8px;">ACTIVE</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card wide" id="stat-network-card">
+                    <div class="stat-icon blue">🌐</div>
+                    <div class="stat-info centered">
+                        <div class="stat-label">Network Card</div>
+                        <div class="stat-split-grid">
+                            <div class="split-col">
+                                <div class="split-label">Down</div>
+                                <div class="split-val" id="stat-net-down-val">--</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Up</div>
+                                <div class="split-val" id="stat-net-up-val">--</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Load</div>
+                                <div class="split-val" id="stat-net-load-val">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Compute -->
+                <div class="stat-card wide">
+                    <div class="stat-icon green">⚙️</div>
+                    <div class="stat-info centered">
+                        <div class="stat-label">CPU Engine</div>
+                        <div class="stat-split-grid">
+                            <div class="split-col">
+                                <div class="split-label">Usage</div>
+                                <div class="split-val" id="stat-cpu-usage-val">0%</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Temp</div>
+                                <div class="split-val" id="stat-cpu-temp-val-split">0°C</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label" id="stat-cpu-mem-label">RAM</div>
+                                <div class="split-val" id="stat-cpu-mem-val-split">0GB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card wide" id="stat-gpu-card">
+                    <div class="stat-icon" style="background: rgba(249, 115, 22, 0.15); color: #f97316;">🎮</div>
+                    <div class="stat-info centered">
+                        <div class="stat-label">GPU Engine</div>
+                        <div class="stat-split-grid">
+                            <div class="split-col">
+                                <div class="split-label">Usage</div>
+                                <div class="split-val" id="stat-gpu-usage-val">0%</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label">Temp</div>
+                                <div class="split-val" id="stat-gpu-temp-val-split">0°C</div>
+                            </div>
+                            <div class="split-divider"></div>
+                            <div class="split-col">
+                                <div class="split-label" id="stat-gpu-mem-label">VRAM</div>
+                                <div class="split-val" id="stat-gpu-mem-val-split">0MB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Environment -->
+
+
+                <!-- Row 4: Storage (Wide) -->
+                <div class="stat-card wide" id="stat-storage-card">
+                    <div class="stat-icon" style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9;">💽</div>
+                    <div class="stat-info" style="flex: 1;">
+                        <div class="stat-label">Storage Usage</div>
+                        <div class="stat-val-grid" id="stat-storage-grid">
+                            <div class="loading-text" style="font-size: 0.8rem; padding: 0.5rem;">Loading drives…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 5: Lifecycle -->
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 2. CONTAINER STATUS ── -->
+    <div class="panel collapsed">
+        <div class="panel-head collapsible" onclick="togglePanel(this)">
+            <div class="panel-title">
+                <span class="panel-title-dot"></span>
+                Container Status
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="panel-badge" onclick="event.stopPropagation(); rescanStacks(event)">🔍 Rescan Stacks</button>
+                <button class="panel-badge" onclick="event.stopPropagation(); refreshFleet()">↻ Refresh</button>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="table-responsive">
+            <table class="fleet-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th class="right">CPU</th>
+                        <th class="right">MEM</th>
+                        <th class="right">Uptime</th>
+                        <th class="right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fleet-tbody">
+                    <tr>
+                        <td colspan="6" class="loading-text">Loading containers…</td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. LINKS PANEL (NEW) ── -->
+    <div class="panel collapsed">
+        <div class="panel-head collapsible" onclick="togglePanel(this)">
+            <div class="panel-title">
+                <span class="panel-title-dot" style="background: #3b82f6; box-shadow: 0 0 6px #3b82f6;"></span>
+                Network Links
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="links-grid" id="dynamic-links-grid" style="padding: 1.25rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem;">
+                <div class="loading-text">Discovering Traefik routes…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 4. AI ALERTS & ACTIVITY ── -->
+    <div class="panel collapsed">
+        <div class="panel-head collapsible" onclick="togglePanel(this)">
+            <div class="panel-title">
+                <span class="panel-title-dot" style="background: #a855f7; box-shadow: 0 0 6px #a855f7;"></span>
+                AI Alerts &amp; Activity
+            </div>
+        </div>
+        <div class="panel-body">
+            <div style="padding: 0.5rem 1.25rem;">
+                <a href="/intelligence" class="panel-badge" style="display: inline-block; margin-bottom: 0.5rem;">View Full Intelligence Logs</a>
+            </div>
+            <div id="activity-feed" class="activity-list">
+                <div class="loading-text">Scanning…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 5. RESOURCE USAGE ── -->
+    <div class="panel collapsed">
+        <div class="panel-head collapsible" onclick="togglePanel(this)">
+            <div class="panel-title">
+                <span class="panel-title-dot" style="background: #22c55e; box-shadow: 0 0 6px #22c55e;"></span>
+                Resource Usage
+            </div>
+            <div class="time-selectors" style="display: flex; gap: 0.4rem;">
+                <button class="panel-badge active" onclick="event.stopPropagation(); setTimeframe('1h')">1H</button>
+                <button class="panel-badge" onclick="event.stopPropagation(); setTimeframe('6h')">6H</button>
+                <button class="panel-badge" onclick="event.stopPropagation(); setTimeframe('12h')">12H</button>
+                <button class="panel-badge" onclick="event.stopPropagation(); setTimeframe('1d')">1D</button>
+                <button class="panel-badge" onclick="event.stopPropagation(); setTimeframe('7d')">7D</button>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="chart-wrap">
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#22c55e"></div>
+                        CPU
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#a855f7"></div>
+                        MEM
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#3b82f6"></div>
+                        DOWN
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background:#f59e0b"></div>
+                        UP
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="resource-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- ── MOBILE NAV ──────────────────────────── -->
+<nav class="mobile-nav">
+    <div class="mobile-nav-inner">
+        <a href="/" class="mobile-nav-link active">
+            <div class="mobile-nav-icon">📊</div>
+            Dash
+        </a>
+        <a href="/fleet" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📦</div>
+            Fleet
+        </a>
+        <a href="/plugins" class="mobile-nav-link">
+            <div class="mobile-nav-icon">🔌</div>
+            Plugins
+        </a>
+        <a href="/intelligence" class="mobile-nav-link">
+            <div class="mobile-nav-icon">🧠</div>
+            Intel
+        </a>
+        <a href="/logs" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📄</div>
+            Logs
+        </a>
+    </div>
+</nav>
+
+<script src="{{ url_for('static', filename='app.js') }}?v=1.6"></script>
+</body>
+</html>

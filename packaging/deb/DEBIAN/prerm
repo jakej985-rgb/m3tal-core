@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+# Stop services before removal
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop m3tal.service || true
+    systemctl stop m3tal-api.service || true
+fi

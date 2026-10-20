@@ -1,0 +1,23 @@
+# Example Route Plugin
+#
+# Copy this file to /etc/m3tal/plugins/routes/ and customize
+# to add your own service routes.
+#
+# M3TAL will automatically discover and load this plugin.
+
+apiVersion: m3tal/v1
+kind: Route
+metadata:
+  name: example-app
+  description: "Example route plugin — customize for your service"
+  version: "1.0.0"
+  author: "M3TAL Team"
+spec:
+  service: myapp
+  domain: app.example.local
+  port: 8080
+  entrypoints: websecure
+  network: proxy
+  middlewares:
+    - m3tal-auth
+    - m3tal-security-headers

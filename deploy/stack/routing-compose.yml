@@ -1,0 +1,76 @@
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    # No command flags — using /etc/traefik/traefik.yml
+    ports:
+      - "${TRAEFIK_WEB_PORT:-80}:80"
+      - "${TRAEFIK_WEBHTTPS_PORT:-443}:443"
+      - "127.0.0.1:8081:8080" # Traefik Dashboard (Local only)
+    environment:
+      - DOCKER_API_VERSION=1.45
+      - DOMAIN=${DOMAIN}
+      - DOCKER_HOST=tcp://m3tal-docker-proxy:2375
+    env_file:
+      - ./routing.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      - ${BASE_STORAGE_PATH:-/mnt}:/mnt
+    networks:
+      - proxy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 250M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.middlewares=m3tal-auth"
+      - "traefik.http.middlewares.m3tal-auth.basicauth.usersfile=/etc/traefik/dynamic/users"
+      - "m3tal.stack=routing"
+      - "m3tal.role=gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN:-}
+    volumes:
+      - ./cloudflared-config.yml:/etc/cloudflared/config.yml:ro
+      - ${CONFIG_PATH:-/mnt/config}/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
+    networks:
+      - proxy
+    env_file:
+      - ./routing.env
+    labels:
+      - "m3tal.stack=routing"
+      - "m3tal.role=edge"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 150M
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true
+  default:
+    name: none

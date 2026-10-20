@@ -1,0 +1,8 @@
+services:
+  m3tal-dashboard:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`dash.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8082"
+      - "traefik.docker.network=proxy"

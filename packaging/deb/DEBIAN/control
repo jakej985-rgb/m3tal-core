@@ -1,0 +1,10 @@
+Package: m3tal-core
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Jake Johnson
+Depends: docker-ce | docker.io, docker-compose-plugin
+Description: M3TAL Core — Lightweight orchestration platform.
+ Includes CLI (m3tal) and API backend (m3tal-api).
+ GUI dashboard available as separate Docker image.

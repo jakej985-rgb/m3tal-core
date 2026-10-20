@@ -1,0 +1,28 @@
+{
+    "python.defaultInterpreterPath": "/home/m3tal/.venv-m3tal/bin/python",
+    "python.testing.pytestArgs": [
+        "control-plane/tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/scripts/helpers",
+        "${workspaceFolder}/control-plane/agents",
+        "${workspaceFolder}/scripts/test"
+    ],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.terminal.useEnvFile": true,
+    "cursorpyright.analysis.extraPaths": [
+        "${workspaceFolder}/scripts/helpers",
+        "${workspaceFolder}/control-plane/agents",
+        "${workspaceFolder}/scripts/test"
+    ],
+    "github-actions.workflows.pinned.workflows": [
+        "source/go-backend/.github/workflows/docs-agent.yml"
+    ],
+    "go.alternateTools": {
+        "go": "/home/m3tal/sdk/go/bin/go"
+    },
+    "go.toolsManagement.autoUpdate": true,
+    "go.gopath": "/home/m3tal/go"
+}

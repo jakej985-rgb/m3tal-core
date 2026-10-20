@@ -1,0 +1,32 @@
+[
+  {
+    "name": "ollama",
+    "image": "ollama/ollama:latest",
+    "ports": [
+      "11434:11434"
+    ],
+    "stack": "ai"
+  },
+  {
+    "name": "m3tal-dashboard",
+    "image": "ghcr.io/jakej985-rgb/m3tal-godash:debug",
+    "ports": [],
+    "stack": "m3tal"
+  },
+  {
+    "name": "traefik",
+    "image": "traefik:latest",
+    "ports": [
+      "${TRAEFIK_WEB_PORT:-80}:80",
+      "${TRAEFIK_WEBHTTPS_PORT:-443}:443",
+      "127.0.0.1:8081:8080"
+    ],
+    "stack": "routing"
+  },
+  {
+    "name": "cloudflared",
+    "image": "cloudflare/cloudflared:latest",
+    "ports": [],
+    "stack": "routing"
+  }
+]

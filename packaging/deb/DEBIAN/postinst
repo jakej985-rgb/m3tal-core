@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+# Create required directories
+mkdir -p /etc/m3tal
+mkdir -p /var/lib/m3tal/state
+mkdir -p /var/log/m3tal
+mkdir -p /opt/m3tal/stack
+
+# Copy default config if not exists
+if [ ! -f /etc/m3tal/config.yaml ]; then
+    cp /usr/share/m3tal/defaults/config.yaml /etc/m3tal/config.yaml
+fi
+
+# Create default .env if not exists
+if [ ! -f /etc/m3tal/.env ]; then
+    cat > /etc/m3tal/.env <<EOF
+# M3TAL Core Environment
+# Default values
+BASE_STORAGE_PATH=/var/lib/m3tal
+EOF
+fi
+
+# Set permissions
+chmod 644 /etc/m3tal/config.yaml
+chmod 600 /etc/m3tal/.env
+
+# Reload systemd and enable services
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable m3tal.service || true
+    systemctl enable m3tal-api.service || true
+fi
+
+echo "✅ M3TAL Core installed successfully."

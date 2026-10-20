@@ -1,0 +1,33 @@
+name: Publish m3tal API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout m3tal-core
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "m3tal Bot"
+          git config --global user.email "actions@github.com"
+
+      - name: Split API subtree
+        run: |
+          git subtree split --prefix=api -b api-publish
+
+      - name: Push to m3tal-api
+        env:
+          TOKEN: ${{ secrets.API_PUSH_TOKEN }}
+        run: |
+          git remote add api https://x-access-token:${TOKEN}@github.com/jakej985-rgb/m3tal-api.git || true
+          git push api api-publish:main --force

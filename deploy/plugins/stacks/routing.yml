@@ -1,0 +1,10 @@
+apiVersion: m3tal/v1
+kind: Stack
+metadata:
+  name: routing
+  description: "Traefik reverse proxy and SSL termination"
+  version: "1.0.0"
+spec:
+  composePath: routing-compose.yml
+  priority: 2
+  category: infra

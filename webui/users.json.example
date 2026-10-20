@@ -1,0 +1,7 @@
+[
+  {
+    "username": "admin",
+    "token_hash": "$2b$12$replace_with_a_real_bcrypt_hash_before_use",
+    "role": "admin"
+  }
+]

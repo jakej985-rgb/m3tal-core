@@ -1,0 +1,99 @@
+name: m3tal
+arch: amd64
+platform: linux
+version: ${VERSION}
+
+section: utils
+priority: optional
+maintainer: Jake Johnson <jake@m3tal.io>
+description: |
+  M3TAL Core — DEB-first infrastructure orchestration platform.
+  Includes the m3tal CLI and control-plane API.
+  Optimized for Traefik ecosystems and home lab automation.
+license: MIT
+
+# xdotool is optional but recommended for correct panel icon on LXQt/Lubuntu.
+recommends:
+  - xdotool
+
+contents:
+  # Binaries
+  - src: ./m3tal
+    dst: /usr/bin/m3tal
+    type: "file"
+
+  - src: ./m3tal-api
+    dst: /usr/bin/m3tal-api
+    type: "file"
+
+  - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-headless
+    type: "symlink"
+
+  # Stack Templates
+  - src: ./deploy/stack
+    dst: /usr/share/m3tal/stack
+
+  # Web GUI Static Files
+  - src: ./gui/dist
+    dst: /usr/share/m3tal/gui
+
+  # Configuration Templates
+  - src: ./.env.example
+    dst: /etc/m3tal/.env.example
+    type: "config"
+
+  # Systemd Services
+  - src: ./packaging/m3tal-api.service
+    dst: /lib/systemd/system/m3tal-api.service
+    type: "config"
+
+  - src: ./packaging/m3tal.service
+    dst: /lib/systemd/system/m3tal.service
+    type: "config"
+
+  # Branding Icons
+  - src: ./docs/goback_logo.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/m3tal.svg
+    type: "file"
+
+  - src: ./docs/goback_logo.svg
+    dst: /usr/share/pixmaps/m3tal.svg
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_256x256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_128x128.png
+    dst: /usr/share/icons/hicolor/128x128/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_64x64.png
+    dst: /usr/share/icons/hicolor/64x64/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_48x48.png
+    dst: /usr/share/icons/hicolor/48x48/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_32x32.png
+    dst: /usr/share/icons/hicolor/32x32/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_24x24.png
+    dst: /usr/share/icons/hicolor/24x24/apps/m3tal.png
+    type: "file"
+
+  - src: ./cli/m3tal_icon_pack/m3tal_icon_16x16.png
+    dst: /usr/share/icons/hicolor/16x16/apps/m3tal.png
+    type: "file"
+
+  # Desktop Entry
+  - src: ./packaging/m3tal.desktop
+    dst: /usr/share/applications/m3tal.desktop
+    type: "file"
+
+scripts:
+  postinstall: ./scripts/postinstall.sh
+  postremove: ./scripts/postremove.sh

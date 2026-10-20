@@ -1,0 +1,22 @@
+# M3TAL Core Default Configuration
+# Path: /etc/m3tal/config.yaml
+
+# Data and state directories
+data_dir: /var/lib/m3tal
+log_dir: /var/log/m3tal
+state_dir: /var/lib/m3tal/state
+
+# Logging
+log_level: info
+log_format: json
+
+# API Server
+api:
+  host: 0.0.0.0
+  port: 8080
+  tls_enabled: false
+
+# Orchestrator
+orchestrator:
+  compose_dir: /opt/m3tal/stack
+  project_name: m3tal

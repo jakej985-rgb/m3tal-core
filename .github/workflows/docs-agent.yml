@@ -1,0 +1,89 @@
+name: M3tal Self-Documenting System
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: 🧰 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install dependencies
+        run: npm install js-yaml @google/generative-ai fs-extra
+
+      - name: 🔍 [1] Parse System State (Source of Truth)
+        run: |
+          node .github/scripts/parse-docker.js
+          node .github/scripts/parse-env.js
+          node .github/scripts/parse-m3tal.js
+
+      - name: 🧱 [2] Assemble Deterministic README
+        run: |
+          node .github/scripts/build-readme.js
+
+      - name: 🧠 [3] AI Polish (Gemini)
+        env:
+          GOOGLE_AI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
+        run: |
+          node .github/scripts/docsmith.js
+
+      - name: 🧪 [4] AI QA Gate (DocCritic)
+        env:
+          GOOGLE_AI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
+        run: |
+          node .github/scripts/doccritic.js
+
+      - name: 📥 Checkout m3tal-docs repo
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: jakej985-rgb/m3tal-docs
+          token: ${{ secrets.GH_PAT }}
+          path: m3tal-docs
+
+      - name: 📝 Commit Documentation Changes
+        if: github.event_name == 'push'
+        run: |
+          # Create target folder inside m3tal-docs
+          mkdir -p m3tal-docs/projects/m3tal-core
+
+          # Copy files to m3tal-docs
+          cp README.md m3tal-docs/projects/m3tal-core/README.md
+          cp docs/GET_STARTED.md m3tal-docs/projects/m3tal-core/INSTALL.md
+          cp docs/ENVIRONMENT_VARIABLES.md m3tal-docs/projects/m3tal-core/CONFIG.md
+          cp docs/COMMAND_REFERENCE.md m3tal-docs/projects/m3tal-core/API.md
+          if [[ -f FIXES.md ]]; then
+            cp FIXES.md m3tal-docs/projects/m3tal-core/FIXES.md
+          fi
+
+          # Commit and Push to m3tal-docs repo
+          cd m3tal-docs
+          git config user.name "m3tal-docs-bot"
+          git config user.email "actions@github.com"
+          git add projects/m3tal-core/
+
+          if [[ ! -f ../.doc-failed ]]; then
+            git commit -m "docs: auto-update from system state [skip ci]" || true
+          else
+            echo "[!] DocCritic BLOCKERS found. Pushing both README and FIXES per user instructions."
+            git commit -m "docs: update audit report and README (blockers detected) [skip ci]" || true
+          fi
+
+          git pull --rebase
+          git push

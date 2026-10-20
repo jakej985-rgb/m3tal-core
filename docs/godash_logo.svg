@@ -1,0 +1,53 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect width="256" height="256" rx="20" fill="#0B0F14"/>
+
+  <!-- Dashboard frame -->
+  <rect x="48" y="48" width="160" height="160"
+        rx="10"
+        stroke="#3B82F6"
+        stroke-width="3"
+        fill="none"/>
+
+  <!-- Panels -->
+  <rect x="60" y="60" width="60" height="50"
+        stroke="#3B82F6"
+        stroke-width="2"
+        fill="none"/>
+
+  <rect x="136" y="60" width="60" height="50"
+        stroke="#3B82F6"
+        stroke-width="2"
+        fill="none"/>
+
+  <rect x="60" y="126" width="60" height="60"
+        stroke="#3B82F6"
+        stroke-width="2"
+        fill="none"/>
+
+  <!-- Active panel -->
+  <rect x="136" y="126" width="60" height="60"
+        stroke="#22D3EE"
+        stroke-width="3"
+        fill="none"/>
+
+  <!-- Graph -->
+  <polyline points="140,170 150,150 160,160 170,140 185,155 195,135"
+            fill="none"
+            stroke="#22D3EE"
+            stroke-width="2"/>
+
+  <!-- Small UI hints -->
+  <line x1="65" y1="95" x2="110" y2="95"
+        stroke="#3B82F6"
+        stroke-width="2"/>
+
+  <line x1="140" y1="90" x2="185" y2="90"
+        stroke="#3B82F6"
+        stroke-width="2"/>
+
+  <!-- Focus dot -->
+  <circle cx="128" cy="128" r="4" fill="#22D3EE"/>
+
+</svg>

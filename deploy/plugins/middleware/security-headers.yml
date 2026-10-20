@@ -1,0 +1,15 @@
+apiVersion: m3tal/v1
+kind: Middleware
+metadata:
+  name: security-headers
+  description: "Recommended security headers for production deployments"
+  version: "1.0.0"
+spec:
+  name: m3tal-security-headers
+  type: headers
+  config:
+    browserXssFilter: "true"
+    contentTypeNosniff: "true"
+    frameDeny: "true"
+    stsIncludeSubdomains: "true"
+    stsSeconds: "31536000"

@@ -1,0 +1,163 @@
+[
+  {
+    "name": "m3tal (cli)",
+    "type": "CLI binary",
+    "path": "cli"
+  },
+  {
+    "name": "m3tal-api",
+    "type": "API binary",
+    "path": "api/cmd"
+  },
+  {
+    "name": "agents",
+    "type": "Core package",
+    "path": "core/agents"
+  },
+  {
+    "name": "auth",
+    "type": "Core package",
+    "path": "core/auth"
+  },
+  {
+    "name": "compose",
+    "type": "Core package",
+    "path": "core/compose"
+  },
+  {
+    "name": "config",
+    "type": "Core package",
+    "path": "core/config"
+  },
+  {
+    "name": "docker",
+    "type": "Core package",
+    "path": "core/docker"
+  },
+  {
+    "name": "doctor",
+    "type": "Core package",
+    "path": "core/doctor"
+  },
+
+  {
+    "name": "events",
+    "type": "Core package",
+    "path": "core/events"
+  },
+  {
+    "name": "health",
+    "type": "Core package",
+    "path": "core/health"
+  },
+  {
+    "name": "networking",
+    "type": "Core package",
+    "path": "core/networking"
+  },
+  {
+    "name": "orchestrator",
+    "type": "Core package",
+    "path": "core/orchestrator"
+  },
+  {
+    "name": "plugins",
+    "type": "Core package",
+    "path": "core/plugins"
+  },
+  {
+    "name": "preflight",
+    "type": "Core package",
+    "path": "core/preflight"
+  },
+  {
+    "name": "queue",
+    "type": "Core package",
+    "path": "core/queue"
+  },
+  {
+    "name": "registry",
+    "type": "Core package",
+    "path": "core/registry"
+  },
+  {
+    "name": "traefik",
+    "type": "Core package",
+    "path": "core/traefik"
+  },
+  {
+    "name": "stack",
+    "type": "Core package",
+    "path": "core/stack"
+  },
+  {
+    "name": "services",
+    "type": "Core package",
+    "path": "core/services"
+  },
+  {
+    "name": "state",
+    "type": "Core package",
+    "path": "core/state"
+  },
+  {
+    "name": "system",
+    "type": "Core package",
+    "path": "core/system"
+  },
+  {
+    "name": "client",
+    "type": "Shared package",
+    "path": "pkg/client"
+  },
+  {
+    "name": "cmdutil",
+    "type": "Shared package",
+    "path": "pkg/cmdutil"
+  },
+  {
+    "name": "config",
+    "type": "Shared package",
+    "path": "pkg/config"
+  },
+  {
+    "name": "models",
+    "type": "Shared package",
+    "path": "pkg/models"
+  },
+  {
+    "name": "output",
+    "type": "Shared package",
+    "path": "pkg/output"
+  },
+  {
+    "name": "system",
+    "type": "Shared package",
+    "path": "pkg/system"
+  },
+  {
+    "name": "middleware",
+    "type": "API package",
+    "path": "api/middleware"
+  },
+  {
+    "name": "gui",
+    "type": "Desktop UI",
+    "path": "gui"
+  },
+  {
+    "name": "plugins",
+    "type": "Deploy artifact",
+    "path": "deploy/plugins"
+  },
+  {
+    "name": "stack",
+    "type": "Deploy artifact",
+    "path": "deploy/stack"
+  },
+  {
+    "name": "github.com/jakej985-rgb/m3tal-core",
+    "type": "Go module",
+    "path": "go.mod"
+  }
+]

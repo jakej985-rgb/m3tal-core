@@ -1,0 +1,4 @@
+services:
+  m3tal-dashboard:
+    ports:
+      - "${DASHBOARD_PORT:-8082}:8082"

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>M3TAL | System Logs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.5">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="topbar-left">
+        <div class="server-icon">🖥</div>
+        <div>
+            <div class="server-name">M3TAL Media Server</div>
+            <div class="server-sub">AI-Powered Docker Control Plane</div>
+        </div>
+    </div>
+    <nav class="topbar-center">
+        <a href="/"            class="nav-link">Dashboard</a>
+        <a href="/fleet"       class="nav-link">Fleet</a>
+        <a href="/plugins"     class="nav-link">Plugins</a>
+        <a href="/intelligence"class="nav-link">Intelligence</a>
+        <a href="/logs"        class="nav-link active">Logs</a>
+        <a href="/logout"      class="nav-link danger">Logout</a>
+    </nav>
+    <div class="topbar-right">
+        <div class="status-online"><div class="status-dot"></div>ONLINE</div>
+        <div class="live-clock" id="live-clock">00:00:00</div>
+    </div>
+</header>
+
+<main class="page">
+    <div class="page-head">
+        <h1>System <span>Logs</span></h1>
+        <span class="panel-badge">Auto-refresh 10s</span>
+    </div>
+
+    <div class="logs-layout">
+        <div class="sidebar-logs">
+            <!-- PANEL 1: SYSTEM AGENTS -->
+            <div class="panel sidebar-panel">
+                <div class="panel-head collapsible" onclick="toggleSidebarPanel(this)">
+                    <div class="panel-title"><span class="panel-title-dot"></span>System Agents</div>
+                </div>
+                <div class="panel-body">
+                    <div id="log-list" class="log-tab-list"><div class="loading-text">Loading…</div></div>
+                </div>
+            </div>
+
+            <!-- PANEL 2: DOCKER FLEET -->
+            <div class="panel sidebar-panel" style="margin-top: 1rem;">
+                <div class="panel-head collapsible" onclick="toggleSidebarPanel(this)">
+                    <div class="panel-title"><span class="panel-title-dot"></span>Docker Fleet</div>
+                </div>
+                <div class="panel-body">
+                    <div id="container-log-list" class="log-tab-list"><div class="loading-text">Loading…</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel terminal-panel" style="display:flex;flex-direction:column;">
+            <div class="panel-head">
+                <div class="panel-title" id="log-title"><span class="panel-title-dot"></span>Select a log</div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span id="log-type-badge" class="badge unknown">READY</span>
+                    <span class="panel-badge">LIVE</span>
+                </div>
+            </div>
+            <div class="terminal" id="terminal">Waiting for selection...</div>
+        </div>
+    </div>
+</main>
+
+<style>
+.sidebar-logs { display: flex; flex-direction: column; gap: 0.75rem; }
+.sidebar-panel .panel-body { padding: 0.5rem; }
+.log-tab-list { display: flex; flex-direction: column; gap: 2px; }
+.log-tab {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
+}
+.log-tab:hover { background: var(--bg-hover); color: var(--text-1); }
+.log-tab.active {
+    background: var(--teal-dim);
+    color: var(--teal);
+    border-left-color: var(--teal);
+}
+.sidebar-panel.collapsed .panel-body { display: none; }
+.sidebar-panel .panel-head.collapsible::after {
+    content: '▼';
+    font-size: 0.6rem;
+    opacity: 0.5;
+    transition: transform 0.3s;
+}
+.sidebar-panel.collapsed .panel-head.collapsible::after { transform: rotate(-90deg); }
+
+.terminal-panel { flex: 1; min-width: 0; }
+@media (max-width: 900px) {
+    .logs-layout { grid-template-columns: 1fr; }
+}
+</style>
+
+<!-- ── MOBILE NAV ──────────────────────────── -->
+<nav class="mobile-nav">
+    <div class="mobile-nav-inner">
+        <a href="/" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📊</div>
+            Dash
+        </a>
+        <a href="/fleet" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📦</div>
+            Fleet
+        </a>
+        <a href="/plugins" class="mobile-nav-link">
+            <div class="mobile-nav-icon">🔌</div>
+            Plugins
+        </a>
+        <a href="/intelligence" class="mobile-nav-link">
+            <div class="mobile-nav-icon">🧠</div>
+            Intel
+        </a>
+        <a href="/logs" class="mobile-nav-link active">
+            <div class="mobile-nav-icon">📄</div>
+            Logs
+        </a>
+    </div>
+</nav>
+
+<script>
+setInterval(() => {
+    const el = document.getElementById('live-clock');
+    if (!el) return;
+    const n = new Date();
+    el.textContent = [n.getHours(), n.getMinutes(), n.getSeconds()].map(v => String(v).padStart(2,'0')).join(':');
+}, 1000);
+
+let allLogs = {}, currentLog = null, logType = 'file'; // 'file' or 'docker'
+
+function colorize(text) {
+    return (text || '').split('\n').map(line => {
+        if (/\[ERROR\]|FATAL|Exception|crit/i.test(line)) return `<span class="err">${line}</span>`;
+        if (/\[WARN/i.test(line))  return `<span class="warn">${line}</span>`;
+        if (/\[INFO\]|SUCCESS|ready|started/i.test(line)) return `<span class="info">${line}</span>`;
+        return line;
+    }).join('\n');
+}
+
+function toggleSidebarPanel(header) {
+    header.parentElement.classList.toggle('collapsed');
+}
+
+async function selectLog(name, type = 'file') {
+    currentLog = name;
+    logType = type;
+    
+    document.getElementById('log-title').innerHTML = `<span class="panel-title-dot"></span>${name}`;
+    document.getElementById('log-type-badge').textContent = type.toUpperCase();
+    document.getElementById('log-type-badge').className = `badge ${type === 'docker' ? 'running' : 'online'}`;
+    
+    document.querySelectorAll('.log-tab').forEach(t => t.classList.toggle('active', t.dataset.id === name));
+    
+    await refreshTerminal();
+}
+
+async function refreshTerminal() {
+    if (!currentLog) return;
+    const term = document.getElementById('terminal');
+    const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 30;
+
+    if (logType === 'file') {
+        const text = allLogs[currentLog] || "(no logs)";
+        term.innerHTML = colorize(text);
+    } else {
+        try {
+            const res = await fetch('/api/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action: 'logs', target: currentLog })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                term.innerHTML = colorize(data.logs);
+            } else {
+                term.innerHTML = `<span class="err">Error: ${data.error}</span>`;
+            }
+        } catch (e) {
+            term.innerHTML = `<span class="err">Connection Failed: ${e.message}</span>`;
+        }
+    }
+    
+    if (atBottom) term.scrollTop = term.scrollHeight;
+}
+
+async function fetchAll() {
+    try {
+        // Handle direct deep-links from Fleet page (?container=name)
+        if (!window._initialLogCheck) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetContainer = urlParams.get('container');
+            if (targetContainer) {
+                currentLog = targetContainer;
+                logType = 'docker';
+            }
+            window._initialLogCheck = true;
+        }
+
+        // Fetch Agent Logs
+        const logRes = await fetch('/api/logs');
+        allLogs = await logRes.json();
+        const files = Object.keys(allLogs).sort();
+        const logList = document.getElementById('log-list');
+
+        if (files.length === 0) {
+            logList.innerHTML = '<div class="loading-text">No agent logs found.</div>';
+        } else {
+            logList.innerHTML = files.map(f => `
+                <div class="log-tab" data-id="${f}" data-type="file" onclick="selectLog('${f}', 'file')">
+                    ${f.replace('.log','')}
+                </div>
+            `).join('');
+        }
+
+        // Fetch Containers
+        const healthRes = await fetch('/api/health');
+        const hData = await healthRes.json();
+        const containers = hData.containers || [];
+        const containerList = document.getElementById('container-log-list');
+
+        if (containers.length === 0) {
+            containerList.innerHTML = '<div class="loading-text">No containers found.</div>';
+        } else {
+            containerList.innerHTML = containers.map(c => `
+                <div class="log-tab" data-id="${c.name}" data-type="docker" onclick="selectLog('${c.name}', 'docker')">
+                    ${c.name}
+                </div>
+            `).join('');
+        }
+
+        // Sync active state
+        if (currentLog) {
+            document.querySelectorAll('.log-tab').forEach(t => t.classList.toggle('active', t.dataset.id === currentLog));
+            await refreshTerminal();
+        } else if (files.length > 0) {
+            // Default select first agent log if nothing selected
+            const def = files.find(f => f.includes('main')) || files[0];
+            selectLog(def, 'file');
+        }
+
+    } catch(e) { console.error(e); }
+}
+
+fetchAll();
+setInterval(fetchAll, 10000);
+</script>
+</body>
+</html>

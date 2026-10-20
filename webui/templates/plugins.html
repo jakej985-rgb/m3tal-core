@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>M3TAL | Plugin Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.6">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        .plugin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+            padding: 1.25rem 0;
+        }
+        .plugin-card {
+            background: var(--bg-panel, rgba(30, 41, 59, 0.7));
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .plugin-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-color, #3b82f6);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+        }
+        .plugin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+        .plugin-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+        .plugin-kind-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+        }
+        .plugin-kind-badge.route { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .plugin-kind-badge.stack { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        .plugin-kind-badge.middleware { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .plugin-kind-badge.traefik { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .plugin-desc {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 1rem;
+            flex-grow: 1;
+        }
+        .plugin-meta {
+            font-size: 0.8rem;
+            color: #64748b;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .plugin-meta-item {
+            margin-bottom: 0.25rem;
+        }
+        .plugin-meta-item span {
+            color: #cbd5e1;
+        }
+        .plugin-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .plugin-toggle-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background 0.15s ease;
+        }
+        .plugin-toggle-btn.enable {
+            background: #22c55e;
+            color: #ffffff;
+        }
+        .plugin-toggle-btn.enable:hover {
+            background: #16a34a;
+        }
+        .plugin-toggle-btn.disable {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .plugin-toggle-btn.disable:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        .sync-bar {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sync-btn {
+            background: #3b82f6;
+            color: #ffffff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .sync-btn:hover {
+            background: #2563eb;
+        }
+        .tab-bar {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+            padding-bottom: 0.5rem;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .tab-btn:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .tab-btn.active {
+            color: var(--accent-color, #3b82f6);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -9px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--accent-color, #3b82f6);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="topbar-left">
+        <div class="server-icon">🖥</div>
+        <div>
+            <div class="server-name">M3TAL Media Server</div>
+            <div class="server-sub">AI-Powered Docker Control Plane</div>
+        </div>
+    </div>
+    <nav class="topbar-center">
+        <a href="/"            class="nav-link">Dashboard</a>
+        <a href="/fleet"       class="nav-link">Fleet</a>
+        <a href="/plugins"     class="nav-link active">Plugins</a>
+        <a href="/intelligence"class="nav-link">Intelligence</a>
+        <a href="/logs"        class="nav-link">Logs</a>
+        <a href="/logout"      class="nav-link danger">Logout</a>
+    </nav>
+    <div class="topbar-right">
+        <div class="status-online"><div class="status-dot"></div>ONLINE</div>
+        <div class="live-clock" id="live-clock">00:00:00</div>
+    </div>
+</header>
+
+<main class="page">
+    <div class="page-head">
+        <h1>Plugin <span>Manager</span></h1>
+        <span class="badge running" id="plugin-summary-badge">— plugins loaded</span>
+    </div>
+
+    <!-- Sync bar -->
+    <div class="sync-bar">
+        <div>
+            <h3 style="margin:0 0 0.25rem 0;color:#f8fafc;">Compile & Sync Gateway</h3>
+            <p style="margin:0;font-size:0.85rem;color:#94a3b8;">Synthesize all active route and middleware plugin rules into Traefik's dynamic provider configuration.</p>
+        </div>
+        <button class="sync-btn" onclick="syncGateway()">⚡ Sync Gateway</button>
+    </div>
+
+    <!-- Tab navigation -->
+    <div class="tab-bar">
+        <button class="tab-btn active" id="tab-btn-installed" onclick="switchTab('installed')">🔌 Installed Plugins</button>
+        <button class="tab-btn" id="tab-btn-catalog" onclick="switchTab('catalog')">🌐 Plugin Catalog</button>
+    </div>
+
+    <!-- Plugins list container -->
+    <div class="panel">
+        <div class="panel-head">
+            <div class="panel-title"><span class="panel-title-dot"></span><span id="panel-title-text">All Discovered Plugins</span></div>
+        </div>
+        <div style="padding: 1.25rem;">
+            <div id="plugin-list-container" class="plugin-grid">
+                <div class="loading-text">Loading plugins…</div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<nav class="mobile-nav">
+    <div class="mobile-nav-inner">
+        <a href="/" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📊</div>
+            Dash
+        </a>
+        <a href="/fleet" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📦</div>
+            Fleet
+        </a>
+        <a href="/plugins" class="mobile-nav-link active">
+            <div class="mobile-nav-icon">🔌</div>
+            Plugins
+        </a>
+        <a href="/intelligence" class="mobile-nav-link">
+            <div class="mobile-nav-icon">🧠</div>
+            Intel
+        </a>
+        <a href="/logs" class="mobile-nav-link">
+            <div class="mobile-nav-icon">📄</div>
+            Logs
+        </a>
+    </div>
+</nav>
+
+<script>
+// Clock
+setInterval(() => {
+    const el = document.getElementById('live-clock');
+    if (!el) return;
+    const n = new Date();
+    el.textContent = [n.getHours(), n.getMinutes(), n.getSeconds()].map(v => String(v).padStart(2,'0')).join(':');
+}, 1000);
+
+let currentTab = 'installed';
+let installedPluginsList = [];
+let catalogPluginsList = [];
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById(`tab-btn-${tab}`).classList.add('active');
+    renderPlugins();
+}
+
+async function loadPlugins() {
+    try {
+        // 1. Fetch Installed
+        const resInstalled = await fetch('/api/plugins');
+        const dataInstalled = await resInstalled.json();
+        
+        if (dataInstalled.error) {
+            document.getElementById('plugin-list-container').innerHTML = `<div class="loading-text" style="color:var(--red)">Error: ${dataInstalled.error}</div>`;
+            return;
+        }
+
+        document.getElementById('plugin-summary-badge').textContent = dataInstalled.summary || '0 plugins';
+
+        const routes = dataInstalled.routes || [];
+        const stacks = dataInstalled.stacks || [];
+        const middleware = dataInstalled.middleware || [];
+        
+        installedPluginsList = [];
+        routes.forEach(p => installedPluginsList.push({ ...p, kind: 'Route' }));
+        stacks.forEach(p => installedPluginsList.push({ ...p, kind: 'Stack' }));
+        middleware.forEach(p => installedPluginsList.push({ ...p, kind: 'Middleware' }));
+
+        // 2. Fetch Catalog
+        try {
+            const resCatalog = await fetch('/api/plugins/catalog');
+            catalogPluginsList = await resCatalog.json();
+        } catch (e) {
+            console.error("Failed to load plugin catalog", e);
+            catalogPluginsList = [];
+        }
+
+        renderPlugins();
+    } catch (e) {
+        document.getElementById('plugin-list-container').innerHTML = `<div class="loading-text" style="color:var(--red)">Error: ${e.message}</div>`;
+    }
+}
+
+function renderPlugins() {
+    const container = document.getElementById('plugin-list-container');
+    const panelTitle = document.getElementById('panel-title-text');
+    
+    if (currentTab === 'installed') {
+        panelTitle.textContent = "All Discovered Plugins";
+        if (installedPluginsList.length === 0) {
+            container.innerHTML = '<div class="loading-text">No plugins detected. Add plugins or download them from the Catalog.</div>';
+            return;
+        }
+
+        container.innerHTML = installedPluginsList.map(p => {
+            const name = p.Metadata.Name;
+            const kind = p.kind;
+            const kindLower = kind.toLowerCase();
+            const desc = p.Metadata.Description || 'No description provided.';
+            const isEnabled = p.Enabled !== false;
+            const author = p.Metadata.Author || 'System';
+            const version = p.Metadata.Version || '1.0.0';
+            const isUserPlugin = p.SourcePath && (p.SourcePath.includes('/etc/m3tal/plugins') || p.SourcePath.includes('deploy/plugins'));
+
+            let specHtml = '';
+            if (kind === 'Route') {
+                specHtml = `
+                    <div class="plugin-meta-item">Domain: <span>${p.domain}</span></div>
+                    <div class="plugin-meta-item">Forwarding: <span>${p.service}:${p.port}</span></div>
+                `;
+            } else if (kind === 'Stack') {
+                specHtml = `
+                    <div class="plugin-meta-item">Compose: <span>${p.composePath}</span></div>
+                    <div class="plugin-meta-item">Category: <span>${p.category || 'general'}</span></div>
+                `;
+            } else if (kind === 'Middleware') {
+                specHtml = `
+                    <div class="plugin-meta-item">Type: <span>${p.type}</span></div>
+                    <div class="plugin-meta-item">Internal Name: <span>${p.name}</span></div>
+                `;
+            }
+
+            let uninstallBtn = '';
+            if (isUserPlugin) {
+                uninstallBtn = `
+                    <button class="plugin-toggle-btn" style="background:rgba(239, 68, 68, 0.1);color:#f87171;border:1px solid rgba(239, 68, 68, 0.3);margin-left:0.5rem;" onclick="uninstallPlugin('${name}', '${kind}')">
+                        Uninstall
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="plugin-card">
+                    <div>
+                        <div class="plugin-header">
+                            <span class="plugin-name">${name}</span>
+                            <span class="plugin-kind-badge ${kindLower}">${kind}</span>
+                        </div>
+                        <div class="plugin-desc">${desc}</div>
+                    </div>
+                    <div>
+                        <div class="plugin-meta">
+                            <div class="plugin-meta-item">Author: <span>${author}</span></div>
+                            <div class="plugin-meta-item">Version: <span>${version}</span></div>
+                            ${specHtml}
+                        </div>
+                        <div class="plugin-actions">
+                            <span class="badge ${isEnabled ? 'running' : 'offline'}">${isEnabled ? 'ENABLED' : 'DISABLED'}</span>
+                            <div>
+                                <button class="plugin-toggle-btn ${isEnabled ? 'disable' : 'enable'}" onclick="togglePlugin('${name}', '${kind}', ${isEnabled})">
+                                    ${isEnabled ? 'Disable' : 'Enable'}
+                                </button>
+                                ${uninstallBtn}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        panelTitle.textContent = "Official Plugin Catalog";
+        if (catalogPluginsList.length === 0) {
+            container.innerHTML = '<div class="loading-text">No plugins available in the remote catalog. Check your internet connection.</div>';
+            return;
+        }
+
+        container.innerHTML = catalogPluginsList.map(item => {
+            const name = item.name;
+            const kind = item.kind;
+            const kindLower = kind.toLowerCase();
+            const desc = item.description || 'No description provided.';
+            const author = item.author || 'M3TAL Team';
+            const version = item.version || '1.0.0';
+            const isInstalled = item.installed;
+
+            let actionBtn = '';
+            if (isInstalled) {
+                actionBtn = `
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <span class="badge running">INSTALLED</span>
+                        <button class="plugin-toggle-btn" style="background:#475569;color:#ffffff;" onclick="installPlugin('${name}', '${kind}', true)">
+                            Reinstall
+                        </button>
+                    </div>
+                `;
+            } else {
+                actionBtn = `
+                    <button class="plugin-toggle-btn enable" onclick="installPlugin('${name}', '${kind}', false)">
+                        📥 Download & Install
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="plugin-card">
+                    <div>
+                        <div class="plugin-header">
+                            <span class="plugin-name">${name}</span>
+                            <span class="plugin-kind-badge ${kindLower}">${kind}</span>
+                        </div>
+                        <div class="plugin-desc">${desc}</div>
+                    </div>
+                    <div>
+                        <div class="plugin-meta">
+                            <div class="plugin-meta-item">Author: <span>${author}</span></div>
+                            <div class="plugin-meta-item">Version: <span>${version}</span></div>
+                        </div>
+                        <div class="plugin-actions" style="justify-content: flex-end;">
+                            ${actionBtn}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+async function togglePlugin(name, kind, currentlyEnabled) {
+    const action = currentlyEnabled ? 'disable' : 'enable';
+    try {
+        const res = await fetch(`/api/plugins/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, kind })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(`Error: ${data.error}`);
+        } else {
+            loadPlugins();
+        }
+    } catch (e) {
+        alert(`Failed to perform action: ${e.message}`);
+    }
+}
+
+async function installPlugin(name, kind, isReinstall) {
+    if (isReinstall && !confirm(`Are you sure you want to download and overwrite the plugin "${name}"?`)) {
+        return;
+    }
+    
+    const container = document.getElementById('plugin-list-container');
+    const prevContent = container.innerHTML;
+    container.innerHTML = `<div class="loading-text">📥 Downloading and installing "${name}"… Please wait.</div>`;
+    
+    try {
+        const res = await fetch('/api/plugins/install', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, kind })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(`Installation failed: ${data.error}`);
+            container.innerHTML = prevContent;
+        } else {
+            alert(`Plugin "${name}" installed successfully!`);
+            loadPlugins();
+        }
+    } catch (e) {
+        alert(`Request failed: ${e.message}`);
+        container.innerHTML = prevContent;
+    }
+}
+
+async function uninstallPlugin(name, kind) {
+    if (!confirm(`Are you sure you want to uninstall the ${kind} plugin "${name}"? This will delete the manifest from disk.`)) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/plugins/uninstall', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, kind })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(`Uninstallation failed: ${data.error}`);
+        } else {
+            alert(`Plugin "${name}" uninstalled successfully.`);
+            loadPlugins();
+        }
+    } catch (e) {
+        alert(`Request failed: ${e.message}`);
+    }
+}
+
+async function syncGateway() {
+    try {
+        const res = await fetch('/api/plugins/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.error) {
+            alert(`Sync failed: ${data.error}`);
+        } else {
+            alert(`Gateway synchronized successfully! Config saved to ${data.path}`);
+        }
+    } catch (e) {
+        alert(`Sync request failed: ${e.message}`);
+    }
+}
+
+loadPlugins();
+</script>
+</body>
+</html>
