@@ -1,17 +1,28 @@
 #!/bin/bash
 set -e
 
-REPO_DIR="repo"
-KEY_ID="B95A45C647577DEBCC877C49AF6190B0C01346DD"
+REPO_DIR="${REPO_DIR:-repo}"
+KEY_ID="${KEY_ID:-5F84FE50A40111C981410E11775AD1473BF25102}"
 
-echo "🚀 Updating APT Repository..."
+echo "🚀 Updating APT Repository in '$REPO_DIR'..."
 
-# 1. Setup structure
-mkdir -p "$REPO_DIR/pool/main"
+# If m3tal-apt-key ingest script is present in the repo, delegate to it
+if [ -f "$REPO_DIR/scripts/ingest_deb.py" ]; then
+    echo "📦 Using central ingest_deb.py from $REPO_DIR..."
+    for deb in *.deb; do
+        if [ -f "$deb" ]; then
+            python3 "$REPO_DIR/scripts/ingest_deb.py" "$deb" --allow-replace
+        fi
+    done
+    exit 0
+fi
+
+# 1. Setup structured pool and dists structure
+mkdir -p "$REPO_DIR/pool/main/m3tal"
 mkdir -p "$REPO_DIR/dists/stable/main/binary-amd64"
 
 # 2. Copy .deb files to pool
-cp *.deb "$REPO_DIR/pool/main/" || true
+cp *.deb "$REPO_DIR/pool/main/m3tal/" 2>/dev/null || true
 
 # 3. Generate Packages file
 echo "[repo] Generating Packages..."

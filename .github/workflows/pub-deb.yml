@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION: ""
+      TAG: ""
+      CLEAN_VERSION: ""
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -25,29 +27,39 @@ jobs:
         id: check_version
         run: |
           git fetch --tags
-          VERSION=$(cat VERSION)
-          
-          if git tag -l | grep -q "^${VERSION}$"; then
-            echo "⚠️ Tag $VERSION already exists! Auto-bumping patch version..."
-            BASE=$(echo "$VERSION" | cut -d. -f1,2)
-            PATCH=$(echo "$VERSION" | cut -d. -f3)
-            NEW_PATCH=$((PATCH + 1))
-            NEW_VERSION="${BASE}.${NEW_PATCH}"
-            
-            echo "✅ Bumping to $NEW_VERSION"
-            echo "$NEW_VERSION" > VERSION
-            
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add VERSION
-            git commit -m "chore: auto-bump version to $NEW_VERSION [skip ci]"
-            git pull --rebase origin main
-            git push origin HEAD:main
-            
-            VERSION=$NEW_VERSION
+          RAW_VERSION=$(cat VERSION 2>/dev/null || echo "0.1.0")
+          CLEAN_VERSION=$(echo "$RAW_VERSION" | sed 's/^v//')
+          TAG="v${CLEAN_VERSION}"
+
+          # Check if tag already exists on a different commit
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            TAG_COMMIT=$(git rev-parse "$TAG^{commit}" 2>/dev/null || true)
+            HEAD_COMMIT=$(git rev-parse HEAD)
+            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
+              echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping patch version..."
+              BASE=$(echo "$CLEAN_VERSION" | cut -d. -f1,2)
+              PATCH=$(echo "$CLEAN_VERSION" | cut -d. -f3)
+              NEW_PATCH=$((PATCH + 1))
+              CLEAN_VERSION="${BASE}.${NEW_PATCH}"
+              TAG="v${CLEAN_VERSION}"
+
+              echo "✅ Bumping to $TAG"
+              echo "$TAG" > VERSION
+
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add VERSION
+              git commit -m "chore: auto-bump version to $TAG [skip ci]"
+              git pull --rebase origin main
+              git push origin HEAD:main
+            fi
           fi
-          
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          echo "VERSION=$TAG" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
@@ -58,7 +70,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y apt-utils gnupg2
+          sudo apt-get install -y apt-utils gnupg2 dpkg-dev python3-yaml
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
@@ -74,40 +86,90 @@ jobs:
           cd gui
           npm ci
           npm run build
+          cd ..
 
       - name: Build .deb package
         run: ./scripts/build-deb.sh
 
-      - name: Import GPG key
+      - name: Verify Built Deb Asset
+        run: |
+          DEB_FILE="m3tal_${CLEAN_VERSION}_amd64.deb"
+          if [ ! -f "$DEB_FILE" ]; then
+            # Check for any built deb
+            FOUND=$(ls m3tal_*.deb 2>/dev/null | head -n 1)
+            if [ -n "$FOUND" ]; then
+              echo "Package found: $FOUND"
+            else
+              echo "::error ::Debian package build artifact not found!"
+              exit 1
+            fi
+          else
+            echo "Successfully built $DEB_FILE ($(du -h "$DEB_FILE" | cut -f1))"
+          fi
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          files: "*.deb"
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Publish to Central APT Repository (m3tal-apt-key)
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_PAT }}
+          repository: jakej985-rgb/m3tal-apt-key
+          event-type: publish-deb
+          client-payload: >-
+            {
+              "package_id": "m3tal",
+              "repo": "${{ github.repository }}",
+              "version": "${{ env.CLEAN_VERSION }}",
+              "tag": "${{ env.TAG }}",
+              "deb_url": "https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/m3tal_${{ env.CLEAN_VERSION }}_amd64.deb",
+              "allow_replace": true
+            }
+
+      - name: Checkout M3tal-Hub
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: jakej985-rgb/M3tal-Hub
+          token: ${{ secrets.GH_PAT }}
+          path: m3tal-hub
+          fetch-depth: 0
+
+      - name: Sync Version and Changelog to M3tal-Hub
+        run: |
+          python3 scripts/sync_hub_manifest.py \
+            --manifest m3tal-hub/apps/manifest.yml \
+            --version "${{ env.CLEAN_VERSION }}" \
+            --tag "${{ env.TAG }}"
+
+      - name: Commit and Push to M3tal-Hub
+        run: |
+          cd m3tal-hub
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/manifest.yml
+          if git diff --staged --quiet; then
+            echo "No changes in M3tal-Hub manifest."
+          else
+            git commit -m "feat(hub): sync m3tal-core ${CLEAN_VERSION} version and changelog [skip ci]"
+            git push origin main
+            echo "✅ Successfully synced version and changelog to M3tal-Hub!"
+          fi
+          cd ..
+
+      - name: Import GPG key (for plugin catalog signing)
         uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
+        continue-on-error: true
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      - name: Checkout m3tal-apt-key repo to retain existing packages
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: jakej985-rgb/m3tal-apt-key
-          token: ${{ secrets.GH_PAT }}
-          path: repo
-        continue-on-error: true
-
-      - name: Remove nested .git directory
-        run: rm -rf repo/.git || true
-
-      - name: Update APT Repository
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: ./scripts/update-repo.sh
-
-      - name: Deploy APT repository to GitHub Pages
-        uses: peaceiris/actions-gh-pages@47f197a2200bb9de68ba5f48fad1c088eb1c4a32 # v4.0.0
-        with:
-          personal_token: ${{ secrets.GH_PAT }}
-          external_repository: jakej985-rgb/m3tal-apt-key
-          publish_dir: ./repo
-          publish_branch: main
-          force_orphan: false
 
       - name: Checkout m3tal-plugin-page repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -115,42 +177,40 @@ jobs:
           repository: jakej985-rgb/m3tal-plugin-page
           token: ${{ secrets.GH_PAT }}
           path: plugin-repo
+          fetch-depth: 0
         continue-on-error: true
 
-      - name: Remove nested .git directory in plugin-repo
-        run: rm -rf plugin-repo/.git || true
-
       - name: Generate and Sign Plugin Catalog
+        if: hashFiles('plugin-repo') != ''
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          mkdir -p plugin-repo
           go build -o m3tal ./cli
           ./m3tal plugin catalog --export plugin-repo/catalog.json
           
-          # Sign the catalog
-          GPG_OPTS="-u B95A45C647577DEBCC877C49AF6190B0C01346DD"
-          if [ -n "$GPG_PASSPHRASE" ]; then
-              GPG_OPTS="$GPG_OPTS --batch --yes --pinentry-mode loopback --passphrase $GPG_PASSPHRASE"
+          # Detect available signing key
+          GPG_KEY_ID=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep '^fpr:' | head -n1 | cut -d: -f10 || true)
+          if [ -n "$GPG_KEY_ID" ]; then
+            GPG_OPTS="-u $GPG_KEY_ID"
+            if [ -n "$GPG_PASSPHRASE" ]; then
+                GPG_OPTS="$GPG_OPTS --batch --yes --pinentry-mode loopback --passphrase $GPG_PASSPHRASE"
+            fi
+            rm -f plugin-repo/catalog.json.sig
+            gpg --batch --no-tty $GPG_OPTS -abs -o plugin-repo/catalog.json.sig plugin-repo/catalog.json || true
           fi
-          rm -f plugin-repo/catalog.json.sig
-          gpg --batch --no-tty $GPG_OPTS -abs -o plugin-repo/catalog.json.sig plugin-repo/catalog.json
           touch plugin-repo/.nojekyll
 
       - name: Deploy Plugins to GitHub Pages
-        uses: peaceiris/actions-gh-pages@47f197a2200bb9de68ba5f48fad1c088eb1c4a32 # v4.0.0
-        with:
-          personal_token: ${{ secrets.GH_PAT }}
-          external_repository: jakej985-rgb/m3tal-plugin-page
-          publish_dir: ./plugin-repo
-          publish_branch: main
-          force_orphan: false
-
-      - name: Create Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
-        with:
-          files: "*.deb"
-          tag_name: ${{ env.VERSION }}
-          name: Release ${{ env.VERSION }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        if: hashFiles('plugin-repo') != ''
+        run: |
+          cd plugin-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog.json catalog.json.sig .nojekyll 2>/dev/null || git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit in plugin repo."
+          else
+            git commit -m "chore(plugins): update plugin catalog for m3tal-core ${CLEAN_VERSION} [skip ci]"
+            git push origin main
+          fi
+          cd ..

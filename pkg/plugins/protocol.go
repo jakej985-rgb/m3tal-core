@@ -23,12 +23,12 @@ const (
 
 // PluginManifest represents the static definition file (plugin.yaml) for an external plugin.
 type PluginManifest struct {
-	APIVersion string            `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string            `yaml:"kind" json:"kind"`
-	Metadata   PluginMeta        `yaml:"metadata" json:"metadata"`
-	Spec       PluginSpec        `yaml:"spec" json:"spec"`
-	Config     map[string]any    `yaml:"config,omitempty" json:"config,omitempty"`
-	Dir        string            `yaml:"-" json:"-"` // Filesystem directory containing the manifest
+	APIVersion string         `yaml:"apiVersion" json:"apiVersion"`
+	Kind       string         `yaml:"kind" json:"kind"`
+	Metadata   PluginMeta     `yaml:"metadata" json:"metadata"`
+	Spec       PluginSpec     `yaml:"spec" json:"spec"`
+	Config     map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+	Dir        string         `yaml:"-" json:"-"` // Filesystem directory containing the manifest
 }
 
 // PluginMeta contains descriptive metadata about the plugin.
