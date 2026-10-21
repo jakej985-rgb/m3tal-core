@@ -8,12 +8,6 @@
     "stack": "ai"
   },
   {
-    "name": "m3tal-dashboard",
-    "image": "ghcr.io/jakej985-rgb/m3tal-godash:debug",
-    "ports": [],
-    "stack": "m3tal"
-  },
-  {
     "name": "traefik",
     "image": "traefik:latest",
     "ports": [

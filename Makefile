@@ -16,9 +16,6 @@ help:
 	@echo "  make up       - Start the M3TAL stack using the Go orchestrator"
 	@echo "  make down     - Stop the M3TAL stack"
 	@echo "  make status   - List container status"
-	@echo ""
-	@echo "Docker:"
-	@echo "  make docker-dash - Build the optional GUI dashboard Docker image"
 
 build:
 	@echo "🎨 Building Web GUI..."
@@ -46,9 +43,3 @@ down:
 
 status:
 	./m3tal list
-
-docker-dash:
-	@echo "🐳 Building M3TAL Dashboard Docker image..."
-	docker build -t m3tal-dashboard:latest ./webui
-	@echo "✅ Dashboard Docker image built."
-	@echo "   Run with: docker compose -f /docker/m3tal-compose.yml up dash"
