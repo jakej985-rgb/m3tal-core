@@ -42,7 +42,7 @@ Never push until every required gate is green.
    ```
 
 2. **Read GitHub Actions Workflows**:
-   - Inspect `.github/workflows/ci-deb.yml`, `ci-docker.yml`, and `pub-deb.yml`.
+   - Inspect `.github/workflows/ci-deb.yml` and `pub-deb.yml`.
    - The local gate must mirror the checks that GitHub will run in CI.
 
 3. **Execute M3tal Core Validation Baseline**:

@@ -2,7 +2,7 @@
 
 This repository uses a strict validation gate for pushes.
 
-**M3TAL Core** officially targets **Linux (Debian/Ubuntu x86_64/arm64), systemd services, daemon control-plane API, embedded Web GUI, and Docker**.
+**M3TAL Core** officially targets **Linux (Debian/Ubuntu x86_64/arm64), systemd services, daemon control-plane API, and embedded Web GUI**.
 
 ---
 
