@@ -54,9 +54,8 @@ repo/
 deploy/stack/users.json
 cmd/m3tal/m3tal_icon_pack.zip
 
-# IDE / Agent metadata
+# IDE metadata
 .vscode/
-.agents/
 .idea/
 .DS_Store
 

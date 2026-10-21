@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-DEB_FILE=$(ls m3tal-core_*.deb | head -n 1)
+DEB_FILE=$(ls m3tal*.deb 2>/dev/null | head -n 1)
 
 if [ -z "$DEB_FILE" ]; then
     echo "❌ No .deb file found. Run build-deb.sh first."
