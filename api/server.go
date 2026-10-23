@@ -104,6 +104,13 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	subFS, err := fs.Sub(gui.DistFS, "dist")
 	if err == nil {
 		fileServer(r, "/gui", http.FS(subFS))
+
+		// Fallback for root-relative asset requests (/assets/*)
+		assetsFS, err := fs.Sub(subFS, "assets")
+		if err == nil {
+			fileServer(r, "/assets", http.FS(assetsFS))
+		}
+
 		redirectRoot := func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/gui/", http.StatusFound)
 		}

@@ -54,8 +54,9 @@ func main() {
 	}
 
 	var rootCmd = &cobra.Command{
-		Use:   "m3tal",
-		Short: "M3TAL Core Desktop Application & Orchestrator",
+		Use:     "m3tal",
+		Short:   "M3TAL Core Desktop Application & Orchestrator",
+		Version: Version,
 		Run: func(cmd *cobra.Command, args []string) {
 			port, _ := cmd.Flags().GetString("port")
 			headless, _ := cmd.Flags().GetBool("headless")
@@ -1688,9 +1689,15 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 			launchDesktopApp(port, true)
 		},
 	}
-	headlessCmd.Flags().StringP("port", "p", "5050", "Port to serve on")
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Print the M3TAL version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("M3TAL Core v%s\n", Version)
+		},
+	}
 
-	rootCmd.AddCommand(listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, aiCmd, stacksCmd, uiCmd, headlessCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
+	rootCmd.AddCommand(versionCmd, listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, aiCmd, stacksCmd, uiCmd, headlessCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
