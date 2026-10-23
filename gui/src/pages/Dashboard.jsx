@@ -3,7 +3,7 @@ import { api, subscribeWS } from '../api';
 import DoctorModal from '../components/DoctorModal';
 import FleetMiniOverview from '../components/FleetMiniOverview';
 import NetworkSummary from '../components/NetworkSummary';
-import { IconDoctor, IconPrune, IconReconcile, IconRefresh } from '../components/Icons';
+import { IconDoctor, IconClean, IconReconcile, IconRefresh } from '../components/Icons';
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
@@ -15,7 +15,7 @@ export default function Dashboard() {
   // Quick action states
   const [isDoctorOpen, setIsDoctorOpen] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
-  const [isPruning, setIsPruning] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -98,33 +98,22 @@ export default function Dashboard() {
     setIsReconciling(false);
   };
 
-  const handlePrune = async () => {
-    setIsPruning(true);
+  const handleSystemCleanup = async () => {
+    setIsCleaning(true);
     try {
-      const res = await api.pruneImages();
+      const res = await api.systemCleanup();
       if (res.status === 'success') {
-        const reclaimed = res.data?.reclaimed;
-        let reclaimedStr = '';
-        if (typeof reclaimed === 'number') {
-          if (reclaimed > 1024 * 1024 * 1024) {
-            reclaimedStr = ` (${(reclaimed / (1024 * 1024 * 1024)).toFixed(2)} GB freed)`;
-          } else if (reclaimed > 1024 * 1024) {
-            reclaimedStr = ` (${(reclaimed / (1024 * 1024)).toFixed(1)} MB freed)`;
-          } else if (reclaimed > 0) {
-            reclaimedStr = ` (${(reclaimed / 1024).toFixed(0)} KB freed)`;
-          } else {
-            reclaimedStr = ' (0 B freed)';
-          }
-        }
-        showToast(`Image cleanup complete${reclaimedStr}.`, 'success');
+        const freed = res.data?.freed_human || '0 B';
+        const count = res.data?.items_cleaned?.length || 0;
+        showToast(`System cleanup complete (${freed} freed across ${count} tasks).`, 'success');
         fetchStats();
       } else {
-        showToast(res.error || 'Pruning failed', 'error');
+        showToast(res.error || 'System cleanup failed', 'error');
       }
     } catch (err) {
       showToast(err.message, 'error');
     }
-    setIsPruning(false);
+    setIsCleaning(false);
   };
 
   const formatUptime = (seconds) => {
@@ -193,13 +182,13 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={handlePrune}
-            disabled={isPruning}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-750 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Prune dangling or unused container images"
+            onClick={handleSystemCleanup}
+            disabled={isCleaning}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-750 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Clean APT cache, unused Flatpaks, old Snaps, and temporary caches"
           >
-            <IconPrune className={`w-4 h-4 text-slate-400 ${isPruning ? 'animate-spin' : ''}`} />
-            <span>{isPruning ? 'Pruning...' : 'Prune Images'}</span>
+            <IconClean className={`w-4 h-4 text-emerald-400 ${isCleaning ? 'animate-spin' : ''}`} />
+            <span>{isCleaning ? 'Cleaning...' : 'Clean Up'}</span>
           </button>
 
           <button

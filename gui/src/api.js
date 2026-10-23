@@ -86,6 +86,7 @@ export const api = {
   getPluginCatalog: () => fetchAPI('GET', '/api/v2/plugins/catalog'),
   runDoctor: () => fetchAPI('GET', '/api/v2/system/doctor'),
   pruneImages: () => fetchAPI('POST', '/api/v2/docker/images/prune'),
+  systemCleanup: () => fetchAPI('POST', '/api/v2/system/cleanup'),
   reconcileSystem: () => fetchAPI('POST', '/api/v2/system/reconcile'),
   getVPNStatus: () => fetchAPI('GET', '/api/v2/vpn/status'),
   getRoutes: () => fetchAPI('GET', '/api/v2/routes'),

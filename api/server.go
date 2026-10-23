@@ -248,6 +248,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/system/cron", srv.GetCronJobs)
 			r.Get("/system/updates", srv.GetSystemUpdates)
 			r.Post("/system/updates/apply", srv.ApplySystemUpdates)
+			r.Post("/system/cleanup", srv.SystemCleanup)
 
 			// Docker Controls
 			r.Get("/docker/images", srv.GetDockerImages)
@@ -350,6 +351,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/system/cron", srv.GetCronJobs)
 			r.Get("/system/updates", srv.GetSystemUpdates)
 			r.Post("/system/updates/apply", srv.ApplySystemUpdates)
+			r.Post("/system/cleanup", srv.SystemCleanup)
 
 			// Docker Controls
 			r.Get("/docker/images", srv.GetDockerImages)

@@ -876,6 +876,17 @@ func (s *Server) ApplySystemUpdates(w http.ResponseWriter, r *http.Request) {
 	sendSuccess(w, http.StatusOK, map[string]bool{"ok": true}, nil)
 }
 
+// SystemCleanup executes host cleanup across package managers and caches.
+// POST /api/v2/system/cleanup
+func (s *Server) SystemCleanup(w http.ResponseWriter, r *http.Request) {
+	result, err := system.CleanSystem()
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "CLEANUP_ERROR", err.Error(), nil)
+		return
+	}
+	sendSuccess(w, http.StatusOK, result, nil)
+}
+
 // GetProcesses returns running system processes.
 // GET /api/v2/system/processes
 func (s *Server) GetProcesses(w http.ResponseWriter, r *http.Request) {

@@ -117,3 +117,11 @@ type SystemSpecs struct {
 	GPUModel          string                 `json:"gpu_model"`
 	NetworkInterfaces []NetworkInterfaceInfo `json:"network_interfaces"`
 }
+
+// SystemCleanupResult represents the result of a system maintenance and cleanup run.
+type SystemCleanupResult struct {
+	FreedBytes   int64    `json:"freed_bytes"`
+	FreedHuman   string   `json:"freed_human"`
+	ItemsCleaned []string `json:"items_cleaned"`
+	Details      string   `json:"details"`
+}

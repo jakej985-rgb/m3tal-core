@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, subscribeWS } from '../api';
+import { IconPrune } from '../components/Icons';
 
 export default function Containers() {
   const [containers, setContainers] = useState([]);
@@ -7,9 +8,47 @@ export default function Containers() {
   const [error, setError] = useState(null);
   const [activeLogContainer, setActiveLogContainer] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [isPruning, setIsPruning] = useState(false);
+  const [toast, setToast] = useState(null);
   
   const logTerminalEndRef = useRef(null);
   const wsSubscriptionRef = useRef(null);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4500);
+  };
+
+  const handlePrune = async () => {
+    setIsPruning(true);
+    try {
+      const res = await api.pruneImages();
+      if (res.status === 'success') {
+        const reclaimed = res.data?.reclaimed;
+        let reclaimedStr = '';
+        if (typeof reclaimed === 'number') {
+          if (reclaimed > 1024 * 1024 * 1024) {
+            reclaimedStr = ` (${(reclaimed / (1024 * 1024 * 1024)).toFixed(2)} GB freed)`;
+          } else if (reclaimed > 1024 * 1024) {
+            reclaimedStr = ` (${(reclaimed / (1024 * 1024)).toFixed(1)} MB freed)`;
+          } else if (reclaimed > 0) {
+            reclaimedStr = ` (${(reclaimed / 1024).toFixed(0)} KB freed)`;
+          } else {
+            reclaimedStr = ' (0 B freed)';
+          }
+        }
+        showToast(`Image cleanup complete${reclaimedStr}.`, 'success');
+        fetchContainers();
+      } else {
+        showToast(res.error || 'Pruning failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+    setIsPruning(false);
+  };
 
   const fetchContainers = async () => {
     setLoading(true);
@@ -108,13 +147,45 @@ export default function Containers() {
           <h1 className="text-2xl font-bold tracking-tight text-white">Container Instances</h1>
           <p className="text-slate-400 text-sm">Monitor services, control containers, and inspect active logs.</p>
         </div>
-        <button
-          onClick={fetchContainers}
-          className="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/60 transition-colors"
-        >
-          Refresh List
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePrune}
+            disabled={isPruning}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700/60 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Prune dangling or unused container images"
+          >
+            <IconPrune className={`w-4 h-4 text-slate-400 ${isPruning ? 'animate-spin' : ''}`} />
+            <span>{isPruning ? 'Pruning...' : 'Prune Images'}</span>
+          </button>
+          <button
+            onClick={fetchContainers}
+            className="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/60 transition-colors"
+          >
+            Refresh List
+          </button>
+        </div>
       </div>
+
+      {toast && (
+        <div className={`p-3 rounded-xl border flex items-center justify-between shadow-lg text-xs font-medium animate-fade-in ${
+          toast.type === 'success'
+            ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+            : toast.type === 'error'
+            ? 'bg-rose-950/80 text-rose-300 border-rose-500/40'
+            : 'bg-slate-900/90 text-slate-200 border-slate-700'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{toast.type === 'success' ? '✓' : toast.type === 'error' ? '⚠️' : 'ℹ️'}</span>
+            <span>{toast.message}</span>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-white ml-4 text-xs font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-sm">
