@@ -89,12 +89,12 @@ export default function SystemMonitor() {
   };
 
   const m3talProcs = processes.filter(
-    (p) => p.name?.startsWith('m3tal') || p.name === 'm3tal' || p.cmdline?.includes('m3tal')
+    (p) => p.name?.startsWith('m3tal-') || p.name === 'm3tal'
   );
 
   const filteredProcesses = processes
     .filter((p) => {
-      const isM3tal = p.name?.startsWith('m3tal') || p.name === 'm3tal' || p.cmdline?.includes('m3tal');
+      const isM3tal = p.name?.startsWith('m3tal-') || p.name === 'm3tal';
       if (filterM3talOnly && !isM3tal) return false;
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();

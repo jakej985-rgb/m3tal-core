@@ -46,19 +46,22 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 		}
 
 		// Canonical M3TAL process naming: m3tal-<process>
-		if name == "m3tal" || name == "m3tal-headless" || strings.Contains(cmdline, "m3tal") {
+		// Strictly match ONLY genuine M3TAL binaries or comms. Never rename chrome, java, avahi, node, etc.
+		if name == "m3tal" || strings.HasPrefix(name, "m3tal-") {
 			cmdLower := strings.ToLower(cmdline)
-			if strings.Contains(cmdLower, "sysmon") || strings.Contains(cmdLower, "monitor") {
+			if strings.Contains(cmdLower, "sysmon") {
 				name = "m3tal-sysmon"
-			} else if strings.Contains(cmdLower, "web") || strings.Contains(cmdLower, "headless") {
-				name = "m3tal-web"
+			} else if strings.Contains(cmdLower, "docker-daemon") || strings.Contains(cmdLower, "docker") {
+				name = "m3tal-docker"
 			} else if strings.Contains(cmdLower, "api") {
 				name = "m3tal-api"
-			} else if strings.Contains(cmdLower, "docker") {
-				name = "m3tal-docker"
-			} else if strings.Contains(cmdLower, "agent") || strings.Contains(cmdLower, "daemon") {
+			} else if strings.Contains(cmdLower, "headless") || strings.Contains(cmdLower, "web") {
+				name = "m3tal-web"
+			} else if strings.Contains(cmdLower, "ui") {
+				name = "m3tal-gui"
+			} else if strings.Contains(cmdLower, "daemon") {
 				name = "m3tal-core"
-			} else if !strings.HasPrefix(name, "m3tal-") {
+			} else if name == "m3tal" {
 				name = "m3tal-core"
 			}
 		}

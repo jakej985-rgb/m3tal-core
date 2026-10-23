@@ -31,6 +31,10 @@ contents:
     type: "symlink"
 
   - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-gui
+    type: "symlink"
+
+  - src: /usr/bin/m3tal
     dst: /usr/bin/m3tal-headless
     type: "symlink"
 

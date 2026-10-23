@@ -42,6 +42,7 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
     cp ./m3tal-api "$STAGE_DIR/usr/bin/"
     chmod 755 "$STAGE_DIR/usr/bin/m3tal" "$STAGE_DIR/usr/bin/m3tal-api"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-core"
+    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-gui"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-headless"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-web"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-sysmon"

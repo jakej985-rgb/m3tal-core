@@ -61,6 +61,10 @@ func main() {
 		if len(os.Args) == 1 {
 			os.Args = append(os.Args, "api")
 		}
+	case strings.Contains(exeName, "daemon") || (len(os.Args) > 1 && os.Args[1] == "daemon"):
+		system.SetProcessName("m3tal-core")
+	case strings.Contains(exeName, "gui") || strings.Contains(exeName, "ui") || (len(os.Args) > 1 && os.Args[1] == "ui") || len(os.Args) == 1:
+		system.SetProcessName("m3tal-gui")
 	default:
 		system.SetProcessName("m3tal-core")
 	}
@@ -159,6 +163,13 @@ func main() {
 		Short: "Manage M3TAL background API daemon and agents",
 		Run: func(cmd *cobra.Command, args []string) {
 			system.SetProcessName("m3tal-core")
+			unlock, acquired := system.AcquireProcessLock("m3tal-core")
+			if !acquired {
+				log.Println("⚠️ m3tal-core daemon is already running. Exiting duplicate instance.")
+				return
+			}
+			defer unlock()
+
 			port := os.Getenv("API_PORT")
 			if port == "" {
 				port = "5050"
@@ -1758,6 +1769,12 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 		Short:   "Start M3TAL System Monitor telemetry collector daemon",
 		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
 			system.SetProcessName("m3tal-sysmon")
+			unlock, acquired := system.AcquireProcessLock("m3tal-sysmon")
+			if !acquired {
+				return
+			}
+			defer unlock()
+
 			fmt.Println("🚀 M3TAL System Monitor telemetry collector running (m3tal-sysmon)...")
 			ticker := time.NewTicker(3 * time.Second)
 			defer ticker.Stop()
@@ -1773,6 +1790,12 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 		Short:   "Start M3TAL Docker monitoring and reconciliation daemon",
 		Run: func(cmd *cobra.Command, args []string) {
 			system.SetProcessName("m3tal-docker")
+			unlock, acquired := system.AcquireProcessLock("m3tal-docker")
+			if !acquired {
+				return
+			}
+			defer unlock()
+
 			fmt.Println("🐳 M3TAL Docker Worker running (m3tal-docker)...")
 			api.RunAgentsDaemon()
 		},
@@ -1839,6 +1862,16 @@ func openDesktopApp(url string) *exec.Cmd {
 }
 
 func launchDesktopApp(port string, forceHeadless bool) {
+	if !forceHeadless && runtime.GOOS == "linux" && (os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "") {
+		system.SetProcessName("m3tal-gui")
+		unlock, acquired := system.AcquireProcessLock("m3tal-gui")
+		if !acquired {
+			fmt.Println("🟢 M3TAL Desktop App is already active.")
+			return
+		}
+		defer unlock()
+	}
+
 	if port == "" {
 		if ep := os.Getenv("API_PORT"); ep != "" {
 			port = ep
@@ -1933,7 +1966,7 @@ func launchDesktopApp(port string, forceHeadless bool) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	if browserCmd != nil {
-		fmt.Println("⚡ M3TAL Desktop is running (m3tal-core). Close the window or press Ctrl+C to exit...")
+		fmt.Println("⚡ M3TAL Desktop is running (m3tal-gui). Close the window or press Ctrl+C to exit...")
 		done := make(chan error, 1)
 		go func() {
 			done <- browserCmd.Wait()

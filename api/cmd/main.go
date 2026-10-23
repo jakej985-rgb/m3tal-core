@@ -16,6 +16,13 @@ import (
 
 func main() {
 	syspaths.SetProcessName("m3tal-api")
+	unlock, acquired := syspaths.AcquireProcessLock("m3tal-api")
+	if !acquired {
+		log.Println("⚠️ m3tal-api is already running. Exiting duplicate instance.")
+		return
+	}
+	defer unlock()
+
 	apiToken := os.Getenv("API_TOKEN")
 	if apiToken == "" {
 		apiToken = "m3tal-secret-token"
@@ -25,9 +32,6 @@ func main() {
 	if port == "" {
 		port = "5050"
 	}
-
-	// Start agents daemon if not already running
-	startAgentsDaemonIfMissing()
 
 	if err := api.RunServer(port, apiToken); err != nil {
 		log.Fatalf("❌ API server failed: %v", err)
