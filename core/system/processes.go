@@ -46,7 +46,6 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 		}
 
 		// Canonical M3TAL process naming: m3tal-<process>
-		// Strictly match ONLY genuine M3TAL binaries or comms. Never rename chrome, java, avahi, node, etc.
 		if name == "m3tal" || strings.HasPrefix(name, "m3tal-") {
 			cmdLower := strings.ToLower(cmdline)
 			if strings.Contains(cmdLower, "sysmon") {
@@ -63,6 +62,21 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 				name = "m3tal-core"
 			} else if name == "m3tal" {
 				name = "m3tal-core"
+			}
+		} else if (name == "chrome" || name == "google-chrome" || name == "chromium" || name == "brave" || name == "chrome_crashpad") &&
+			strings.Contains(cmdline, "--user-data-dir=") && strings.Contains(cmdline, "m3tal/browser-profile") {
+			// Chrome subprocesses belonging specifically to M3TAL Desktop App Window
+			cmdLower := strings.ToLower(cmdline)
+			if strings.Contains(cmdLower, "--type=renderer") {
+				name = "m3tal-render"
+			} else if strings.Contains(cmdLower, "--type=gpu-process") {
+				name = "m3tal-gpu"
+			} else if strings.Contains(cmdLower, "--type=utility") {
+				name = "m3tal-utility"
+			} else if strings.Contains(cmdLower, "crashpad") {
+				name = "m3tal-crashpad"
+			} else if strings.Contains(cmdLower, "--app=") {
+				name = "m3tal-gui"
 			}
 		}
 

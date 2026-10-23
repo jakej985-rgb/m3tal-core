@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"strings"
 )
 
 // PluginState represents runtime state of a plugin subprocess.
@@ -177,6 +178,22 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 		return errors.New(p.LastError)
 	}
 
+	// Canonical process naming: all plugins follow m3tal-<plugin-name>
+	procName := p.Manifest.Metadata.Name
+	if !strings.HasPrefix(procName, "m3tal-") {
+		procName = "m3tal-" + procName
+	}
+
+	binDir := filepath.Join(os.TempDir(), "m3tal-plugins-bin")
+	_ = os.MkdirAll(binDir, 0755)
+	canonicalExec := filepath.Join(binDir, procName)
+	_ = os.Remove(canonicalExec)
+	if absCmdPath, err := filepath.Abs(cmdPath); err == nil {
+		if err := os.Symlink(absCmdPath, canonicalExec); err == nil {
+			cmdPath = canonicalExec
+		}
+	}
+
 	pCtx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
@@ -185,6 +202,7 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 	cmd.Env = append(os.Environ(),
 		"M3TAL_CORE_VERSION="+coreVersion,
 		"M3TAL_PLUGIN_DIR="+p.Manifest.Dir,
+		"M3TAL_PROCESS_NAME="+procName,
 	)
 
 	stdin, err := cmd.StdinPipe()
