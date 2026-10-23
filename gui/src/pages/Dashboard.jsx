@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api, subscribeWS } from '../api';
+import DoctorModal from '../components/DoctorModal';
+import FleetMiniOverview from '../components/FleetMiniOverview';
+import NetworkSummary from '../components/NetworkSummary';
+import { IconDoctor, IconPrune, IconReconcile, IconRefresh } from '../components/Icons';
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
@@ -8,30 +12,44 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
 
+  // Quick action states
+  const [isDoctorOpen, setIsDoctorOpen] = useState(false);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [isPruning, setIsPruning] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 4500);
+  };
+
+  const fetchStats = async () => {
+    // 1. Fetch current metrics
+    const resMetrics = await api.getMetrics();
+    if (resMetrics.status === 'success') {
+      setMetrics(resMetrics.data);
+      setError(null);
+    } else {
+      setError(resMetrics.error || 'Failed to fetch metrics');
+    }
+
+    // 2. Fetch history
+    const resHistory = await api.getSystemMetricsHistory();
+    if (resHistory.status === 'success') {
+      setHistory(resHistory.data || []);
+    }
+
+    // 3. Fetch health status
+    const resHealth = await api.getSystemHealth();
+    if (resHealth.status === 'success') {
+      setHealth(resHealth.data);
+    }
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      // 1. Fetch current metrics
-      const resMetrics = await api.getMetrics();
-      if (resMetrics.status === 'success') {
-        setMetrics(resMetrics.data);
-        setError(null);
-      } else {
-        setError(resMetrics.error || 'Failed to fetch metrics');
-      }
-
-      // 2. Fetch history
-      const resHistory = await api.getSystemMetricsHistory();
-      if (resHistory.status === 'success') {
-        setHistory(resHistory.data || []);
-      }
-
-      // 3. Fetch health status
-      const resHealth = await api.getSystemHealth();
-      if (resHealth.status === 'success') {
-        setHealth(resHealth.data);
-      }
-    };
-
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
 
@@ -43,7 +61,7 @@ export default function Dashboard() {
         type: event.type,
         detail: typeof event.payload === 'object' ? JSON.stringify(event.payload) : String(event.payload),
       };
-      setEvents((prev) => [newEvent, ...prev].slice(0, 15)); // Keep last 15
+      setEvents((prev) => [newEvent, ...prev].slice(0, 20)); // Keep last 20
     });
 
     return () => {
@@ -51,6 +69,63 @@ export default function Dashboard() {
       sub.close();
     };
   }, []);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchStats();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  const handleReconcile = async () => {
+    setIsReconciling(true);
+    try {
+      const res = await api.reconcileSystem();
+      if (res.status === 'success') {
+        const actionCount = Array.isArray(res.data?.actions) ? res.data.actions.length : 0;
+        showToast(
+          actionCount > 0 
+            ? `System reconciled: ${actionCount} adjustment(s) applied.` 
+            : 'System state verified: fully converged.',
+          'success'
+        );
+        fetchStats();
+      } else {
+        showToast(res.error || 'Reconciliation failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+    setIsReconciling(false);
+  };
+
+  const handlePrune = async () => {
+    setIsPruning(true);
+    try {
+      const res = await api.pruneImages();
+      if (res.status === 'success') {
+        const reclaimed = res.data?.reclaimed;
+        let reclaimedStr = '';
+        if (typeof reclaimed === 'number') {
+          if (reclaimed > 1024 * 1024 * 1024) {
+            reclaimedStr = ` (${(reclaimed / (1024 * 1024 * 1024)).toFixed(2)} GB freed)`;
+          } else if (reclaimed > 1024 * 1024) {
+            reclaimedStr = ` (${(reclaimed / (1024 * 1024)).toFixed(1)} MB freed)`;
+          } else if (reclaimed > 0) {
+            reclaimedStr = ` (${(reclaimed / 1024).toFixed(0)} KB freed)`;
+          } else {
+            reclaimedStr = ' (0 B freed)';
+          }
+        }
+        showToast(`Image cleanup complete${reclaimedStr}.`, 'success');
+        fetchStats();
+      } else {
+        showToast(res.error || 'Pruning failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+    setIsPruning(false);
+  };
 
   const formatUptime = (seconds) => {
     if (!seconds) return '0s';
@@ -79,10 +154,16 @@ export default function Dashboard() {
     return 'shadow-[0_0_12px_rgba(45,212,191,0.3)]';
   };
 
+  // Resilient status badge computation
+  const systemStatus = typeof health?.status === 'string' && health.status.trim()
+    ? health.status.toUpperCase()
+    : (metrics ? 'ONLINE' : 'CONNECTING');
+  const isHealthy = systemStatus === 'HEALTHY' || systemStatus === 'ONLINE' || systemStatus === 'OK';
+
   return (
     <div className="space-y-6">
-      {/* Top Header Row with health badges */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/60 backdrop-blur-md">
+      {/* Top Header Row with health badges & Quick Actions */}
+      <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800/60 backdrop-blur-md">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
             System Dashboard
@@ -90,23 +171,57 @@ export default function Dashboard() {
           <p className="text-slate-400 text-sm">Real-time resource utilization and event streaming.</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {health ? (
-            <div className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 border ${
-              health.status === 'healthy' 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${
-                health.status === 'healthy' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-ping'
-              }`}></span>
-              SYSTEM: {health.status.toUpperCase()}
-            </div>
-          ) : (
-            <div className="px-4 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700 animate-pulse">
-              Checking Health...
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Quick Actions */}
+          <button
+            onClick={() => setIsDoctorOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition-all shadow-sm active:scale-95"
+            title="Run comprehensive pre-flight health diagnostics"
+          >
+            <IconDoctor className="w-4 h-4 text-teal-400" />
+            <span>Diagnostics</span>
+          </button>
+
+          <button
+            onClick={handleReconcile}
+            disabled={isReconciling}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Enforce target state across all declared services and configurations"
+          >
+            <IconReconcile className={`w-4 h-4 text-indigo-400 ${isReconciling ? 'animate-spin' : ''}`} />
+            <span>{isReconciling ? 'Reconciling...' : 'Reconcile'}</span>
+          </button>
+
+          <button
+            onClick={handlePrune}
+            disabled={isPruning}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-750 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Prune dangling or unused container images"
+          >
+            <IconPrune className={`w-4 h-4 text-slate-400 ${isPruning ? 'animate-spin' : ''}`} />
+            <span>{isPruning ? 'Pruning...' : 'Prune Images'}</span>
+          </button>
+
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700/80 hover:text-white hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50"
+            title="Refresh statistics now"
+          >
+            <IconRefresh className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+
+          {/* System Status Pill */}
+          <div className={`ml-2 px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 border shadow-sm ${
+            isHealthy 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${
+              isHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-ping'
+            }`}></span>
+            SYSTEM: {systemStatus}
+          </div>
           
           {error && (
             <div className="px-3 py-1 text-xs rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
@@ -115,6 +230,28 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Floating Action Toast */}
+      {toast && (
+        <div className={`p-3 rounded-xl border flex items-center justify-between shadow-lg text-xs font-medium animate-fade-in ${
+          toast.type === 'success'
+            ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+            : toast.type === 'error'
+            ? 'bg-rose-950/80 text-rose-300 border-rose-500/40'
+            : 'bg-slate-900/90 text-slate-200 border-slate-700'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{toast.type === 'success' ? '✓' : toast.type === 'error' ? '⚠️' : 'ℹ️'}</span>
+            <span>{toast.message}</span>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-white ml-4 text-xs font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {metrics && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -166,7 +303,8 @@ export default function Dashboard() {
                 <span className="text-lg font-bold text-white">{metrics.memory_usage?.toFixed(1)}%</span>
               </div>
               <div className="text-xs text-slate-400 mb-3 font-mono">
-                {metrics.memory_used?.toFixed(1)} / {metrics.memory_total?.toFixed(1)} GB {metrics.memory_frequency && `(${metrics.memory_frequency})`}
+                {metrics.memory_used?.toFixed(1)} / {metrics.memory_total?.toFixed(1)} GB
+                {metrics.memory_frequency && metrics.memory_frequency !== 'Unknown' && ` (${metrics.memory_frequency})`}
               </div>
               <div className="w-full bg-slate-800 rounded-full h-2 mt-2">
                 <div
@@ -293,11 +431,23 @@ export default function Dashboard() {
             {metrics.disk_partitions.map((p, idx) => {
               const isNet = p.device?.startsWith('//') || p.device?.startsWith('\\\\') || p.fstype === 'cifs' || p.fstype?.startsWith('nfs');
               const label = p.label && !p.device?.includes(p.label) ? p.label : p.mountpoint;
+              const isCriticalSpace = p.used_percent >= 90;
+              const isWarningSpace = p.used_percent >= 80 && p.used_percent < 90;
+
               return (
-                <div key={idx} className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-4 space-y-2">
+                <div 
+                  key={idx} 
+                  className={`bg-slate-950/60 border rounded-lg p-4 space-y-2 relative transition-all ${
+                    isCriticalSpace 
+                      ? 'border-rose-500/40 ring-1 ring-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]' 
+                      : isWarningSpace 
+                      ? 'border-amber-500/30' 
+                      : 'border-slate-800/60'
+                  }`}
+                >
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="font-semibold text-white text-sm flex items-center gap-2">
+                      <div className="font-semibold text-white text-sm flex items-center gap-2 flex-wrap">
                         <span>{label}</span>
                         {isNet ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
@@ -308,13 +458,27 @@ export default function Dashboard() {
                             LOCAL
                           </span>
                         )}
+                        {isCriticalSpace && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse">
+                            CRITICAL
+                          </span>
+                        )}
+                        {isWarningSpace && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            LOW SPACE
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-slate-500 font-mono mt-0.5">
                         {p.mountpoint} • {p.fstype?.toUpperCase()}
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="font-bold text-white text-sm">{p.used_percent?.toFixed(1)}%</span>
+                      <span className={`font-bold text-sm ${
+                        isCriticalSpace ? 'text-rose-400' : isWarningSpace ? 'text-amber-400' : 'text-white'
+                      }`}>
+                        {p.used_percent?.toFixed(1)}%
+                      </span>
                       <div className="text-xs text-slate-400 font-mono">
                         {formatCap(p.used)} / {formatCap(p.total)}
                       </div>
@@ -332,6 +496,12 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Fleet & Network Operational Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FleetMiniOverview />
+        <NetworkSummary />
+      </div>
 
       {metrics && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -376,7 +546,7 @@ export default function Dashboard() {
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
                         status === 'healthy' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                       }`}>
-                        {status.toUpperCase()}
+                        {String(status).toUpperCase()}
                       </span>
                     </div>
                   </div>
@@ -408,6 +578,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Doctor Diagnostics Modal */}
+      <DoctorModal isOpen={isDoctorOpen} onClose={() => setIsDoctorOpen(false)} />
     </div>
   );
 }

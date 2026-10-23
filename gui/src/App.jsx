@@ -4,6 +4,7 @@ import Stacks from './pages/Stacks';
 import Containers from './pages/Containers';
 import AI from './pages/AI';
 import Plugins from './pages/Plugins';
+import { IconDashboard, IconStacks, IconContainers, IconAI, IconPlugins, IconSettings } from './components/Icons';
 import { getToken, setToken, getApiBase } from './api';
 
 export default function App() {
@@ -53,53 +54,58 @@ export default function App() {
           <nav className="p-4 space-y-1">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
                 activeTab === 'dashboard'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                   : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
               }`}
             >
-              📊 Dashboard
+              <IconDashboard className="w-5 h-5 flex-shrink-0" />
+              <span>Dashboard</span>
             </button>
             <button
               onClick={() => setActiveTab('stacks')}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
                 activeTab === 'stacks'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                   : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
               }`}
             >
-              📁 Stacks Manager
+              <IconStacks className="w-5 h-5 flex-shrink-0" />
+              <span>Stacks Manager</span>
             </button>
             <button
               onClick={() => setActiveTab('containers')}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
                 activeTab === 'containers'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                   : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
               }`}
             >
-              🐳 Containers
+              <IconContainers className="w-5 h-5 flex-shrink-0" />
+              <span>Containers</span>
             </button>
             <button
               onClick={() => setActiveTab('ai')}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
                 activeTab === 'ai'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                   : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
               }`}
             >
-              🤖 AI Playground
+              <IconAI className="w-5 h-5 flex-shrink-0" />
+              <span>AI Playground</span>
             </button>
             <button
               onClick={() => setActiveTab('plugins')}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-3 ${
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
                 activeTab === 'plugins'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                   : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
               }`}
             >
-              🧩 Plugin Registry
+              <IconPlugins className="w-5 h-5 flex-shrink-0" />
+              <span>Plugin Registry</span>
             </button>
           </nav>
         </div>
@@ -108,9 +114,10 @@ export default function App() {
         <div className="p-4 border-t border-[#30363d]">
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="w-full text-left px-4 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-2"
+            className="w-full text-left px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-[#21262d] transition-colors flex items-center gap-2"
           >
-            ⚙️ Connection Settings
+            <IconSettings className="w-4 h-4 text-slate-500" />
+            <span>Connection Settings</span>
           </button>
           {showSettings && (
             <div className="mt-2 p-3 bg-slate-900 border border-[#30363d] rounded-lg space-y-2 text-xs">

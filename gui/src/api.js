@@ -84,6 +84,11 @@ export const api = {
   installPlugin: (name, kind) => fetchAPI('POST', '/api/v2/plugins/install', { name, kind }),
   uninstallPlugin: (name, kind) => fetchAPI('POST', '/api/v2/plugins/uninstall', { name, kind }),
   getPluginCatalog: () => fetchAPI('GET', '/api/v2/plugins/catalog'),
+  runDoctor: () => fetchAPI('GET', '/api/v2/system/doctor'),
+  pruneImages: () => fetchAPI('POST', '/api/v2/docker/images/prune'),
+  reconcileSystem: () => fetchAPI('POST', '/api/v2/system/reconcile'),
+  getVPNStatus: () => fetchAPI('GET', '/api/v2/vpn/status'),
+  getRoutes: () => fetchAPI('GET', '/api/v2/routes'),
 };
 
 export const subscribeWS = (path, onMessage, onError = null) => {
