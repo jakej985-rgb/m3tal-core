@@ -55,11 +55,7 @@ spec:
 }
 
 func TestPluginSubprocessLifecycle(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "m3tal-proc-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	mockPluginDir := filepath.Join(tempDir, "echo-plugin")
 	if err := os.MkdirAll(mockPluginDir, 0755); err != nil {

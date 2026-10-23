@@ -184,7 +184,12 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 		procName = "m3tal-" + procName
 	}
 
-	binDir := filepath.Join(os.TempDir(), "m3tal-plugins-bin")
+	binDir := ""
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		binDir = filepath.Join(cacheDir, "m3tal", "plugins-bin")
+	} else {
+		binDir = filepath.Join(os.TempDir(), "m3tal-plugins-bin")
+	}
 	_ = os.MkdirAll(binDir, 0755)
 	canonicalExec := filepath.Join(binDir, procName)
 	_ = os.Remove(canonicalExec)

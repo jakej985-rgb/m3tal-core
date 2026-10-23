@@ -40,6 +40,8 @@ type ServiceStatus struct {
 // DiskPartition represents a storage partition or mount point.
 type DiskPartition struct {
 	Device      string  `json:"device"`
+	DiskName    string  `json:"disk_name,omitempty"`
+	DiskModel   string  `json:"disk_model,omitempty"`
 	Label       string  `json:"label"`
 	Mountpoint  string  `json:"mountpoint"`
 	FSType      string  `json:"fstype"`

@@ -33,6 +33,37 @@ func getDeviceLabel(devicePath string) string {
 	return filepath.Base(devicePath)
 }
 
+// getParentDisk resolves the physical disk device name and model (e.g. /dev/sda4 -> "sda", "HGST HTS721010A9").
+func getParentDisk(devicePath string) (string, string) {
+	if !strings.HasPrefix(devicePath, "/dev/") {
+		return "", ""
+	}
+	devName := filepath.Base(devicePath)
+	sysBlockPath := filepath.Join("/sys/class/block", devName)
+
+	link, err := os.Readlink(sysBlockPath)
+	if err != nil {
+		return devName, ""
+	}
+
+	parentDisk := devName
+	// If a "partition" entry exists, this devName is a partition of a parent disk
+	if _, err := os.Stat(filepath.Join(sysBlockPath, "partition")); err == nil {
+		parentDir := filepath.Base(filepath.Dir(link))
+		if parentDir != "" && parentDir != "." && parentDir != "/" {
+			parentDisk = parentDir
+		}
+	}
+
+	model := ""
+	modelBytes, err := os.ReadFile(filepath.Join("/sys/class/block", parentDisk, "device", "model"))
+	if err == nil {
+		model = strings.TrimSpace(string(modelBytes))
+	}
+
+	return parentDisk, model
+}
+
 // GetDiskPartitions returns detailed disk usage for all mounted partitions (physical and network shares).
 func GetDiskPartitions() ([]models.DiskPartition, error) {
 	partitions, err := disk.Partitions(true) // all partitions including network mounts
@@ -47,7 +78,18 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 		// Skip virtual mounts that look physical
 		if strings.HasPrefix(p.Mountpoint, "/var/lib/docker") ||
 			strings.HasPrefix(p.Mountpoint, "/run") ||
+			strings.HasPrefix(p.Mountpoint, "/sys") ||
+			strings.HasPrefix(p.Mountpoint, "/proc") ||
+			strings.HasPrefix(p.Mountpoint, "/dev") ||
 			seenMounts[p.Mountpoint] {
+			continue
+		}
+
+		// Ignore EFI/boot and temporary partitions (e.g. /boot/efi, /boot, /efi, /tmp)
+		mp := strings.TrimRight(p.Mountpoint, "/")
+		if mp == "/boot" || strings.HasPrefix(p.Mountpoint, "/boot/") ||
+			mp == "/efi" || strings.HasPrefix(p.Mountpoint, "/efi/") ||
+			mp == "/tmp" || strings.HasPrefix(p.Mountpoint, "/tmp/") {
 			continue
 		}
 
@@ -77,8 +119,12 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 		usedGB := float64(usage.Used) / (1024 * 1024 * 1024)
 		freeGB := float64(usage.Free) / (1024 * 1024 * 1024)
 
+		diskName, diskModel := getParentDisk(p.Device)
+
 		list = append(list, models.DiskPartition{
 			Device:      p.Device,
+			DiskName:    diskName,
+			DiskModel:   diskModel,
 			Label:       getDeviceLabel(p.Device),
 			Mountpoint:  p.Mountpoint,
 			FSType:      p.Fstype,
