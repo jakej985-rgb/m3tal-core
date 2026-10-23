@@ -29,23 +29,30 @@ export default function App() {
 
   const checkInstalledPlugins = async () => {
     try {
-      const [resPlugins, resCatalog, resContainers] = await Promise.all([
+      const [resPlugins, resCatalog] = await Promise.all([
         api.getPlugins(),
         api.getPluginCatalog(),
-        api.getContainers(),
       ]);
 
       let hasStacks = false;
       let hasAI = false;
       let hasContainers = false;
 
-      // 1. Check loaded stacks
-      if (resPlugins?.status === 'success' && resPlugins.data?.stacks) {
-        if (Array.isArray(resPlugins.data.stacks) && resPlugins.data.stacks.length > 0) {
+      // 1. Check loaded plugins
+      if (resPlugins?.status === 'success' && resPlugins.data) {
+        const loadedStacks = Array.isArray(resPlugins.data.stacks) ? resPlugins.data.stacks : [];
+        const loadedRoutes = Array.isArray(resPlugins.data.routes) ? resPlugins.data.routes : [];
+        const loadedMiddleware = Array.isArray(resPlugins.data.middleware) ? resPlugins.data.middleware : [];
+        const allLoaded = [...loadedStacks, ...loadedRoutes, ...loadedMiddleware];
+
+        if (loadedStacks.length > 0) {
           hasStacks = true;
-          if (resPlugins.data.stacks.some((s) => (s.name || s.id) === 'ai')) {
-            hasAI = true;
-          }
+        }
+        if (allLoaded.some((p) => (p.name || p.id) === 'ai')) {
+          hasAI = true;
+        }
+        if (allLoaded.some((p) => ['docker-monitor', 'docker', 'containers'].includes(p.name || p.id))) {
+          hasContainers = true;
         }
       }
 
@@ -58,11 +65,9 @@ export default function App() {
         if (installed.some((c) => c.name === 'ai')) {
           hasAI = true;
         }
-      }
-
-      // 3. Check active container fleet
-      if (resContainers?.status === 'success' && Array.isArray(resContainers.data) && resContainers.data.length > 0) {
-        hasContainers = true;
+        if (installed.some((c) => ['docker-monitor', 'docker', 'containers'].includes(c.name))) {
+          hasContainers = true;
+        }
       }
 
       setPluginsState({

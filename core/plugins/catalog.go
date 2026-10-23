@@ -127,6 +127,14 @@ var Catalog = []CatalogItem{
 		Author:      "M3TAL Team",
 		URL:         "https://raw.githubusercontent.com/jakej985-rgb/m3tal-core/main/deploy/plugins/traefik/traefik-gateway.yml",
 	},
+	{
+		Name:        "docker-monitor",
+		Kind:        "Service",
+		Description: "Docker Container Fleet Manager & Real-time Monitor",
+		Version:     "1.0.0",
+		Author:      "M3TAL Team",
+		URL:         "https://raw.githubusercontent.com/jakej985-rgb/m3tal-core/main/deploy/plugins/services/docker-monitor.yml",
+	},
 }
 
 // GetPluginBaseName extracts the clean name of the plugin from its filepath.

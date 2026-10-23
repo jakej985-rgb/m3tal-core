@@ -1,0 +1,11 @@
+apiVersion: m3tal/v1
+kind: Service
+metadata:
+  name: docker-monitor
+  description: "Docker Container Fleet Manager & Real-time Monitor"
+  version: "1.0.0"
+  author: "M3TAL Team"
+  provides:
+    - container-management
+spec:
+  command: "m3tal docker-daemon"
