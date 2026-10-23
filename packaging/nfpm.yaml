@@ -27,7 +27,23 @@ contents:
     type: "file"
 
   - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-core
+    type: "symlink"
+
+  - src: /usr/bin/m3tal
     dst: /usr/bin/m3tal-headless
+    type: "symlink"
+
+  - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-web
+    type: "symlink"
+
+  - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-sysmon
+    type: "symlink"
+
+  - src: /usr/bin/m3tal
+    dst: /usr/bin/m3tal-docker
     type: "symlink"
 
   # Stack Templates

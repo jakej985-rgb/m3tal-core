@@ -45,6 +45,24 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 			cmdline = cmdline[:200] + "..."
 		}
 
+		// Canonical M3TAL process naming: m3tal-<process>
+		if name == "m3tal" || name == "m3tal-headless" || strings.Contains(cmdline, "m3tal") {
+			cmdLower := strings.ToLower(cmdline)
+			if strings.Contains(cmdLower, "sysmon") || strings.Contains(cmdLower, "monitor") {
+				name = "m3tal-sysmon"
+			} else if strings.Contains(cmdLower, "web") || strings.Contains(cmdLower, "headless") {
+				name = "m3tal-web"
+			} else if strings.Contains(cmdLower, "api") {
+				name = "m3tal-api"
+			} else if strings.Contains(cmdLower, "docker") {
+				name = "m3tal-docker"
+			} else if strings.Contains(cmdLower, "agent") || strings.Contains(cmdLower, "daemon") {
+				name = "m3tal-core"
+			} else if !strings.HasPrefix(name, "m3tal-") {
+				name = "m3tal-core"
+			}
+		}
+
 		createTime, _ := p.CreateTime()
 
 		results = append(results, models.ProcessInfo{

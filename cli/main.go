@@ -39,8 +39,30 @@ var Version = "0.1.0"
 var envExample string
 
 func main() {
-	if strings.Contains(filepath.Base(os.Args[0]), "headless") && len(os.Args) == 1 {
-		os.Args = append(os.Args, "headless")
+	exeName := filepath.Base(os.Args[0])
+	switch {
+	case strings.Contains(exeName, "sysmon") || (len(os.Args) > 1 && os.Args[1] == "sysmon"):
+		system.SetProcessName("m3tal-sysmon")
+		if len(os.Args) == 1 {
+			os.Args = append(os.Args, "sysmon")
+		}
+	case strings.Contains(exeName, "web") || strings.Contains(exeName, "headless") || (len(os.Args) > 1 && (os.Args[1] == "web" || os.Args[1] == "headless")):
+		system.SetProcessName("m3tal-web")
+		if len(os.Args) == 1 {
+			os.Args = append(os.Args, "headless")
+		}
+	case strings.Contains(exeName, "docker") || (len(os.Args) > 1 && (os.Args[1] == "docker-daemon" || os.Args[1] == "docker")):
+		system.SetProcessName("m3tal-docker")
+		if len(os.Args) == 1 {
+			os.Args = append(os.Args, "docker-daemon")
+		}
+	case strings.Contains(exeName, "api") || (len(os.Args) > 1 && os.Args[1] == "api"):
+		system.SetProcessName("m3tal-api")
+		if len(os.Args) == 1 {
+			os.Args = append(os.Args, "api")
+		}
+	default:
+		system.SetProcessName("m3tal-core")
 	}
 	log.Println("[cli] M3TAL CLI invoked (Command:", os.Args, ")")
 	// First-run check for Linux system installations
@@ -1697,7 +1719,33 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 		},
 	}
 
-	rootCmd.AddCommand(versionCmd, listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, aiCmd, stacksCmd, uiCmd, headlessCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
+	var sysmonCmd = &cobra.Command{
+		Use:     "sysmon",
+		Aliases: []string{"monitor", "metrics-collector"},
+		Short:   "Start M3TAL System Monitor telemetry collector daemon",
+		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
+			system.SetProcessName("m3tal-sysmon")
+			fmt.Println("🚀 M3TAL System Monitor telemetry collector running (m3tal-sysmon)...")
+			ticker := time.NewTicker(3 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				_, _ = c.GetTrayStats()
+			}
+		}),
+	}
+
+	var dockerDaemonCmd = &cobra.Command{
+		Use:     "docker-daemon",
+		Aliases: []string{"docker-mon", "docker-worker"},
+		Short:   "Start M3TAL Docker monitoring and reconciliation daemon",
+		Run: func(cmd *cobra.Command, args []string) {
+			system.SetProcessName("m3tal-docker")
+			fmt.Println("🐳 M3TAL Docker Worker running (m3tal-docker)...")
+			api.RunAgentsDaemon()
+		},
+	}
+
+	rootCmd.AddCommand(versionCmd, listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, aiCmd, stacksCmd, uiCmd, headlessCmd, sysmonCmd, dockerDaemonCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

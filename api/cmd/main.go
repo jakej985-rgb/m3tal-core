@@ -11,9 +11,11 @@ import (
 
 	"github.com/jakej985-rgb/m3tal-core/api"
 	"github.com/jakej985-rgb/m3tal-core/core/health"
+	syspaths "github.com/jakej985-rgb/m3tal-core/pkg/system"
 )
 
 func main() {
+	syspaths.SetProcessName("m3tal-api")
 	apiToken := os.Getenv("API_TOKEN")
 	if apiToken == "" {
 		apiToken = "m3tal-secret-token"

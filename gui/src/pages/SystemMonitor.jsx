@@ -13,6 +13,7 @@ export default function SystemMonitor() {
   const [sortField, setSortField] = useState('cpu_percent');
   const [sortAsc, setSortAsc] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [filterM3talOnly, setFilterM3talOnly] = useState(false);
   const [killModalProc, setKillModalProc] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -87,14 +88,21 @@ export default function SystemMonitor() {
     }
   };
 
+  const m3talProcs = processes.filter(
+    (p) => p.name?.startsWith('m3tal') || p.name === 'm3tal' || p.cmdline?.includes('m3tal')
+  );
+
   const filteredProcesses = processes
     .filter((p) => {
+      const isM3tal = p.name?.startsWith('m3tal') || p.name === 'm3tal' || p.cmdline?.includes('m3tal');
+      if (filterM3talOnly && !isM3tal) return false;
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
         p.name?.toLowerCase().includes(q) ||
         String(p.pid).includes(q) ||
-        p.username?.toLowerCase().includes(q)
+        p.username?.toLowerCase().includes(q) ||
+        p.cmdline?.toLowerCase().includes(q)
       );
     })
     .sort((a, b) => {
@@ -289,23 +297,50 @@ export default function SystemMonitor() {
       {activeTab === 'processes' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
           {/* Table Toolbar */}
-          <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div className="relative w-full sm:w-80">
-              <input
-                type="text"
-                placeholder="Search processes by name, PID, user..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-              />
-              {searchQuery && (
+          <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="relative w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="Search processes by name, PID, user..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-2 text-slate-500 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* M3TAL Process Filter Toggle */}
+              <div className="flex items-center bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs">
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-2 text-slate-500 hover:text-white text-xs"
+                  onClick={() => setFilterM3talOnly(false)}
+                  className={`px-3 py-1 rounded-md font-semibold transition-all ${
+                    !filterM3talOnly
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  ✕
+                  All ({processes.length})
                 </button>
-              )}
+                <button
+                  onClick={() => setFilterM3talOnly(true)}
+                  className={`px-3 py-1 rounded-md font-semibold flex items-center gap-1.5 transition-all ${
+                    filterM3talOnly
+                      ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                      : 'text-emerald-400/90 hover:text-emerald-300'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  M3TAL ({m3talProcs.length})
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-4 text-xs text-slate-400 font-mono">
@@ -356,18 +391,32 @@ export default function SystemMonitor() {
                 {filteredProcesses.map((p) => {
                   const isHighCpu = p.cpu_percent >= 20;
                   const isRoot = p.username === 'root';
+                  const isM3tal = p.name?.startsWith('m3tal') || p.name === 'm3tal';
 
                   return (
                     <tr
                       key={p.pid}
-                      className="hover:bg-slate-800/40 transition-colors group"
+                      className={`transition-colors group ${
+                        isM3tal
+                          ? 'bg-emerald-950/25 hover:bg-emerald-950/40 border-l-2 border-l-emerald-400'
+                          : 'hover:bg-slate-800/40'
+                      }`}
                     >
                       <td className="p-3.5 font-sans">
-                        <div className="font-semibold text-white text-xs flex items-center gap-2">
-                          <span>{p.name}</span>
+                        <div className="font-semibold text-xs flex items-center gap-2">
+                          <span className={isM3tal ? 'text-emerald-300 font-bold' : 'text-white'}>
+                            {p.name}
+                          </span>
+                          {isM3tal && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider">
+                              M3TAL
+                            </span>
+                          )}
                         </div>
                         {p.cmdline && p.cmdline !== p.name && (
-                          <div className="text-[10px] text-slate-500 font-mono truncate max-w-sm mt-0.5" title={p.cmdline}>
+                          <div className={`text-[10px] font-mono truncate max-w-sm mt-0.5 ${
+                            isM3tal ? 'text-emerald-400/70' : 'text-slate-500'
+                          }`} title={p.cmdline}>
                             {p.cmdline}
                           </div>
                         )}
