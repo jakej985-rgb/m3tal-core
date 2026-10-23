@@ -143,15 +143,14 @@ export default function Dashboard() {
     return 'shadow-[0_0_12px_rgba(45,212,191,0.3)]';
   };
 
-  // Group partitions by physical parent drive or individual network share
-  const diskCards = useMemo(() => {
-    if (!metrics?.disk_partitions) return [];
+  // Categorize storage into System (top row), USB/Removable, Network, and Internal drives
+  const storageGroups = useMemo(() => {
+    if (!metrics?.disk_partitions) return { system: [], usb: [], network: [], internal: [], totalDrives: 0, totalVolumes: 0 };
 
     const groups = new Map();
 
     metrics.disk_partitions.forEach((p) => {
-      const isNet = p.device?.startsWith('//') || p.device?.startsWith('\\\\') || p.fstype === 'cifs' || p.fstype?.startsWith('nfs');
-      // For network shares, group by their unique device/mountpoint; for local disks, group by disk_name
+      const isNet = p.device?.startsWith('//') || p.device?.startsWith('\\\\') || p.fstype === 'cifs' || p.fstype?.startsWith('nfs') || p.drive_type === 'network';
       const groupKey = isNet ? `net:${p.mountpoint || p.device}` : (p.disk_name ? `disk:${p.disk_name}` : `dev:${p.device}`);
 
       if (!groups.has(groupKey)) {
@@ -166,7 +165,12 @@ export default function Dashboard() {
       groups.get(groupKey).partitions.push(p);
     });
 
-    return Array.from(groups.values()).map((g) => {
+    const system = [];
+    const usb = [];
+    const network = [];
+    const internal = [];
+
+    groups.forEach((g) => {
       const totalGB = g.partitions.reduce((acc, p) => acc + (p.total || 0), 0);
       const usedGB = g.partitions.reduce((acc, p) => acc + (p.used || 0), 0);
       const freeGB = g.partitions.reduce((acc, p) => acc + (p.free || 0), 0);
@@ -175,25 +179,36 @@ export default function Dashboard() {
       const isCriticalSpace = g.partitions.some((p) => p.used_percent >= 90) || usedPercent >= 90;
       const isWarningSpace = !isCriticalSpace && (g.partitions.some((p) => p.used_percent >= 80) || usedPercent >= 80);
 
+      const isSystemDrive = g.partitions.some((p) => p.drive_type === 'system' || p.mountpoint === '/' || p.mountpoint === '/home' || p.mountpoint === '/tmp');
+      const isUsbDrive = !isSystemDrive && (g.partitions.some((p) => p.drive_type === 'usb' || p.mountpoint?.startsWith('/media/') || p.mountpoint?.startsWith('/run/media/')));
+      const isNetDrive = g.isNet || g.partitions.some((p) => p.drive_type === 'network');
+
+      let driveCategory = 'internal';
+      if (isSystemDrive) driveCategory = 'system';
+      else if (isUsbDrive) driveCategory = 'usb';
+      else if (isNetDrive) driveCategory = 'network';
+
       let title = '';
       let subtitle = '';
 
-      if (g.isNet) {
+      if (driveCategory === 'network') {
         const p = g.partitions[0];
         title = p.label && !p.device?.includes(p.label) ? p.label : p.mountpoint;
         subtitle = `${p.mountpoint} • ${p.fstype?.toUpperCase()}`;
-      } else if (g.partitions.length > 1) {
-        const hasRoot = g.partitions.some((p) => p.mountpoint === '/');
-        const driveLabel = hasRoot ? 'System Drive' : 'Physical Drive';
-        title = g.diskModel ? `${g.diskModel} (${g.diskName})` : `${driveLabel} (${g.diskName})`;
-        subtitle = `${g.partitions.length} Linux Partitions • ${g.diskName}`;
+      } else if (driveCategory === 'system') {
+        title = g.diskModel ? `System Drive • ${g.diskModel} (${g.diskName})` : `System Drive (${g.diskName})`;
+        subtitle = `${g.partitions.length} Linux System Partitions (/, /home, /tmp) • ${g.diskName}`;
+      } else if (driveCategory === 'usb') {
+        const p = g.partitions[0];
+        title = p.label && !p.device?.includes(p.label) ? p.label : (g.diskModel || g.diskName || 'USB Drive');
+        subtitle = `${p.mountpoint} • ${p.fstype?.toUpperCase()} • ${g.diskName}`;
       } else {
         const p = g.partitions[0];
-        title = p.label && !p.device?.includes(p.label) ? p.label : p.mountpoint;
-        subtitle = `${p.mountpoint} • ${p.fstype?.toUpperCase()} • ${g.diskName || (p.device ? p.device.replace('/dev/', '') : '')}`;
+        title = p.label && !p.device?.includes(p.label) ? p.label : (g.diskModel || p.mountpoint);
+        subtitle = `${p.mountpoint} • ${p.fstype?.toUpperCase()} • ${g.diskName}`;
       }
 
-      return {
+      const cardData = {
         ...g,
         title,
         subtitle,
@@ -203,8 +218,23 @@ export default function Dashboard() {
         usedPercent,
         isCriticalSpace,
         isWarningSpace,
+        driveCategory,
       };
+
+      if (driveCategory === 'system') system.push(cardData);
+      else if (driveCategory === 'usb') usb.push(cardData);
+      else if (driveCategory === 'network') network.push(cardData);
+      else internal.push(cardData);
     });
+
+    return {
+      system,
+      usb,
+      network,
+      internal,
+      totalDrives: groups.size,
+      totalVolumes: metrics.disk_partitions.length,
+    };
   }, [metrics?.disk_partitions]);
 
   // Resilient status badge computation
@@ -471,127 +501,246 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Storage & Mounted Drives Panel (disk1, disk2, network shares, pools) */}
-      {diskCards && diskCards.length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+      {/* Storage & Mounted Drives Panel */}
+      {storageGroups && storageGroups.totalVolumes > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
               <span>💿</span> Storage & Mounted Drives
             </h2>
             <span className="text-xs text-slate-500 font-mono">
-              {diskCards.length} {diskCards.length === 1 ? 'Drive' : 'Drives'} ({metrics.disk_partitions.length} {metrics.disk_partitions.length === 1 ? 'Volume' : 'Volumes'})
+              {storageGroups.totalDrives} {storageGroups.totalDrives === 1 ? 'Drive' : 'Drives'} ({storageGroups.totalVolumes} Volumes)
             </span>
           </div>
-          <div className="border-t border-slate-800/60 pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {diskCards.map((card, idx) => {
-              const isMulti = card.partitions.length > 1;
 
-              return (
-                <div 
-                  key={card.key || idx} 
-                  className={`bg-slate-950/60 border rounded-lg p-4 space-y-3 relative transition-all ${
-                    card.isCriticalSpace 
-                      ? 'border-rose-500/40 ring-1 ring-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]' 
-                      : card.isWarningSpace 
-                      ? 'border-amber-500/30' 
-                      : 'border-slate-800/60'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 pr-2">
-                      <div className="font-semibold text-white text-sm flex items-center gap-2 flex-wrap">
-                        <span className="truncate max-w-[200px]" title={card.title}>{card.title}</span>
-                        {card.isNet ? (
+          {/* 1. TOP ROW: SYSTEM STORAGE (LOCKED ACROSS TOP ROW) */}
+          {storageGroups.system.map((card, idx) => (
+            <div key={card.key || idx} className="space-y-2">
+              <div className="text-xs font-semibold text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+                <span>💻</span> Host System Storage
+              </div>
+              <div className={`bg-slate-950/70 border rounded-xl p-5 space-y-4 relative transition-all ${
+                card.isCriticalSpace
+                  ? 'border-rose-500/40 ring-1 ring-rose-500/20'
+                  : card.isWarningSpace
+                  ? 'border-amber-500/30'
+                  : 'border-slate-800/80 shadow-sm'
+              }`}>
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="font-bold text-white text-base">{card.title}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      SYSTEM
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                      {card.partitions.length} PARTITIONS
+                    </span>
+                    {card.isCriticalSpace && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse">
+                        CRITICAL
+                      </span>
+                    )}
+                    {card.isWarningSpace && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        LOW SPACE
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 font-mono text-xs">
+                    <span className="text-slate-400">Total: {formatCap(card.usedGB)} / {formatCap(card.totalGB)}</span>
+                    <span className={`font-bold text-sm ${card.isCriticalSpace ? 'text-rose-400' : card.isWarningSpace ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {card.usedPercent?.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* System partitions displayed side-by-side in responsive columns */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                  {card.partitions.map((p, pIdx) => {
+                    const isPartCritical = p.used_percent >= 90;
+                    const isPartWarning = p.used_percent >= 80 && p.used_percent < 90;
+                    const partLabel = p.mountpoint === '/' ? 'Root (/)' : p.mountpoint === '/home' ? 'Home (/home)' : p.mountpoint === '/tmp' ? 'Temp (/tmp)' : p.mountpoint;
+
+                    return (
+                      <div key={pIdx} className="bg-slate-900/80 border border-slate-800/70 rounded-lg p-3.5 space-y-2 hover:border-slate-700 transition-colors">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-semibold text-slate-200 text-xs flex items-center gap-1.5">
+                              <span className="text-white font-mono">{partLabel}</span>
+                              {p.label && p.label !== p.mountpoint && (
+                                <span className="text-[10px] text-slate-400 font-normal">({p.label})</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                              {p.device ? p.device.replace('/dev/', '') : ''} • {p.fstype?.toUpperCase()}
+                            </div>
+                          </div>
+                          <div className="text-right font-mono">
+                            <div className={`text-xs font-bold ${isPartCritical ? 'text-rose-400' : isPartWarning ? 'text-amber-400' : 'text-slate-200'}`}>
+                              {p.used_percent?.toFixed(1)}%
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {formatCap(p.used)} / {formatCap(p.total)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-1.5 rounded-full transition-all duration-500 ${getUsageColor(p.used_percent)}`}
+                            style={{ width: `${Math.min(100, p.used_percent)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* 2. REMOVABLE & USB STORAGE (DEDICATED SECTION) */}
+          {storageGroups.usb.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-semibold text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+                <span>🔌</span> Removable & USB Drives
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {storageGroups.usb.map((card, idx) => (
+                  <div key={card.key || idx} className={`bg-slate-950/60 border rounded-lg p-4 space-y-3 relative transition-all ${
+                    card.isCriticalSpace ? 'border-rose-500/40 ring-1 ring-rose-500/20' : card.isWarningSpace ? 'border-amber-500/30' : 'border-slate-800/60'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 pr-2">
+                        <div className="font-semibold text-white text-sm flex items-center gap-2 flex-wrap">
+                          <span className="truncate max-w-[180px]" title={card.title}>{card.title}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            USB
+                          </span>
+                          {card.isCriticalSpace && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse">
+                              CRITICAL
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5 truncate" title={card.subtitle}>
+                          {card.subtitle}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-bold text-sm ${card.isCriticalSpace ? 'text-rose-400' : card.isWarningSpace ? 'text-amber-400' : 'text-white'}`}>
+                          {card.usedPercent?.toFixed(1)}%
+                        </span>
+                        <div className="text-xs text-slate-400 font-mono">
+                          {formatCap(card.usedGB)} / {formatCap(card.totalGB)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(card.usedPercent)}`}
+                        style={{ width: `${Math.min(100, card.usedPercent)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. NETWORK STORAGE (LOCKED TO DEDICATED ROW) */}
+          {storageGroups.network.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-semibold text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+                <span>🌐</span> Network Storage
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {storageGroups.network.map((card, idx) => (
+                  <div key={card.key || idx} className={`bg-slate-950/60 border rounded-lg p-4 space-y-3 relative transition-all ${
+                    card.isCriticalSpace ? 'border-rose-500/40 ring-1 ring-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.1)]' : card.isWarningSpace ? 'border-amber-500/30' : 'border-slate-800/60'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 pr-2">
+                        <div className="font-semibold text-white text-sm flex items-center gap-2 flex-wrap">
+                          <span className="truncate max-w-[180px]" title={card.title}>{card.title}</span>
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                             NETWORK
                           </span>
-                        ) : (
+                          {card.isCriticalSpace && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse">
+                              CRITICAL
+                            </span>
+                          )}
+                          {card.isWarningSpace && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              LOW SPACE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5 truncate" title={card.subtitle}>
+                          {card.subtitle}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-bold text-sm ${card.isCriticalSpace ? 'text-rose-400' : card.isWarningSpace ? 'text-amber-400' : 'text-white'}`}>
+                          {card.usedPercent?.toFixed(1)}%
+                        </span>
+                        <div className="text-xs text-slate-400 font-mono">
+                          {formatCap(card.usedGB)} / {formatCap(card.totalGB)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(card.usedPercent)}`}
+                        style={{ width: `${Math.min(100, card.usedPercent)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4. OTHER INTERNAL STORAGE (if any) */}
+          {storageGroups.internal.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-semibold text-slate-400 flex items-center gap-2 uppercase tracking-wider">
+                <span>💽</span> Internal Storage
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {storageGroups.internal.map((card, idx) => (
+                  <div key={card.key || idx} className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 pr-2">
+                        <div className="font-semibold text-white text-sm flex items-center gap-2 flex-wrap">
+                          <span className="truncate max-w-[180px]" title={card.title}>{card.title}</span>
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
                             LOCAL
                           </span>
-                        )}
-                        {isMulti && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                            {card.partitions.length} PARTITIONS
-                          </span>
-                        )}
-                        {card.isCriticalSpace && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 animate-pulse">
-                            CRITICAL
-                          </span>
-                        )}
-                        {card.isWarningSpace && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                            LOW SPACE
-                          </span>
-                        )}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5 truncate" title={card.subtitle}>
+                          {card.subtitle}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-500 font-mono mt-0.5 truncate" title={card.subtitle}>
-                        {card.subtitle}
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-sm text-white">{card.usedPercent?.toFixed(1)}%</span>
+                        <div className="text-xs text-slate-400 font-mono">
+                          {formatCap(card.usedGB)} / {formatCap(card.totalGB)}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className={`font-bold text-sm ${
-                        card.isCriticalSpace ? 'text-rose-400' : card.isWarningSpace ? 'text-amber-400' : 'text-white'
-                      }`}>
-                        {card.usedPercent?.toFixed(1)}%
-                      </span>
-                      <div className="text-xs text-slate-400 font-mono">
-                        {formatCap(card.usedGB)} / {formatCap(card.totalGB)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* If multi-partition, list each partition with its own usage bar */}
-                  {isMulti ? (
-                    <div className="space-y-2.5 pt-1 border-t border-slate-800/40">
-                      {card.partitions.map((p, pIdx) => {
-                        const isPartCritical = p.used_percent >= 90;
-                        const isPartWarning = p.used_percent >= 80 && p.used_percent < 90;
-                        return (
-                          <div key={pIdx} className="bg-slate-900/60 border border-slate-800/50 rounded-lg p-2.5 space-y-1.5">
-                            <div className="flex justify-between items-center text-xs">
-                              <div className="flex items-center gap-1.5 font-semibold text-slate-200">
-                                <span className="text-emerald-400 font-mono">{p.mountpoint}</span>
-                                {p.label && p.label !== p.mountpoint && (
-                                  <span className="text-[10px] text-slate-400 font-normal">({p.label})</span>
-                                )}
-                                <span className="text-[10px] text-slate-500 font-mono uppercase bg-slate-800/70 px-1.5 py-0.5 rounded">
-                                  {p.fstype}
-                                </span>
-                              </div>
-                              <div className="text-right font-mono text-[11px]">
-                                <span className={isPartCritical ? 'text-rose-400 font-bold' : isPartWarning ? 'text-amber-400 font-bold' : 'text-slate-200'}>
-                                  {p.used_percent?.toFixed(1)}%
-                                </span>
-                                <span className="text-slate-400 ml-1.5">
-                                  ({formatCap(p.used)} / {formatCap(p.total)})
-                                </span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-slate-800/90 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className={`h-1.5 rounded-full transition-all duration-500 ${getUsageColor(p.used_percent)}`}
-                                style={{ width: `${Math.min(100, p.used_percent)}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    /* Single partition layout */
                     <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                       <div
-                        className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(card.partitions[0]?.used_percent || card.usedPercent)}`}
-                        style={{ width: `${Math.min(100, card.partitions[0]?.used_percent || card.usedPercent)}%` }}
+                        className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(card.usedPercent)}`}
+                        style={{ width: `${Math.min(100, card.usedPercent)}%` }}
                       ></div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

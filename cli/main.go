@@ -196,15 +196,6 @@ func main() {
 				exe = "m3tal"
 			}
 
-			// Spawn dedicated docker worker process (m3tal-docker)
-			dockerCmd := exec.Command(exe, "docker-daemon")
-			dockerCmd.Stdout = os.Stdout
-			dockerCmd.Stderr = os.Stderr
-			if err := dockerCmd.Start(); err != nil {
-				log.Printf("⚠️ Failed to start m3tal-docker child process: %v, falling back to in-process", err)
-				go api.RunAgentsDaemon()
-			}
-
 			// Spawn dedicated sysmon collector process (m3tal-sysmon)
 			sysmonCmd := exec.Command(exe, "sysmon")
 			sysmonCmd.Stdout = os.Stdout
@@ -217,9 +208,6 @@ func main() {
 			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 			<-sigChan
 
-			if dockerCmd != nil && dockerCmd.Process != nil {
-				_ = dockerCmd.Process.Kill()
-			}
 			if sysmonCmd != nil && sysmonCmd.Process != nil {
 				_ = sysmonCmd.Process.Kill()
 			}

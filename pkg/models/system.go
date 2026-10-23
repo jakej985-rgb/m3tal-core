@@ -42,6 +42,7 @@ type DiskPartition struct {
 	Device      string  `json:"device"`
 	DiskName    string  `json:"disk_name,omitempty"`
 	DiskModel   string  `json:"disk_model,omitempty"`
+	DriveType   string  `json:"drive_type,omitempty"` // "system", "usb", "network", "internal"
 	Label       string  `json:"label"`
 	Mountpoint  string  `json:"mountpoint"`
 	FSType      string  `json:"fstype"`

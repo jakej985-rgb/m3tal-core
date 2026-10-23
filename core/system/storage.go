@@ -33,17 +33,17 @@ func getDeviceLabel(devicePath string) string {
 	return filepath.Base(devicePath)
 }
 
-// getParentDisk resolves the physical disk device name and model (e.g. /dev/sda4 -> "sda", "HGST HTS721010A9").
-func getParentDisk(devicePath string) (string, string) {
+// getParentDisk resolves the physical disk device name, model, and whether it is USB/removable.
+func getParentDisk(devicePath string) (string, string, bool) {
 	if !strings.HasPrefix(devicePath, "/dev/") {
-		return "", ""
+		return "", "", false
 	}
 	devName := filepath.Base(devicePath)
 	sysBlockPath := filepath.Join("/sys/class/block", devName)
 
 	link, err := os.Readlink(sysBlockPath)
 	if err != nil {
-		return devName, ""
+		return devName, "", false
 	}
 
 	parentDisk := devName
@@ -61,7 +61,15 @@ func getParentDisk(devicePath string) (string, string) {
 		model = strings.TrimSpace(string(modelBytes))
 	}
 
-	return parentDisk, model
+	// Check if this device or its parent disk is connected via USB bus
+	isUSB := strings.Contains(link, "/usb")
+	if !isUSB {
+		if parentLink, err := os.Readlink(filepath.Join("/sys/class/block", parentDisk)); err == nil {
+			isUSB = strings.Contains(parentLink, "/usb")
+		}
+	}
+
+	return parentDisk, model, isUSB
 }
 
 // GetDiskPartitions returns detailed disk usage for all mounted partitions (physical and network shares).
@@ -85,11 +93,10 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 			continue
 		}
 
-		// Ignore EFI/boot and temporary partitions (e.g. /boot/efi, /boot, /efi, /tmp)
+		// Ignore EFI/boot partitions (e.g. /boot/efi, /boot, /efi)
 		mp := strings.TrimRight(p.Mountpoint, "/")
 		if mp == "/boot" || strings.HasPrefix(p.Mountpoint, "/boot/") ||
-			mp == "/efi" || strings.HasPrefix(p.Mountpoint, "/efi/") ||
-			mp == "/tmp" || strings.HasPrefix(p.Mountpoint, "/tmp/") {
+			mp == "/efi" || strings.HasPrefix(p.Mountpoint, "/efi/") {
 			continue
 		}
 
@@ -119,12 +126,22 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 		usedGB := float64(usage.Used) / (1024 * 1024 * 1024)
 		freeGB := float64(usage.Free) / (1024 * 1024 * 1024)
 
-		diskName, diskModel := getParentDisk(p.Device)
+		diskName, diskModel, isUSB := getParentDisk(p.Device)
+
+		driveType := "internal"
+		if strings.HasPrefix(p.Device, "//") || strings.Contains(p.Device, ":/") || p.Fstype == "cifs" || strings.HasPrefix(p.Fstype, "nfs") {
+			driveType = "network"
+		} else if isUSB || strings.HasPrefix(p.Mountpoint, "/media/") || strings.HasPrefix(p.Mountpoint, "/run/media/") {
+			driveType = "usb"
+		} else if p.Mountpoint == "/" || p.Mountpoint == "/home" || p.Mountpoint == "/tmp" {
+			driveType = "system"
+		}
 
 		list = append(list, models.DiskPartition{
 			Device:      p.Device,
 			DiskName:    diskName,
 			DiskModel:   diskModel,
+			DriveType:   driveType,
 			Label:       getDeviceLabel(p.Device),
 			Mountpoint:  p.Mountpoint,
 			FSType:      p.Fstype,
@@ -133,6 +150,20 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 			Free:        freeGB,
 			UsedPercent: usage.UsedPercent,
 		})
+	}
+
+	// Unify driveType for partitions sharing the same physical diskName:
+	// If any partition on diskName is "system", all partitions on that disk are "system".
+	systemDisks := make(map[string]bool)
+	for _, p := range list {
+		if p.DriveType == "system" && p.DiskName != "" {
+			systemDisks[p.DiskName] = true
+		}
+	}
+	for i := range list {
+		if list[i].DiskName != "" && systemDisks[list[i].DiskName] {
+			list[i].DriveType = "system"
+		}
 	}
 
 	return list, nil
