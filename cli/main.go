@@ -1814,11 +1814,20 @@ func launchDesktopApp(port string, forceHeadless bool) {
 	fmt.Println("╚════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
+	token := config.GetAPIToken()
+	if token == "" {
+		token = os.Getenv("API_TOKEN")
+		if token == "" {
+			token = "change_me_api_token"
+		}
+	}
+	appURL := fmt.Sprintf("http://localhost:%s/gui/?token=%s", port, token)
+
 	isHeadless := forceHeadless || (runtime.GOOS == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "")
 
 	if !isHeadless {
 		fmt.Printf("🖥️  Opening M3TAL Desktop App Window: %s\n", localURL)
-		openDesktopApp(localURL)
+		openDesktopApp(appURL)
 	} else {
 		fmt.Println("🌐 Headless mode active. Access the Web GUI remotely using the Network URL above.")
 	}

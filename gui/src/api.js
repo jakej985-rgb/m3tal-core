@@ -1,6 +1,14 @@
-const DEFAULT_TOKEN = 'm3tal-secret-token';
+const DEFAULT_TOKEN = 'change_me_api_token';
 
 export const getToken = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      setToken(urlToken);
+      return urlToken;
+    }
+  }
   return localStorage.getItem('m3tal_token') || DEFAULT_TOKEN;
 };
 
@@ -42,6 +50,10 @@ const fetchAPI = async (method, path, body = null) => {
     if (res.status === 401) {
       return { status: 'error', error: 'Unauthorized API Access' };
     }
+    if (!res.ok) {
+      const text = await res.text();
+      return { status: 'error', error: text || `HTTP ${res.status}` };
+    }
     const data = await res.json();
     if (data && data.status) {
       return data;
@@ -56,9 +68,9 @@ export const api = {
   getStacks: () => fetchAPI('GET', '/api/v2/stacks'),
   deployStack: (name) => fetchAPI('POST', `/api/v2/stacks/${name}/up`),
   stopStack: (name) => fetchAPI('POST', `/api/v2/stacks/${name}/down`),
-  getContainers: () => fetchAPI('GET', '/api/containers'),
-  controlContainer: (name, action) => fetchAPI('POST', `/api/containers/${action}`, { name }),
-  getMetrics: () => fetchAPI('GET', '/api/metrics'),
+  getContainers: () => fetchAPI('GET', '/api/v2/services'),
+  controlContainer: (name, action) => fetchAPI('POST', `/api/v2/containers/${name}/${action}`),
+  getMetrics: () => fetchAPI('GET', '/api/v2/system/stats'),
   getAIQueue: () => fetchAPI('GET', '/api/v2/ai/queue'),
   getAIModels: () => fetchAPI('GET', '/api/v2/ai/models'),
   runAI: (prompt, mode = '', priority = 'normal') => fetchAPI('POST', '/api/v2/ai/run', { prompt, mode, priority }),
