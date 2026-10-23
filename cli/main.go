@@ -158,6 +158,7 @@ func main() {
 		Use:   "daemon",
 		Short: "Manage M3TAL background API daemon and agents",
 		Run: func(cmd *cobra.Command, args []string) {
+			system.SetProcessName("m3tal-core")
 			port := os.Getenv("API_PORT")
 			if port == "" {
 				port = "5050"
@@ -178,7 +179,39 @@ func main() {
 			} else {
 				conn.Close()
 			}
-			api.RunAgentsDaemon()
+
+			exe, err := os.Executable()
+			if err != nil {
+				exe = "m3tal"
+			}
+
+			// Spawn dedicated docker worker process (m3tal-docker)
+			dockerCmd := exec.Command(exe, "docker-daemon")
+			dockerCmd.Stdout = os.Stdout
+			dockerCmd.Stderr = os.Stderr
+			if err := dockerCmd.Start(); err != nil {
+				log.Printf("⚠️ Failed to start m3tal-docker child process: %v, falling back to in-process", err)
+				go api.RunAgentsDaemon()
+			}
+
+			// Spawn dedicated sysmon collector process (m3tal-sysmon)
+			sysmonCmd := exec.Command(exe, "sysmon")
+			sysmonCmd.Stdout = os.Stdout
+			sysmonCmd.Stderr = os.Stderr
+			if err := sysmonCmd.Start(); err != nil {
+				log.Printf("⚠️ Failed to start m3tal-sysmon child process: %v", err)
+			}
+
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+			<-sigChan
+
+			if dockerCmd != nil && dockerCmd.Process != nil {
+				_ = dockerCmd.Process.Kill()
+			}
+			if sysmonCmd != nil && sysmonCmd.Process != nil {
+				_ = sysmonCmd.Process.Kill()
+			}
 		},
 	}
 
@@ -1781,7 +1814,7 @@ func getLocalLANIP() string {
 // openDesktopApp launches M3TAL in a standalone application window (no browser address bar, no tabs).
 // It attempts to use Chrome/Chromium --app mode for a borderless native-looking window with --class=m3tal,
 // falling back to openBrowser if no standalone runtime is detected.
-func openDesktopApp(url string) {
+func openDesktopApp(url string) *exec.Cmd {
 	if runtime.GOOS == "linux" {
 		for _, browser := range []string{"google-chrome", "chromium", "chromium-browser", "brave-browser"} {
 			if _, err := exec.LookPath(browser); err == nil {
@@ -1796,12 +1829,13 @@ func openDesktopApp(url string) {
 					"--no-default-browser-check",
 				)
 				if err := cmd.Start(); err == nil {
-					return
+					return cmd
 				}
 			}
 		}
 	}
 	openBrowser(url)
+	return nil
 }
 
 func launchDesktopApp(port string, forceHeadless bool) {
@@ -1873,19 +1907,55 @@ func launchDesktopApp(port string, forceHeadless bool) {
 
 	isHeadless := forceHeadless || (runtime.GOOS == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "")
 
+	var browserCmd *exec.Cmd
 	if !isHeadless {
 		fmt.Printf("🖥️  Opening M3TAL Desktop App Window: %s\n", localURL)
-		openDesktopApp(appURL)
+		browserCmd = openDesktopApp(appURL)
 	} else {
 		fmt.Println("🌐 Headless mode active. Access the Web GUI remotely using the Network URL above.")
 	}
 
-	if serverStartedByUs {
+	// Always spawn dedicated background telemetry process (m3tal-sysmon)
+	exe, err := os.Executable()
+	if err != nil {
+		exe = "m3tal"
+	}
+	sysmonCmd := exec.Command(exe, "sysmon")
+	_ = sysmonCmd.Start()
+
+	cleanup := func() {
+		if sysmonCmd != nil && sysmonCmd.Process != nil {
+			_ = sysmonCmd.Process.Kill()
+		}
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	if browserCmd != nil {
+		fmt.Println("⚡ M3TAL Desktop is running (m3tal-core). Close the window or press Ctrl+C to exit...")
+		done := make(chan error, 1)
+		go func() {
+			done <- browserCmd.Wait()
+		}()
+		select {
+		case <-sigChan:
+			fmt.Println("\nStopping M3TAL Desktop...")
+			if browserCmd.Process != nil {
+				_ = browserCmd.Process.Kill()
+			}
+		case <-done:
+			fmt.Println("\nM3TAL Desktop window closed.")
+		}
+		cleanup()
+		return
+	}
+
+	if serverStartedByUs || isHeadless {
 		fmt.Println("⚡ Press Ctrl+C to exit M3TAL...")
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
 		fmt.Println("\nStopping M3TAL Desktop backend...")
+		cleanup()
 	}
 }
 
