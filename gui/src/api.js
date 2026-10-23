@@ -89,6 +89,9 @@ export const api = {
   reconcileSystem: () => fetchAPI('POST', '/api/v2/system/reconcile'),
   getVPNStatus: () => fetchAPI('GET', '/api/v2/vpn/status'),
   getRoutes: () => fetchAPI('GET', '/api/v2/routes'),
+  getProcesses: (limit = 150) => fetchAPI('GET', `/api/v2/system/processes?limit=${limit}`),
+  killProcess: (pid) => fetchAPI('POST', `/api/v2/system/processes/${pid}/kill`),
+  getSystemSpecs: () => fetchAPI('GET', '/api/v2/system/specs'),
 };
 
 export const subscribeWS = (path, onMessage, onError = null) => {

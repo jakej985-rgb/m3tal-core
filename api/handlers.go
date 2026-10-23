@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -873,6 +874,50 @@ func (s *Server) ApplySystemUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendSuccess(w, http.StatusOK, map[string]bool{"ok": true}, nil)
+}
+
+// GetProcesses returns running system processes.
+// GET /api/v2/system/processes
+func (s *Server) GetProcesses(w http.ResponseWriter, r *http.Request) {
+	limit := 150
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	procs, err := system.GetProcesses(limit)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "PROCESSES_ERROR", err.Error(), nil)
+		return
+	}
+	sendSuccess(w, http.StatusOK, procs, nil)
+}
+
+// KillProcess terminates a process by PID.
+// POST /api/v2/system/processes/{pid}/kill
+func (s *Server) KillProcess(w http.ResponseWriter, r *http.Request) {
+	pidStr := chi.URLParam(r, "pid")
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 0 {
+		sendError(w, http.StatusBadRequest, "INVALID_PID", "invalid PID specified", nil)
+		return
+	}
+	if err := system.KillProcess(int32(pid)); err != nil {
+		sendError(w, http.StatusInternalServerError, "KILL_PROCESS_FAILED", err.Error(), nil)
+		return
+	}
+	sendSuccess(w, http.StatusOK, map[string]any{"ok": true, "pid": pid}, nil)
+}
+
+// GetSystemSpecs returns detailed host specifications and network interfaces.
+// GET /api/v2/system/specs
+func (s *Server) GetSystemSpecs(w http.ResponseWriter, r *http.Request) {
+	specs, err := system.GetSystemSpecs()
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "SYSTEM_SPECS_ERROR", err.Error(), nil)
+		return
+	}
+	sendSuccess(w, http.StatusOK, specs, nil)
 }
 
 // GetDockerImages retrieves all Docker images on the host.

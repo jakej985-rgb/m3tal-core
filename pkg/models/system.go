@@ -72,3 +72,49 @@ type SystemUpdates struct {
 	Count       int      `json:"count"`
 	UpdatesList []string `json:"updates_list"`
 }
+
+// ProcessInfo represents a running process on the host.
+type ProcessInfo struct {
+	PID           int32   `json:"pid"`
+	Name          string  `json:"name"`
+	Username      string  `json:"username"`
+	CPUPercent    float64 `json:"cpu_percent"`
+	MemoryPercent float32 `json:"memory_percent"`
+	MemoryRSS     uint64  `json:"memory_rss"` // bytes
+	Status        string  `json:"status"`
+	Cmdline       string  `json:"cmdline"`
+	CreateTime    int64   `json:"create_time"`
+}
+
+// NetworkInterfaceInfo represents a network interface and its counters.
+type NetworkInterfaceInfo struct {
+	Name        string   `json:"name"`
+	IPAddresses []string `json:"ip_addresses"`
+	BytesSent   uint64   `json:"bytes_sent"`
+	BytesRecv   uint64   `json:"bytes_recv"`
+	IsUp        bool     `json:"is_up"`
+}
+
+// SystemSpecs represents comprehensive host hardware and OS profile.
+type SystemSpecs struct {
+	Hostname          string                 `json:"hostname"`
+	OS                string                 `json:"os"`
+	Platform          string                 `json:"platform"`
+	PlatformFamily    string                 `json:"platform_family"`
+	PlatformVersion   string                 `json:"platform_version"`
+	KernelVersion     string                 `json:"kernel_version"`
+	KernelArch        string                 `json:"kernel_arch"`
+	Virtualization    string                 `json:"virtualization"`
+	Uptime            uint64                 `json:"uptime"`
+	CPUModel          string                 `json:"cpu_model"`
+	CPUCores          int32                  `json:"cpu_cores"`
+	CPUThreads        int                    `json:"cpu_threads"`
+	CPUMHz            float64                `json:"cpu_mhz"`
+	MemoryTotal       float64                `json:"memory_total"` // GB
+	MemoryUsed        float64                `json:"memory_used"`  // GB
+	SwapTotal         float64                `json:"swap_total"`   // GB
+	SwapUsed          float64                `json:"swap_used"`    // GB
+	GPUModel          string                 `json:"gpu_model"`
+	NetworkInterfaces []NetworkInterfaceInfo `json:"network_interfaces"`
+}
+
