@@ -117,4 +117,3 @@ type SystemSpecs struct {
 	GPUModel          string                 `json:"gpu_model"`
 	NetworkInterfaces []NetworkInterfaceInfo `json:"network_interfaces"`
 }
-
