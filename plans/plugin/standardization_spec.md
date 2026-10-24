@@ -16,9 +16,10 @@
 3. **Canonical Process Naming (`m3tal-<process>`)**:
    - Every single process spawned by M3TAL (the core app, supervisor, and every plugin daemon, worker, collector, or helper subprocess) MUST explicitly identify as `m3tal-<process>` (e.g. `m3tal-core`, `m3tal-api`, `m3tal-docker`, `m3tal-smart`, `m3tal-ai`, `m3tal-collector`).
    - **Operational Rationale**: High-Usage Attribution. When monitoring system health in `top`, `htop`, `m3tal-sysmon`, or `/proc/$pid/comm`, operators can immediately identify which exact subsystem or plugin is responsible for high CPU, memory, or disk I/O spikes without confusing generic names like `python3`, `node`, `bash`, or `main`.
-   - **Implementation & Enforcement**:
-     - *Supervisor Level*: `pkg/plugins.Manager` creates canonical execution symlinks in `$XDG_CACHE_DIR/m3tal/plugins-bin/m3tal-<process>` and passes `M3TAL_PROCESS_NAME=m3tal-<process>`.
-     - *Code Level*: Plugins should also set their thread/process title via Linux `prctl(PR_SET_NAME, "m3tal-<process>")` (in Go/C) or `setproctitle` (in Python).
+   - **Implementation & Execution Modes**:
+     - *First-Party Plugins (Direct Execution)*: Plugin binaries MUST be built and named canonically as `bin/m3tal-<process>` (e.g. `bin/m3tal-docker`). When the binary is already named `m3tal-<process>`, M3TAL Core executes it directly from its installation directory (`/usr/lib/m3tal/plugins/m3tal-<name>/bin/m3tal-<process>`). No symlinks are created, ensuring zero overhead, clean process tables, and complete immunity to `/tmp` security restrictions or `noexec` mounts.
+     - *Third-Party & Legacy Plugins (Runtime Symlink)*: If a third-party plugin executable has an arbitrary name (e.g. `server`, `app`, `run.sh`), the host supervisor automatically creates a canonical symlink named `m3tal-<process>` inside the secure systemd runtime directory (`$RUNTIME_DIRECTORY/plugins-bin/` or `/run/m3tal/plugins-bin/`), falling back to user cache (`$XDG_RUNTIME_DIR` / `~/.cache/m3tal/plugins-bin/`) before `/tmp`.
+     - *Code Level (prctl)*: Plugins should also set their thread/process title via Linux `prctl(PR_SET_NAME, "m3tal-<process>")` (in Go/C) or `setproctitle` (in Python).
      - *Sub-workers & Daemons*: Any helper threads or child processes spawned by a plugin must also follow the `m3tal-<process>-<worker>` convention.
 4. **Dynamic GUI Integration**:
    - The Web GUI dynamically discovers installed plugins and mounts their sidebar tabs, routing, and views at runtime without rebuilding the core frontend.
@@ -32,22 +33,23 @@
 All official and community M3TAL plugins reside in the dedicated **`m3tal-plugins`** repository (`jakej985-rgb/m3tal-plugins`).
 
 To keep the repository clean and avoid unnecessary nesting:
-- **Each plugin lives directly in its own top-level folder** (`<plugin-name>/`, e.g. `docker-monitor/`, `ai-engine/`, `smart-disk/`).
-- There is **no extra intermediate wrapper directory** (e.g. no `plugins/` folder).
+- **Each plugin lives directly in its own top-level folder** (`m3tal-<plugin-name>/`, e.g. `m3tal-docker/`, `m3tal-stacks/`, `m3tal-ai/`, `m3tal-smart/`).
+- There is **no extra intermediate wrapper directory** (e.g. no `plugins/` folder) and no symlinks.
 
 Every M3TAL plugin directory adheres to the following structure:
 
 ```text
-m3tal-plugins/<plugin-name>/
+m3tal-plugins/m3tal-<plugin-name>/
 ├── .agents/
 │   └── agents/
 │       └── plugin-maintainer/
 │           └── agent.md         # Dedicated In-Repo Custodian Agent
 ├── plugin.yaml                  # Mandatory: Plugin Manifest & Configuration
+├── README.md                    # Mandatory: Plugin architecture & guide
 ├── CHANGELOG.md                 # Mandatory: Version history following Keep a Changelog & SemVer
 ├── Makefile                     # Build & test rules
 ├── bin/
-│   └── <executable>             # Backend executable (compiled Go/Rust/C binary or shell/python entrypoint)
+│   └── m3tal-<process>          # Canonical backend executable (compiled Go/Rust/C binary or script)
 ├── ui/                          # Frontend User Interface
 │   ├── dist/                    # Compiled static web bundle served by the plugin host
 │   │   ├── index.html           # Main UI entrypoint (with relative asset links)
