@@ -166,10 +166,10 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Checkout m3tal-plugin-page repo
+      - name: Checkout m3tal-plugins repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          repository: jakej985-rgb/m3tal-plugin-page
+          repository: jakej985-rgb/m3tal-plugins
           token: ${{ secrets.GH_PAT }}
           path: plugin-repo
           fetch-depth: 0
