@@ -213,6 +213,13 @@ type CatalogPluginDTO struct {
 	Changelog        string               `json:"changelog,omitempty"`
 }
 
+// GetDefaultCatalog returns the list of default plugin catalog entries.
+func GetDefaultCatalog() []CatalogPluginDTO {
+	cp := make([]CatalogPluginDTO, len(defaultCatalogEntries))
+	copy(cp, defaultCatalogEntries)
+	return cp
+}
+
 var defaultCatalogEntries = []CatalogPluginDTO{
 	{
 		Name:         "docker-monitor",
