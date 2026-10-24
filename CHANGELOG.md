@@ -4,6 +4,41 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.4.0] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.4.0 delivers updates across 8 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **style(api): format Go files according to gofmt** (`4b2d3aad`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **feat(plugins): add plugin catalog & install endpoints and update plugin-author workflow** (`77a1c6d6`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **chore(ci): update plugin catalog repo reference to m3tal-plugins** (`df50ce09`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(gui): add changelog modal, deb download, and sudo install confirmation to plugins page** (`898fcdee`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **docs(plugins): require CHANGELOG.md across plugin spec and agent suite** (`82523dcc`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **feat(plugins): enforce canonical process naming m3tal-<process> across supervisor and agent suite** (`641ff4bb`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **docs(plugins): align agent suite and specs with m3tal-plugins monorepo and m3tal-apt-key signing** (`629db631`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **feat(agents): add M3TAL plugin agent suite (director, auditor, author, tester, packager)** (`9fff7c6f`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.3.0] - 2026-10-23
 
 ### Overview & Release Highlights
