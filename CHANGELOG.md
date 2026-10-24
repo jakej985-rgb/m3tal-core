@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.4.1] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.4.1 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🐛 Bug Fixes & Stability
+- **fix(cli): add 'plugin catalog --export' command for CI release automation** (`f549cbe`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.4.0] - 2026-10-24
 
 ### Overview & Release Highlights
