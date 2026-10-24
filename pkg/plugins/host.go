@@ -543,7 +543,16 @@ func (m *Manager) GetAllTabs() []PluginTabSpec {
 	var tabs []PluginTabSpec
 	for _, p := range m.plugins {
 		if p.State == StateRunning {
-			tabs = append(tabs, p.Tabs...)
+			for _, tab := range p.Tabs {
+				tabCopy := tab
+				if tabCopy.Plugin == "" {
+					tabCopy.Plugin = p.Manifest.Metadata.Name
+				}
+				if tabCopy.URL == "" {
+					tabCopy.URL = "/plugins/" + p.Manifest.Metadata.Name + "/"
+				}
+				tabs = append(tabs, tabCopy)
+			}
 		}
 	}
 	return tabs

@@ -55,19 +55,15 @@ export default function App() {
         // Check if activeTab matches a dynamic plugin tab
         const dynamicTab = pluginTabs.find((t) => t.id === activeTab);
         if (dynamicTab) {
+          const pluginName = dynamicTab.plugin || (dynamicTab.id === 'docker_containers' ? 'docker-monitor' : dynamicTab.id);
+          const pluginUrl = dynamicTab.url || `/plugins/${pluginName}/`;
           return (
-            <div className="space-y-4">
-              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                <span>{dynamicTab.title}</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800">
-                  Plugin View
-                </span>
-              </h1>
-              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-6 text-slate-300">
-                <p className="text-sm text-slate-400">
-                  Dynamic view provided by plugin: <span className="text-white font-mono">{dynamicTab.plugin || dynamicTab.id}</span>
-                </p>
-              </div>
+            <div className="w-full h-full flex flex-col -m-6 md:-m-8" style={{ height: 'calc(100vh - 0px)' }}>
+              <iframe
+                src={`${pluginUrl}?token=${tokenInput}`}
+                title={dynamicTab.title}
+                className="w-full h-full flex-1 border-0 bg-[#0d1117]"
+              />
             </div>
           );
         }

@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -124,6 +126,100 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 
 	// Serve the system tray popup UI
 	r.Get("/tray", srv.GetTrayPage)
+
+	// Serve dynamic plugin Web UIs under /plugins/{name}/*
+	servePluginUI := func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		if name == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		candidates := []string{
+			name,
+			strings.TrimPrefix(name, "m3tal-"),
+			"m3tal-" + strings.TrimPrefix(name, "m3tal-"),
+		}
+
+		var targetDir string
+		if GlobalPluginManager != nil {
+			for _, c := range candidates {
+				if p := GlobalPluginManager.GetPlugin(c); p != nil && p.Manifest.Dir != "" {
+					targetDir = p.Manifest.Dir
+					break
+				}
+			}
+		}
+
+		if targetDir == "" {
+			home, _ := os.UserHomeDir()
+			baseDirs := []string{
+				"/home/m3tal/apps/m3tal-plugins",
+				"/usr/lib/m3tal/plugins",
+				filepath.Join(home, ".config", "m3tal", "plugins"),
+				"./plugins",
+			}
+			for _, base := range baseDirs {
+				for _, c := range candidates {
+					testPath := filepath.Join(base, c)
+					if info, err := os.Stat(testPath); err == nil && info.IsDir() {
+						targetDir = testPath
+						break
+					}
+				}
+				if targetDir != "" {
+					break
+				}
+			}
+		}
+
+		if targetDir == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Locate ui/dist or ui directory
+		uiDir := filepath.Join(targetDir, "ui", "dist")
+		if _, err := os.Stat(uiDir); os.IsNotExist(err) {
+			uiDir = filepath.Join(targetDir, "ui")
+			if _, err := os.Stat(uiDir); os.IsNotExist(err) {
+				http.NotFound(w, r)
+				return
+			}
+		}
+
+		subPath := chi.URLParam(r, "*")
+		subPath = strings.TrimPrefix(subPath, "/")
+
+		if subPath == "" {
+			subPath = "index.html"
+		}
+
+		filePath := filepath.Join(uiDir, subPath)
+		info, err := os.Stat(filePath)
+		if err == nil && info.IsDir() {
+			filePath = filepath.Join(filePath, "index.html")
+			_, err = os.Stat(filePath)
+		}
+
+		if err != nil {
+			fallback := filepath.Join(uiDir, "index.html")
+			if _, err2 := os.Stat(fallback); err2 == nil {
+				http.ServeFile(w, r, fallback)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, filePath)
+	}
+
+	r.Get("/plugins/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		http.Redirect(w, r, "/plugins/"+name+"/", http.StatusMovedPermanently)
+	})
+	r.Get("/plugins/{name}/*", servePluginUI)
 
 	// ─── v1 Legacy Endpoints (backward compatible) ───
 	r.Group(func(r chi.Router) {
@@ -373,6 +469,12 @@ func (s *Server) chiAuthMiddleware(next http.Handler) http.Handler {
 		token := r.Header.Get("X-API-Token")
 		if token == "" {
 			token = r.URL.Query().Get("token")
+		}
+		if token == "" {
+			authHeader := r.Header.Get("Authorization")
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token = strings.TrimPrefix(authHeader, "Bearer ")
+			}
 		}
 		if token != s.APIToken && token != "change_me_api_token" && token != "m3tal-secret-token" {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)

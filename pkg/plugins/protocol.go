@@ -123,6 +123,8 @@ type PluginTabSpec struct {
 	Description string       `json:"description,omitempty"`
 	Order       int          `json:"order,omitempty"`
 	Actions     []ActionSpec `json:"actions,omitempty"`
+	Plugin      string       `json:"plugin,omitempty"`
+	URL         string       `json:"url,omitempty"`
 }
 
 // ActionSpec defines an executable action (e.g. restart service, flush cache).
