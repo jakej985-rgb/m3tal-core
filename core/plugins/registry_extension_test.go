@@ -137,6 +137,34 @@ func TestParameterize(t *testing.T) {
 }
 
 func TestCatalogListAndInstallUninstall(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`
+apiVersion: m3tal/v1
+kind: Route
+metadata:
+  name: example-app
+`))
+	}))
+	defer ts.Close()
+
+	origCatalog := Catalog
+	defer func() {
+		Catalog = origCatalog
+		bootstrapCatalog = make([]CatalogItem, len(origCatalog))
+		copy(bootstrapCatalog, origCatalog)
+	}()
+
+	Catalog = []CatalogItem{
+		{
+			Name: "example-route",
+			Kind: "Route",
+			URL:  ts.URL,
+		},
+	}
+	bootstrapCatalog = make([]CatalogItem, len(Catalog))
+	copy(bootstrapCatalog, Catalog)
+
 	// Create mock registry
 	reg := &Registry{
 		Routes: []RoutePlugin{
@@ -166,14 +194,10 @@ func TestCatalogListAndInstallUninstall(t *testing.T) {
 	}
 
 	// 2. Install and uninstall test using temporary directory
-	tmpDir, err := os.MkdirTemp("", "m3tal-catalog-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Test installing example-route
-	err = InstallPlugin("example-route", "Route", tmpDir)
+	err := InstallPlugin("example-route", "Route", tmpDir)
 	if err != nil {
 		t.Fatalf("failed to install example-route: %v", err)
 	}
@@ -207,11 +231,7 @@ func TestCatalogListAndInstallUninstall(t *testing.T) {
 }
 
 func TestUnifiedTraefikPlugin(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "m3tal-traefik-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	traefikDir := filepath.Join(tmpDir, "traefik")
 	if err := os.MkdirAll(traefikDir, 0755); err != nil {
@@ -325,7 +345,11 @@ func TestFetchCatalog(t *testing.T) {
 	origURL := CatalogURL
 	origOverride := catalogCachePathOverride
 	origDisableSig := DisableSignatureVerification
+	origCatalog := Catalog
+	origBootstrap := bootstrapCatalog
 	defer func() {
+		Catalog = origURLCatalog(origCatalog)
+		bootstrapCatalog = origBootstrap
 		CatalogURL = origURL
 		catalogCachePathOverride = origOverride
 		DisableSignatureVerification = origDisableSig
@@ -333,12 +357,14 @@ func TestFetchCatalog(t *testing.T) {
 
 	CatalogURL = server.URL + "/catalog.json"
 	DisableSignatureVerification = true
-
-	tmpDir, err := os.MkdirTemp("", "m3tal-catalog-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
+	bootstrapCatalog = []CatalogItem{
+		{
+			Name: "mock-default",
+			Kind: "Stack",
+		},
 	}
-	defer os.RemoveAll(tmpDir)
+
+	tmpDir := t.TempDir()
 
 	catalogCachePathOverride = filepath.Join(tmpDir, "catalog.json")
 
@@ -366,17 +392,23 @@ func TestFetchCatalog(t *testing.T) {
 	_ = os.Remove(catalogCachePathOverride)
 
 	catalogDefault := FetchCatalog()
-	// Should have at least one default plugin (like "m3tal")
-	foundM3tal := false
+	// Should fall back to bootstrap default containing "mock-default"
+	foundMock := false
 	for _, item := range catalogDefault {
-		if item.Name == "m3tal" {
-			foundM3tal = true
+		if item.Name == "mock-default" {
+			foundMock = true
 			break
 		}
 	}
-	if !foundM3tal {
-		t.Fatal("expected fallback to default Catalog containing 'm3tal', but it wasn't found")
+	if !foundMock {
+		t.Fatal("expected fallback to default Catalog containing 'mock-default', but it wasn't found")
 	}
+}
+
+func origURLCatalog(c []CatalogItem) []CatalogItem {
+	res := make([]CatalogItem, len(c))
+	copy(res, c)
+	return res
 }
 
 func TestRegistry_PopulateWarnings(t *testing.T) {
