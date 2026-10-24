@@ -9,11 +9,7 @@ import (
 )
 
 func TestPluginDiscovery(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "m3tal-plugins-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	mockPluginDir := filepath.Join(tempDir, "mock-plugin")
 	if err := os.MkdirAll(mockPluginDir, 0755); err != nil {
@@ -135,13 +131,58 @@ done
 	}
 }
 
-func TestDockerMonitorPluginIntegration(t *testing.T) {
-	pluginDir := filepath.Join("..", "..", "plugins", "docker-monitor")
-	if _, err := os.Stat(filepath.Join(pluginDir, "docker-plugin")); os.IsNotExist(err) {
-		t.Skip("docker-plugin binary not compiled, skipping")
+func TestManagerFullLifecycleIntegration(t *testing.T) {
+	tempDir := t.TempDir()
+	mockPluginDir := filepath.Join(tempDir, "mock-manager-plugin")
+	if err := os.MkdirAll(mockPluginDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock plugin dir: %v", err)
 	}
 
-	mgr := NewManager("2.0.0", filepath.Join("..", "..", "plugins"))
+	manifestContent := `
+apiVersion: m3tal.io/v1alpha1
+kind: Plugin
+metadata:
+  name: mock-manager
+  version: 1.0.0
+  title: "Mock Manager"
+spec:
+  command: ./run.sh
+  capabilities:
+    - collector
+    - ui_view
+  ui:
+    tabs:
+      - id: mock-tab
+        title: "Mock Tab"
+`
+	if err := os.WriteFile(filepath.Join(mockPluginDir, "plugin.yaml"), []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("Failed to write plugin.yaml: %v", err)
+	}
+
+	scriptContent := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"m3tal.init"'*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"name":"mock-manager","version":"1.0.0","capabilities":["collector","ui_view"],"tabs":[{"id":"mock-tab","title":"Mock Tab"}]}}'
+      ;;
+    *'"method":"m3tal.collect"'*)
+      echo '{"jsonrpc":"2.0","id":2,"result":{"status":"ok","tables":[{"name":"mock_table","columns":["a","b"],"rows":[["1","2"]]}]}}'
+      ;;
+    *'"method":"m3tal.render"'*)
+      echo '{"jsonrpc":"2.0","id":3,"result":{"content":"<h1>Mock Render</h1>"}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":0,"error":{"code":-32601,"message":"Method not found"}}'
+      ;;
+  esac
+done
+`
+	scriptPath := filepath.Join(mockPluginDir, "run.sh")
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to write mock script: %v", err)
+	}
+
+	mgr := NewManager("2.0.0", tempDir)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -155,20 +196,20 @@ func TestDockerMonitorPluginIntegration(t *testing.T) {
 		t.Fatalf("Expected at least 1 active plugin, found none")
 	}
 
-	var dockerInst *PluginInstance
+	var mockInst *PluginInstance
 	for _, p := range active {
-		if p.Manifest.Metadata.Name == "docker-monitor" {
-			dockerInst = p
+		if p.Manifest.Metadata.Name == "mock-manager" {
+			mockInst = p
 			break
 		}
 	}
 
-	if dockerInst == nil {
-		t.Fatalf("docker-monitor plugin not found in active plugins")
+	if mockInst == nil {
+		t.Fatalf("mock-manager plugin not found in active plugins")
 	}
 
-	if dockerInst.State != StateRunning {
-		t.Fatalf("docker-monitor not running, state=%s (error: %s)", dockerInst.State, dockerInst.LastError)
+	if mockInst.State != StateRunning {
+		t.Fatalf("mock-manager not running, state=%s (error: %s)", mockInst.State, mockInst.LastError)
 	}
 
 	tabs := mgr.GetAllTabs()
@@ -177,18 +218,18 @@ func TestDockerMonitorPluginIntegration(t *testing.T) {
 	}
 
 	// Test Collect
-	res, err := dockerInst.Collect(ctx)
+	res, err := mockInst.Collect(ctx)
 	if err != nil {
-		t.Fatalf("dockerInst.Collect failed: %v", err)
+		t.Fatalf("mockInst.Collect failed: %v", err)
 	}
 	if len(res.Tables) == 0 {
-		t.Errorf("Expected container tables in collect result")
+		t.Errorf("Expected tables in collect result")
 	}
 
 	// Test Render
-	renderRes, err := dockerInst.Render(ctx, "docker_containers", 80, 24, "dark")
+	renderRes, err := mockInst.Render(ctx, "mock-tab", 80, 24, "dark")
 	if err != nil {
-		t.Fatalf("dockerInst.Render failed: %v", err)
+		t.Fatalf("mockInst.Render failed: %v", err)
 	}
 	if renderRes.Content == "" {
 		t.Errorf("Expected non-empty render content")
