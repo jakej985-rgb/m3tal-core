@@ -40,44 +40,12 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 			status = statusList[0]
 		}
 
-		cmdline, _ := p.Cmdline()
-		if len(cmdline) > 200 {
-			cmdline = cmdline[:200] + "..."
-		}
+		rawCmdline, _ := p.Cmdline()
+		name = ResolveProcessName(name, rawCmdline)
 
-		// Canonical M3TAL process naming: m3tal-<process>
-		if name == "m3tal" || strings.HasPrefix(name, "m3tal-") {
-			cmdLower := strings.ToLower(cmdline)
-			if strings.Contains(cmdLower, "sysmon") {
-				name = "m3tal-sysmon"
-			} else if strings.Contains(cmdLower, "docker-daemon") || strings.Contains(cmdLower, "docker") {
-				name = "m3tal-docker"
-			} else if strings.Contains(cmdLower, "api") {
-				name = "m3tal-api"
-			} else if strings.Contains(cmdLower, "headless") || strings.Contains(cmdLower, "web") {
-				name = "m3tal-web"
-			} else if strings.Contains(cmdLower, "ui") {
-				name = "m3tal-gui"
-			} else if strings.Contains(cmdLower, "daemon") {
-				name = "m3tal-core"
-			} else if name == "m3tal" {
-				name = "m3tal-core"
-			}
-		} else if (name == "chrome" || name == "google-chrome" || name == "chromium" || name == "brave" || name == "chrome_crashpad") &&
-			strings.Contains(cmdline, "--user-data-dir=") && strings.Contains(cmdline, "m3tal/browser-profile") {
-			// Chrome subprocesses belonging specifically to M3TAL Desktop App Window
-			cmdLower := strings.ToLower(cmdline)
-			if strings.Contains(cmdLower, "--type=renderer") {
-				name = "m3tal-render"
-			} else if strings.Contains(cmdLower, "--type=gpu-process") {
-				name = "m3tal-gpu"
-			} else if strings.Contains(cmdLower, "--type=utility") {
-				name = "m3tal-utility"
-			} else if strings.Contains(cmdLower, "crashpad") {
-				name = "m3tal-crashpad"
-			} else if strings.Contains(cmdLower, "--app=") {
-				name = "m3tal-gui"
-			}
+		displayCmdline := rawCmdline
+		if len(displayCmdline) > 200 {
+			displayCmdline = displayCmdline[:200] + "..."
 		}
 
 		createTime, _ := p.CreateTime()
@@ -90,7 +58,7 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 			MemoryPercent: memPercent,
 			MemoryRSS:     rss,
 			Status:        strings.ToLower(status),
-			Cmdline:       cmdline,
+			Cmdline:       displayCmdline,
 			CreateTime:    createTime,
 		})
 	}
@@ -117,4 +85,57 @@ func KillProcess(pid int32) error {
 		return fmt.Errorf("process with PID %d not found: %w", pid, err)
 	}
 	return p.Kill()
+}
+
+// ResolveProcessName maps system process names and command-line arguments
+// to canonical M3TAL process titles (e.g. m3tal-zygote (SB), m3tal-render, m3tal-docker).
+func ResolveProcessName(name, cmdline string) string {
+	cmdLower := strings.ToLower(cmdline)
+
+	// Canonical M3TAL process naming: m3tal-<process>
+	if name == "m3tal" || strings.HasPrefix(name, "m3tal-") {
+		if strings.Contains(cmdLower, "sysmon") {
+			return "m3tal-sysmon"
+		} else if strings.Contains(cmdLower, "docker-daemon") || strings.Contains(cmdLower, "docker") {
+			return "m3tal-docker"
+		} else if strings.Contains(cmdLower, "api") {
+			return "m3tal-api"
+		} else if strings.Contains(cmdLower, "headless") || strings.Contains(cmdLower, "web") {
+			return "m3tal-web"
+		} else if strings.Contains(cmdLower, "ui") {
+			return "m3tal-gui"
+		} else if strings.Contains(cmdLower, "daemon") {
+			return "m3tal-core"
+		} else if name == "m3tal" {
+			return "m3tal-core"
+		}
+	} else if (name == "chrome" || name == "google-chrome" || name == "chromium" || name == "brave" || name == "chrome_crashpad") &&
+		strings.Contains(cmdline, "--user-data-dir=") && strings.Contains(cmdline, "m3tal/browser-profile") {
+		// Chrome subprocesses belonging specifically to M3TAL Desktop App Window
+		if strings.Contains(cmdLower, "--type=renderer") {
+			return "m3tal-render"
+		} else if strings.Contains(cmdLower, "--type=gpu-process") {
+			return "m3tal-gpu"
+		} else if strings.Contains(cmdLower, "--type=utility") {
+			if strings.Contains(cmdLower, "network.mojom") {
+				return "m3tal-net"
+			} else if strings.Contains(cmdLower, "storage.mojom") {
+				return "m3tal-storage"
+			}
+			return "m3tal-utility"
+		} else if strings.Contains(cmdLower, "--type=zygote") {
+			if strings.Contains(cmdLower, "--no-zygote-sandbox") {
+				return "m3tal-zygote"
+			}
+			return "m3tal-zygote (SB)"
+		} else if strings.Contains(cmdLower, "--type=broker") {
+			return "m3tal-broker"
+		} else if strings.Contains(cmdLower, "crashpad-handler") || strings.Contains(cmdLower, "chrome_crashpad") {
+			return "m3tal-crashpad"
+		} else if strings.Contains(cmdLower, "--app=") {
+			return "m3tal-gui"
+		}
+	}
+
+	return name
 }

@@ -33,3 +33,76 @@ func TestGetSystemSpecs(t *testing.T) {
 	t.Logf("System specs: OS=%s, Platform=%s, Kernel=%s, CPU=%s (%d cores / %d threads)",
 		specs.OS, specs.Platform, specs.KernelVersion, specs.CPUModel, specs.CPUCores, specs.CPUThreads)
 }
+
+func TestResolveProcessName(t *testing.T) {
+	tests := []struct {
+		name     string
+		procName string
+		cmdline  string
+		expected string
+	}{
+		{
+			name:     "Un-sandboxed zygote",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=zygote --no-zygote-sandbox --crashpad-handler-pid=123 --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-zygote",
+		},
+		{
+			name:     "Sandboxed zygote (SB)",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=zygote --crashpad-handler-pid=123 --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-zygote (SB)",
+		},
+		{
+			name:     "Renderer process",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=renderer --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-render",
+		},
+		{
+			name:     "GPU process",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=gpu-process --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-gpu",
+		},
+		{
+			name:     "Network utility",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=utility --utility-sub-type=network.mojom.NetworkService --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-net",
+		},
+		{
+			name:     "Storage utility",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --type=utility --utility-sub-type=storage.mojom.StorageService --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-storage",
+		},
+		{
+			name:     "Crashpad handler",
+			procName: "chrome_crashpad",
+			cmdline:  "/opt/google/chrome/chrome_crashpad_handler --monitor-self --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-crashpad",
+		},
+		{
+			name:     "Main GUI window",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome --app=http://localhost:5050/gui/ --user-data-dir=/home/m3tal/.config/m3tal/browser-profile",
+			expected: "m3tal-gui",
+		},
+		{
+			name:     "Unrelated chrome process",
+			procName: "chrome",
+			cmdline:  "/opt/google/chrome/chrome https://google.com",
+			expected: "chrome",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveProcessName(tc.procName, tc.cmdline)
+			if got != tc.expected {
+				t.Errorf("ResolveProcessName(%q, %q) = %q; want %q", tc.procName, tc.cmdline, got, tc.expected)
+			}
+		})
+	}
+}
