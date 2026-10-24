@@ -1,28 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import {
+  IconPlugins,
+  IconDownload,
+  IconDocument,
+  IconLock,
+  IconTrash,
+  IconPlay,
+  IconStop,
+  IconCheck,
+  IconCopy,
+  IconRefresh,
+} from '../components/Icons';
 
 const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'docker-monitor',
     title: 'Containers',
-    processName: 'm3tal-docker',
-    packageName: 'm3tal-plugin-docker-monitor',
+    process_name: 'm3tal-docker',
+    package_name: 'm3tal-plugin-docker-monitor',
     category: 'Container Management',
     description: 'Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.',
     capabilities: ['collector', 'actions', 'ui_view', 'websocket_stream'],
-    version: '0.1.0',
+    version: '0.2.2',
     status: 'available',
     has_deb: true,
-    deb_filename: 'm3tal-plugin-docker-monitor_0.1.0_amd64.deb',
+    deb_filename: 'm3tal-plugin-docker-monitor_0.2.2_amd64.deb',
     apt_command: 'sudo apt install -y m3tal-plugin-docker-monitor',
   },
   {
+    name: 'compose',
+    title: 'Compose Editor',
+    process_name: 'm3tal-compose',
+    package_name: 'm3tal-plugin-compose',
+    category: 'Container Management',
+    description: 'Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.',
+    capabilities: ['collector', 'actions', 'ui_view'],
+    version: '0.1.0',
+    status: 'available',
+    has_deb: true,
+    deb_filename: 'm3tal-plugin-compose_0.1.0_amd64.deb',
+    apt_command: 'sudo apt install -y m3tal-plugin-compose',
+  },
+  {
     name: 'stack-orchestrator',
-    title: 'Compose Stacks',
-    processName: 'm3tal-stacks',
-    packageName: 'm3tal-plugin-stacks',
+    title: 'Compose Stacks (Template DB)',
+    process_name: 'm3tal-stacks',
+    package_name: 'm3tal-plugin-stacks',
     category: 'Compose Stacks',
-    description: 'Multi-service compose stack orchestration, live health checks, and lifecycle deployment.',
+    description: 'Curated database of verified Docker Compose templates, argument presets, and 1-click community stacks.',
     capabilities: ['orchestrator', 'actions', 'ui_view'],
     version: '0.1.0',
     status: 'planned',
@@ -31,10 +57,10 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'ai-engine',
     title: 'Local AI & LLM',
-    processName: 'm3tal-ai',
-    packageName: 'm3tal-plugin-ai',
+    process_name: 'm3tal-ai',
+    package_name: 'm3tal-plugin-ai',
     category: 'Local AI & LLM',
-    description: 'Local LLM inference manager (Ollama, vLLM), job queue, and model catalog.',
+    description: 'Local LLM inference manager (Ollama, vLLM), GPU VRAM stats, asynchronous job queue, and model catalog.',
     capabilities: ['inference_runner', 'job_queue', 'ui_view'],
     version: '0.1.0',
     status: 'planned',
@@ -43,8 +69,8 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'smart-disk',
     title: 'Smart Disk Telemetry',
-    processName: 'm3tal-smart',
-    packageName: 'm3tal-plugin-smart',
+    process_name: 'm3tal-smart',
+    package_name: 'm3tal-plugin-smart',
     category: 'Hardware Diagnostics',
     description: 'Drive health telemetry, NVMe wear life, S.M.A.R.T. self-tests, and temperature history.',
     capabilities: ['collector', 'ui_widget', 'alerts'],
@@ -55,8 +81,8 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'traefik-gateway',
     title: 'Traefik Gateway',
-    processName: 'm3tal-traefik',
-    packageName: 'm3tal-plugin-traefik',
+    process_name: 'm3tal-traefik',
+    package_name: 'm3tal-plugin-traefik',
     category: 'Networking & Proxy',
     description: 'Traefik v3 reverse proxy, automated Let\'s Encrypt SSL/TLS certificates, and dynamic routing.',
     capabilities: ['proxy_generator', 'route_provider'],
@@ -67,8 +93,8 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'gluetun-vpn',
     title: 'VPN Tunnel',
-    processName: 'm3tal-vpn',
-    packageName: 'm3tal-plugin-vpn',
+    process_name: 'm3tal-vpn',
+    package_name: 'm3tal-plugin-vpn',
     category: 'Network Privacy',
     description: 'WireGuard/OpenVPN tunnel connectivity with container egress routing and leak protection.',
     capabilities: ['network_tunnel', 'status_checker'],
@@ -79,8 +105,8 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'samba-manager',
     title: 'Samba Manager',
-    processName: 'm3tal-samba',
-    packageName: 'm3tal-plugin-samba',
+    process_name: 'm3tal-samba',
+    package_name: 'm3tal-plugin-samba',
     category: 'File Sharing',
     description: 'Graphical Samba/NFS share manager, guest permissions, user credentials, and active mounts.',
     capabilities: ['actions', 'ui_view', 'system_admin'],
@@ -91,8 +117,8 @@ const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'system-bench',
     title: 'System Benchmarks',
-    processName: 'm3tal-bench',
-    packageName: 'm3tal-plugin-bench',
+    process_name: 'm3tal-bench',
+    package_name: 'm3tal-plugin-bench',
     category: 'Diagnostics',
     description: 'One-click benchmarking for CPU multi-threading, GPU compute, and disk I/O throughput.',
     capabilities: ['benchmark_runner', 'ui_view'],
@@ -298,13 +324,13 @@ export default function Plugins() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#30363d] pb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <span className="p-2 rounded-lg bg-emerald-950/50 border border-emerald-800/60 text-emerald-400 text-xl">
-              🧩
+            <span className="p-2 rounded-lg bg-emerald-950/50 border border-emerald-800/60 text-emerald-400">
+              <IconPlugins className="w-6 h-6" />
             </span>
             <span>Plugin Manager</span>
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Supervise self-contained external plugins, inspect release changelogs, and install via APT or Sudo.
+            Supervise external plugins, inspect release changelogs & roadmap specifications, and install via APT or Sudo.
           </p>
         </div>
 
@@ -361,15 +387,16 @@ export default function Plugins() {
               <button
                 onClick={reloadAll}
                 disabled={loading}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-slate-300 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-slate-300 transition-colors flex items-center gap-1.5"
               >
-                {loading ? 'Refreshing...' : '🔄 Refresh'}
+                <IconRefresh className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
               </button>
             </div>
 
             {plugins.length === 0 ? (
               <div className="p-12 text-center space-y-4">
-                <div className="text-4xl">📦</div>
+                <div className="text-4xl text-slate-500">📦</div>
                 <h3 className="text-base font-semibold text-white">No External Plugins Installed</h3>
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                   M3TAL Core is running in pure platform mode with zero background plugin footprint. To install a plugin with 1 click, explore the <strong>Catalog & Roadmap</strong> tab!
@@ -395,7 +422,12 @@ export default function Plugins() {
                   const procName = meta.name ? (meta.name.startsWith('m3tal-') ? meta.name : `m3tal-${meta.name}`) : 'm3tal-plugin';
 
                   // Match catalog entry for changelog
-                  const catalogItem = catalog.find((c) => c.name === name);
+                  const catalogItem = catalog.find((c) => {
+                    const cName = c.name || '';
+                    const cleanC = cName.replace(/^m3tal-/, '');
+                    const cleanP = name.replace(/^m3tal-/, '');
+                    return cName === name || cleanC === cleanP;
+                  });
 
                   return (
                     <div key={name} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#21262d]/40 transition-colors">
@@ -424,12 +456,12 @@ export default function Plugins() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {catalogItem?.changelog && (
+                        {catalogItem && (
                           <button
                             onClick={() => setSelectedChangelog(catalogItem)}
                             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-slate-300 border border-[#30363d] transition-colors flex items-center gap-1.5"
                           >
-                            <span>📋</span>
+                            <IconDocument className="w-3.5 h-3.5 text-cyan-400" />
                             <span>Changelog</span>
                           </button>
                         )}
@@ -438,27 +470,29 @@ export default function Plugins() {
                           <button
                             onClick={() => handleStop(name)}
                             disabled={actionLoading === name}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700 transition-colors"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700 transition-colors flex items-center gap-1.5"
                           >
-                            {actionLoading === name ? 'Stopping...' : '⏹ Stop'}
+                            <IconStop className="w-3.5 h-3.5" />
+                            <span>{actionLoading === name ? 'Stopping...' : 'Stop'}</span>
                           </button>
                         ) : (
                           <button
                             onClick={() => handleStart(name)}
                             disabled={actionLoading === name}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors"
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors flex items-center gap-1.5"
                           >
-                            {actionLoading === name ? 'Starting...' : '▶ Start'}
+                            <IconPlay className="w-3.5 h-3.5" />
+                            <span>{actionLoading === name ? 'Starting...' : 'Start'}</span>
                           </button>
                         )}
 
                         <button
                           onClick={() => setUninstallTarget({ name })}
                           disabled={actionLoading === name}
-                          className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-slate-400 border border-slate-700 transition-colors"
+                          className="p-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-slate-400 border border-slate-700 transition-colors"
                           title="Uninstall Plugin"
                         >
-                          🗑
+                          <IconTrash className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -482,8 +516,16 @@ export default function Plugins() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {catalog.map((item) => {
-              const isInstalled = item.status === 'installed' || plugins.some((p) => (p.manifest?.metadata?.name || p.name) === item.name);
-              const hasDeb = item.has_deb || item.name === 'docker-monitor';
+              const cleanItemName = (item.name || '').replace(/^m3tal-/, '');
+              const cleanProcName = (item.process_name || item.processName || '').replace(/^m3tal-/, '');
+
+              const isInstalled = item.status === 'installed' || plugins.some((p) => {
+                const pName = p.manifest?.metadata?.name || p.name || '';
+                const cleanP = pName.replace(/^m3tal-/, '');
+                return pName === item.name || cleanP === cleanItemName || cleanP === cleanProcName;
+              });
+
+              const hasDeb = Boolean(item.has_deb || item.deb_filename || item.name === 'docker-monitor' || item.name === 'compose');
               const downloadUrl = api.getPluginDownloadUrl(item.name);
 
               return (
@@ -506,16 +548,16 @@ export default function Plugins() {
                           {item.category}
                         </span>
                         {isInstalled ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                             Installed
                           </span>
                         ) : hasDeb ? (
-                          <span className="text-[11px] font-bold text-cyan-300 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 rounded-full">
+                          <span className="text-[11px] font-bold text-cyan-300 bg-cyan-950/60 border border-cyan-800 px-2.5 py-0.5 rounded-full">
                             Available in APT / DEB
                           </span>
                         ) : (
-                          <span className="text-[11px] font-medium text-slate-400 bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-full">
+                          <span className="text-[11px] font-medium text-slate-400 bg-slate-800/80 border border-slate-700 px-2.5 py-0.5 rounded-full">
                             Planned Roadmap
                           </span>
                         )}
@@ -543,9 +585,19 @@ export default function Plugins() {
                           <span className="truncate">{item.apt_command}</span>
                           <button
                             onClick={() => copyToClipboard(item.apt_command, item.name)}
-                            className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-[#21262d] hover:bg-[#30363d] text-slate-300 transition-colors"
+                            className="ml-2 px-2.5 py-1 text-[10px] font-semibold rounded bg-[#21262d] hover:bg-[#30363d] text-slate-300 transition-colors flex items-center gap-1"
                           >
-                            {copiedName === item.name ? '✓ Copied' : 'Copy'}
+                            {copiedName === item.name ? (
+                              <>
+                                <IconCheck className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-400">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <IconCopy className="w-3 h-3 text-slate-400" />
+                                <span>Copy</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -555,13 +607,13 @@ export default function Plugins() {
                   {/* Actions Bar */}
                   <div className="pt-3 border-t border-[#30363d] flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      {/* Changelog Button */}
+                      {/* Changelog or Roadmap Specs Button */}
                       <button
                         onClick={() => setSelectedChangelog(item)}
                         className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-slate-300 border border-[#30363d] transition-colors flex items-center gap-1.5"
                       >
-                        <span>📋</span>
-                        <span>Changelog</span>
+                        <IconDocument className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{hasDeb ? 'Changelog' : 'Roadmap Specs'}</span>
                       </button>
 
                       {/* Download Button */}
@@ -572,7 +624,7 @@ export default function Plugins() {
                           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-cyan-900/60 transition-colors flex items-center gap-1.5"
                           title="Download official Debian (.deb) package"
                         >
-                          <span>⬇️</span>
+                          <IconDownload className="w-3.5 h-3.5 text-cyan-400" />
                           <span>Download .deb</span>
                         </a>
                       )}
@@ -594,7 +646,7 @@ export default function Plugins() {
                           onClick={() => openInstallModal(item)}
                           className="px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all flex items-center gap-1.5"
                         >
-                          <span>📥</span>
+                          <IconDownload className="w-3.5 h-3.5 text-white" />
                           <span>Install Plugin</span>
                         </button>
                       ) : (
@@ -615,8 +667,8 @@ export default function Plugins() {
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-400 text-2xl">
-                  🔐
+                <span className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-400">
+                  <IconLock className="w-6 h-6 text-emerald-400" />
                 </span>
                 <div>
                   <h3 className="text-lg font-bold text-white">Confirm Plugin Installation</h3>
@@ -762,7 +814,7 @@ export default function Plugins() {
                   </>
                 ) : (
                   <>
-                    <span>🚀 Confirm & Install</span>
+                    <span>Confirm & Install</span>
                   </>
                 )}
               </button>
@@ -771,19 +823,19 @@ export default function Plugins() {
         </div>
       )}
 
-      {/* Changelog Modal */}
+      {/* Changelog & Roadmap Specs Modal */}
       {selectedChangelog && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-[#30363d] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="p-2 rounded-lg bg-cyan-950/60 border border-cyan-800 text-cyan-400 text-lg">
-                  📋
+                <span className="p-2 rounded-lg bg-cyan-950/60 border border-cyan-800 text-cyan-400">
+                  <IconDocument className="w-5 h-5 text-cyan-400" />
                 </span>
                 <div>
                   <h3 className="text-base font-bold text-white">
-                    {selectedChangelog.title || selectedChangelog.name} Release Notes
+                    {selectedChangelog.title || selectedChangelog.name}
                   </h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs font-mono text-emerald-400">v{selectedChangelog.version || '0.1.0'}</span>
@@ -804,24 +856,30 @@ export default function Plugins() {
             <div className="p-6 overflow-y-auto space-y-4 text-slate-300 text-xs leading-relaxed font-sans">
               {selectedChangelog.changelog ? (
                 <div className="prose prose-invert max-w-none space-y-3">
-                  <pre className="p-4 bg-[#0d1117] border border-[#30363d] rounded-xl whitespace-pre-wrap font-sans text-xs text-slate-300">
+                  <pre className="p-4 bg-[#0d1117] border border-[#30363d] rounded-xl whitespace-pre-wrap font-sans text-xs text-slate-300 leading-relaxed">
                     {selectedChangelog.changelog}
                   </pre>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-xl space-y-2">
-                    <h4 className="text-sm font-bold text-white">Version {selectedChangelog.version || '0.1.0'} Release Notes</h4>
-                    <p className="text-slate-400">{selectedChangelog.description}</p>
+                    <h4 className="text-sm font-bold text-white">{selectedChangelog.title || selectedChangelog.name} Specification</h4>
+                    <p className="text-slate-400 leading-relaxed">{selectedChangelog.description}</p>
                   </div>
                   <div className="space-y-2">
-                    <h5 className="font-semibold text-white">Declared Capabilities:</h5>
-                    <ul className="list-disc list-inside space-y-1 text-slate-400">
+                    <h5 className="font-semibold text-white">Target Capabilities:</h5>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                       {selectedChangelog.capabilities?.map((c) => (
-                        <li key={c}><span className="font-mono text-cyan-300">{c}</span></li>
+                        <span key={c} className="font-mono text-cyan-300 bg-cyan-950/40 border border-cyan-800/60 px-2 py-0.5 rounded text-[11px]">{c}</span>
                       ))}
-                    </ul>
+                    </div>
                   </div>
+                  {selectedChangelog.apt_command && (
+                    <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-xl space-y-1">
+                      <div className="text-slate-400 text-[11px]">APT Package Command (upon release):</div>
+                      <code className="text-emerald-400 font-mono">{selectedChangelog.apt_command}</code>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -834,7 +892,7 @@ export default function Plugins() {
                   download={selectedChangelog.deb_filename || `m3tal-plugin-${selectedChangelog.name}.deb`}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-cyan-900/60 transition-colors inline-flex items-center gap-1.5"
                 >
-                  <span>⬇️</span>
+                  <IconDownload className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Download .deb Archive</span>
                 </a>
               )}

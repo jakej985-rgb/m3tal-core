@@ -330,34 +330,83 @@ func findPluginDeb(name string) (string, string) {
 		"./plugins",
 	}
 
+	clean := strings.TrimPrefix(name, "m3tal-")
+	nameVariations := []string{
+		name,
+		clean,
+		"m3tal-" + clean,
+		"m3tal-plugin-" + name,
+		"m3tal-plugin-" + clean,
+	}
+	if name == "docker-monitor" || name == "docker" || clean == "docker" {
+		nameVariations = append(nameVariations, "docker-monitor", "m3tal-plugin-docker-monitor")
+	}
+	if name == "compose" || clean == "compose" || name == "stack-orchestrator" {
+		nameVariations = append(nameVariations, "compose", "m3tal-plugin-compose")
+	}
+
 	for _, dir := range candidateDirs {
-		matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s_*.deb", name)))
-		if err == nil && len(matches) > 0 {
-			return matches[0], filepath.Base(matches[0])
-		}
-		exact := filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s.deb", name))
-		if _, err := os.Stat(exact); err == nil {
-			return exact, filepath.Base(exact)
+		for _, v := range nameVariations {
+			// Pattern: m3tal-plugin-<v>_*.deb
+			matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s_*.deb", v)))
+			if err == nil && len(matches) > 0 {
+				return matches[0], filepath.Base(matches[0])
+			}
+			matchesDirect, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%s_*.deb", v)))
+			if err == nil && len(matchesDirect) > 0 {
+				return matchesDirect[0], filepath.Base(matchesDirect[0])
+			}
+			exact := filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s.deb", v))
+			if _, err := os.Stat(exact); err == nil {
+				return exact, filepath.Base(exact)
+			}
 		}
 	}
 	return "", ""
 }
 
-// findPluginChangelog finds changelog markdown for a plugin.
+// findPluginChangelog finds changelog or roadmap documentation for a plugin.
 func findPluginChangelog(name string) string {
 	home, _ := os.UserHomeDir()
-	candidateFiles := []string{
-		fmt.Sprintf("/home/m3tal/apps/m3tal-plugins/%s/CHANGELOG.md", name),
-		filepath.Join(home, "apps", "m3tal-plugins", name, "CHANGELOG.md"),
-		fmt.Sprintf("/usr/lib/m3tal/plugins/%s/CHANGELOG.md", name),
-		fmt.Sprintf("/usr/share/doc/m3tal-plugin-%s/CHANGELOG.md", name),
-		filepath.Join(home, ".config", "m3tal", "plugins", name, "CHANGELOG.md"),
+	clean := strings.TrimPrefix(name, "m3tal-")
+
+	candidateDirs := []string{
+		fmt.Sprintf("/home/m3tal/apps/m3tal-plugins/m3tal-%s", clean),
+		fmt.Sprintf("/home/m3tal/apps/m3tal-plugins/%s", name),
+		fmt.Sprintf("/home/m3tal/apps/m3tal-plugins/%s", clean),
+		filepath.Join(home, "apps", "m3tal-plugins", "m3tal-"+clean),
+		filepath.Join(home, "apps", "m3tal-plugins", name),
+		fmt.Sprintf("/usr/lib/m3tal/plugins/%s", name),
+		fmt.Sprintf("/usr/lib/m3tal/plugins/m3tal-%s", clean),
+		fmt.Sprintf("/usr/share/doc/m3tal-plugin-%s", name),
+		fmt.Sprintf("/usr/share/doc/m3tal-plugin-%s", clean),
+		filepath.Join(home, ".config", "m3tal", "plugins", name),
+		filepath.Join(home, ".config", "m3tal", "plugins", "m3tal-"+clean),
 	}
-	for _, f := range candidateFiles {
+
+	if name == "docker-monitor" || clean == "docker" {
+		candidateDirs = append(candidateDirs, "/home/m3tal/apps/m3tal-plugins/m3tal-docker", "/usr/lib/m3tal/plugins/m3tal-docker")
+	}
+	if name == "compose" || clean == "compose" || name == "stack-orchestrator" {
+		candidateDirs = append(candidateDirs, "/home/m3tal/apps/m3tal-plugins/m3tal-compose", "/usr/lib/m3tal/plugins/m3tal-compose")
+	}
+
+	// First look for CHANGELOG.md
+	for _, dir := range candidateDirs {
+		f := filepath.Join(dir, "CHANGELOG.md")
 		if data, err := os.ReadFile(f); err == nil && len(data) > 0 {
 			return string(data)
 		}
 	}
+
+	// Fallback to README.md
+	for _, dir := range candidateDirs {
+		f := filepath.Join(dir, "README.md")
+		if data, err := os.ReadFile(f); err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+
 	return ""
 }
 
@@ -368,10 +417,35 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 	installedMap := make(map[string]plugins.PluginManifest)
 	for _, d := range discovered {
 		installedMap[d.Metadata.Name] = d
+		installedMap[strings.TrimPrefix(d.Metadata.Name, "m3tal-")] = d
+		if d.Spec.ProcessName != "" {
+			installedMap[d.Spec.ProcessName] = d
+			installedMap[strings.TrimPrefix(d.Spec.ProcessName, "m3tal-")] = d
+		}
 	}
 
-	results := make([]CatalogPluginDTO, len(defaultCatalogEntries))
-	for i, item := range defaultCatalogEntries {
+	// Try reading dynamic catalog.json from m3tal-plugins
+	catalogEntries := defaultCatalogEntries
+	home, _ := os.UserHomeDir()
+	catalogPaths := []string{
+		"/home/m3tal/apps/m3tal-plugins/catalog.json",
+		filepath.Join(home, "apps", "m3tal-plugins", "catalog.json"),
+		"/etc/m3tal/catalog.json",
+		"/usr/share/m3tal/catalog.json",
+	}
+
+	for _, cp := range catalogPaths {
+		if data, err := os.ReadFile(cp); err == nil && len(data) > 0 {
+			var dynamicEntries []CatalogPluginDTO
+			if err := json.Unmarshal(data, &dynamicEntries); err == nil && len(dynamicEntries) > 0 {
+				catalogEntries = dynamicEntries
+				break
+			}
+		}
+	}
+
+	results := make([]CatalogPluginDTO, len(catalogEntries))
+	for i, item := range catalogEntries {
 		entry := item
 		debPath, debName := findPluginDeb(entry.Name)
 		if debPath != "" {
@@ -383,7 +457,14 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		clean := strings.TrimPrefix(entry.Name, "m3tal-")
 		if inst, found := installedMap[entry.Name]; found {
+			entry.Status = "installed"
+			entry.InstalledVersion = inst.Metadata.Version
+		} else if inst, found := installedMap[clean]; found {
+			entry.Status = "installed"
+			entry.InstalledVersion = inst.Metadata.Version
+		} else if inst, found := installedMap[entry.ProcessName]; found {
 			entry.Status = "installed"
 			entry.InstalledVersion = inst.Metadata.Version
 		}
