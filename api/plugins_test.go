@@ -166,3 +166,47 @@ spec:
 		t.Errorf("expected state stopped, got %s", resp.Data[0].State)
 	}
 }
+
+func TestGetPluginCatalog(t *testing.T) {
+	mgr := plugins.NewManager("v0.2.0")
+	h := NewPluginHandlers(mgr)
+
+	req := httptest.NewRequest("GET", "/api/v2/plugins/catalog", nil)
+	w := httptest.NewRecorder()
+
+	h.GetPluginCatalog(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Status string             `json:"status"`
+		Data   []CatalogPluginDTO `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Data) == 0 {
+		t.Fatalf("expected catalog items, got 0")
+	}
+
+	// Verify docker-monitor is present
+	foundDocker := false
+	for _, item := range resp.Data {
+		if item.Name == "docker-monitor" {
+			foundDocker = true
+			if item.ProcessName != "m3tal-docker" {
+				t.Errorf("expected processName m3tal-docker, got %s", item.ProcessName)
+			}
+			if item.Version != "0.1.0" {
+				t.Errorf("expected version 0.1.0, got %s", item.Version)
+			}
+		}
+	}
+	if !foundDocker {
+		t.Errorf("expected docker-monitor in catalog")
+	}
+}
+

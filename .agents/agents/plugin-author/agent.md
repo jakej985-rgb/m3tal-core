@@ -272,4 +272,5 @@ When tasked with creating a new plugin:
 7. Generate `Makefile` with targets: `build`, `test`, `test-ipc`, `clean`.
 8. Generate `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) and SemVer.
 9. **Generate `.agents/agents/plugin-maintainer/agent.md`** customized to this plugin.
-10. Run `make build` and verify that the binary compiles and all files are placed cleanly.
+10. Generate dedicated CI workflow `.github/workflows/Build-{{PLUGIN_NAME}}-Deb.yml`.
+11. Run `make build` and verify that the binary compiles and all files are placed cleanly.
