@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.8.0] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.8.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(plugins): implement dynamic plugin UI file server and iframe mounting** (`64d5fcf`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.7.0] - 2026-10-24
 
 ### Overview & Release Highlights
