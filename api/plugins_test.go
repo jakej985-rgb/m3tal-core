@@ -264,3 +264,38 @@ spec:
 		t.Fatalf("expected status 200 for discovered plugin start, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestGetPluginChangelog(t *testing.T) {
+	mgr := plugins.NewManager("v0.2.0")
+	h := NewPluginHandlers(mgr)
+
+	pluginsToTest := []string{"docker-monitor", "compose", "stack-orchestrator", "ai-engine", "smart-disk"}
+	for _, p := range pluginsToTest {
+		req := httptest.NewRequest("GET", "/api/v2/plugins/"+p+"/changelog", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("name", p)
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		h.GetPluginChangelog(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200 for plugin %s changelog, got %d: %s", p, w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Status string `json:"status"`
+			Data   struct {
+				Name      string `json:"name"`
+				Changelog string `json:"changelog"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Errorf("failed to unmarshal changelog response for %s: %v", p, err)
+		}
+		if len(resp.Data.Changelog) == 0 {
+			t.Errorf("expected non-empty changelog for %s", p)
+		}
+	}
+}
+

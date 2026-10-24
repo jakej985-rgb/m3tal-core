@@ -229,17 +229,29 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Container Management",
 		Description:  "Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view", "websocket_stream"},
-		Version:      "0.1.0",
+		Version:      "0.2.2",
 		Status:       "available",
 		AptCommand:   "sudo apt install -y m3tal-plugin-docker-monitor",
 	},
 	{
+		Name:         "compose",
+		Title:        "Compose Editor",
+		ProcessName:  "m3tal-compose",
+		PackageName:  "m3tal-plugin-compose",
+		Category:     "Container Management",
+		Description:  "Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.",
+		Capabilities: []plugins.Capability{"collector", "actions", "ui_view"},
+		Version:      "0.1.0",
+		Status:       "available",
+		AptCommand:   "sudo apt install -y m3tal-plugin-compose",
+	},
+	{
 		Name:         "stack-orchestrator",
-		Title:        "Compose Stacks",
+		Title:        "Compose Stacks (Template DB)",
 		ProcessName:  "m3tal-stacks",
 		PackageName:  "m3tal-plugin-stacks",
 		Category:     "Compose Stacks",
-		Description:  "Multi-service compose stack orchestration, live health checks, and lifecycle deployment.",
+		Description:  "Curated database of verified Docker Compose templates, argument presets, and 1-click community stacks.",
 		Capabilities: []plugins.Capability{"orchestrator", "actions", "ui_view"},
 		Version:      "0.1.0",
 		Status:       "planned",
@@ -251,7 +263,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		ProcessName:  "m3tal-ai",
 		PackageName:  "m3tal-plugin-ai",
 		Category:     "Local AI & LLM",
-		Description:  "Local LLM inference manager (Ollama, vLLM), job queue, and model catalog.",
+		Description:  "Local LLM inference manager (Ollama, vLLM), GPU VRAM stats, asynchronous job queue, and model catalog.",
 		Capabilities: []plugins.Capability{"inference_runner", "job_queue", "ui_view"},
 		Version:      "0.1.0",
 		Status:       "planned",
@@ -319,6 +331,41 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 	},
 }
 
+type pluginMeta struct {
+	ProcessName string
+	PackageName string
+	FolderName  string
+}
+
+var pluginMetadataMap = map[string]pluginMeta{
+	"docker-monitor":     {ProcessName: "m3tal-docker", PackageName: "m3tal-plugin-docker-monitor", FolderName: "m3tal-docker"},
+	"docker":             {ProcessName: "m3tal-docker", PackageName: "m3tal-plugin-docker-monitor", FolderName: "m3tal-docker"},
+	"m3tal-docker":       {ProcessName: "m3tal-docker", PackageName: "m3tal-plugin-docker-monitor", FolderName: "m3tal-docker"},
+	"compose":            {ProcessName: "m3tal-compose", PackageName: "m3tal-plugin-compose", FolderName: "m3tal-compose"},
+	"m3tal-compose":      {ProcessName: "m3tal-compose", PackageName: "m3tal-plugin-compose", FolderName: "m3tal-compose"},
+	"stack-orchestrator": {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},
+	"stacks":             {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},
+	"m3tal-stacks":       {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},
+	"ai-engine":          {ProcessName: "m3tal-ai", PackageName: "m3tal-plugin-ai", FolderName: "m3tal-ai"},
+	"ai":                 {ProcessName: "m3tal-ai", PackageName: "m3tal-plugin-ai", FolderName: "m3tal-ai"},
+	"m3tal-ai":           {ProcessName: "m3tal-ai", PackageName: "m3tal-plugin-ai", FolderName: "m3tal-ai"},
+	"smart-disk":         {ProcessName: "m3tal-smart", PackageName: "m3tal-plugin-smart", FolderName: "m3tal-smart"},
+	"smart":              {ProcessName: "m3tal-smart", PackageName: "m3tal-plugin-smart", FolderName: "m3tal-smart"},
+	"m3tal-smart":        {ProcessName: "m3tal-smart", PackageName: "m3tal-plugin-smart", FolderName: "m3tal-smart"},
+	"traefik-gateway":    {ProcessName: "m3tal-traefik", PackageName: "m3tal-plugin-traefik", FolderName: "m3tal-traefik"},
+	"traefik":            {ProcessName: "m3tal-traefik", PackageName: "m3tal-plugin-traefik", FolderName: "m3tal-traefik"},
+	"m3tal-traefik":      {ProcessName: "m3tal-traefik", PackageName: "m3tal-plugin-traefik", FolderName: "m3tal-traefik"},
+	"gluetun-vpn":        {ProcessName: "m3tal-vpn", PackageName: "m3tal-plugin-vpn", FolderName: "m3tal-vpn"},
+	"vpn":                {ProcessName: "m3tal-vpn", PackageName: "m3tal-plugin-vpn", FolderName: "m3tal-vpn"},
+	"m3tal-vpn":          {ProcessName: "m3tal-vpn", PackageName: "m3tal-plugin-vpn", FolderName: "m3tal-vpn"},
+	"samba-manager":      {ProcessName: "m3tal-samba", PackageName: "m3tal-plugin-samba", FolderName: "m3tal-samba"},
+	"samba":              {ProcessName: "m3tal-samba", PackageName: "m3tal-plugin-samba", FolderName: "m3tal-samba"},
+	"m3tal-samba":        {ProcessName: "m3tal-samba", PackageName: "m3tal-plugin-samba", FolderName: "m3tal-samba"},
+	"system-bench":       {ProcessName: "m3tal-bench", PackageName: "m3tal-plugin-bench", FolderName: "m3tal-bench"},
+	"bench":              {ProcessName: "m3tal-bench", PackageName: "m3tal-plugin-bench", FolderName: "m3tal-bench"},
+	"m3tal-bench":        {ProcessName: "m3tal-bench", PackageName: "m3tal-plugin-bench", FolderName: "m3tal-bench"},
+}
+
 // findPluginDeb searches candidate locations for a built .deb package.
 func findPluginDeb(name string) (string, string) {
 	home, _ := os.UserHomeDir()
@@ -338,11 +385,12 @@ func findPluginDeb(name string) (string, string) {
 		"m3tal-plugin-" + name,
 		"m3tal-plugin-" + clean,
 	}
-	if name == "docker-monitor" || name == "docker" || clean == "docker" {
-		nameVariations = append(nameVariations, "docker-monitor", "m3tal-plugin-docker-monitor")
+
+	if meta, ok := pluginMetadataMap[name]; ok {
+		nameVariations = append(nameVariations, meta.FolderName, meta.ProcessName, meta.PackageName, strings.TrimPrefix(meta.PackageName, "m3tal-plugin-"), strings.TrimPrefix(meta.FolderName, "m3tal-"))
 	}
-	if name == "compose" || clean == "compose" || name == "stack-orchestrator" {
-		nameVariations = append(nameVariations, "compose", "m3tal-plugin-compose")
+	if meta, ok := pluginMetadataMap[clean]; ok {
+		nameVariations = append(nameVariations, meta.FolderName, meta.ProcessName, meta.PackageName, strings.TrimPrefix(meta.PackageName, "m3tal-plugin-"), strings.TrimPrefix(meta.FolderName, "m3tal-"))
 	}
 
 	for _, dir := range candidateDirs {
@@ -384,11 +432,25 @@ func findPluginChangelog(name string) string {
 		filepath.Join(home, ".config", "m3tal", "plugins", "m3tal-"+clean),
 	}
 
-	if name == "docker-monitor" || clean == "docker" {
-		candidateDirs = append(candidateDirs, "/home/m3tal/apps/m3tal-plugins/m3tal-docker", "/usr/lib/m3tal/plugins/m3tal-docker")
+	if meta, ok := pluginMetadataMap[name]; ok {
+		candidateDirs = append(candidateDirs,
+			filepath.Join("/home/m3tal/apps/m3tal-plugins", meta.FolderName),
+			filepath.Join("/home/m3tal/apps/m3tal-plugins", meta.ProcessName),
+			filepath.Join(home, "apps", "m3tal-plugins", meta.FolderName),
+			filepath.Join("/usr/lib/m3tal/plugins", meta.FolderName),
+			filepath.Join("/usr/lib/m3tal/plugins", meta.ProcessName),
+			filepath.Join(home, ".config", "m3tal", "plugins", meta.FolderName),
+		)
 	}
-	if name == "compose" || clean == "compose" || name == "stack-orchestrator" {
-		candidateDirs = append(candidateDirs, "/home/m3tal/apps/m3tal-plugins/m3tal-compose", "/usr/lib/m3tal/plugins/m3tal-compose")
+	if meta, ok := pluginMetadataMap[clean]; ok {
+		candidateDirs = append(candidateDirs,
+			filepath.Join("/home/m3tal/apps/m3tal-plugins", meta.FolderName),
+			filepath.Join("/home/m3tal/apps/m3tal-plugins", meta.ProcessName),
+			filepath.Join(home, "apps", "m3tal-plugins", meta.FolderName),
+			filepath.Join("/usr/lib/m3tal/plugins", meta.FolderName),
+			filepath.Join("/usr/lib/m3tal/plugins", meta.ProcessName),
+			filepath.Join(home, ".config", "m3tal", "plugins", meta.FolderName),
+		)
 	}
 
 	// First look for CHANGELOG.md
@@ -404,6 +466,28 @@ func findPluginChangelog(name string) string {
 		f := filepath.Join(dir, "README.md")
 		if data, err := os.ReadFile(f); err == nil && len(data) > 0 {
 			return string(data)
+		}
+	}
+
+	// Fallback to synthesizing specification markdown from default catalog entries
+	for _, entry := range defaultCatalogEntries {
+		if entry.Name == name || entry.ProcessName == name || strings.TrimPrefix(entry.ProcessName, "m3tal-") == clean {
+			var b strings.Builder
+			b.WriteString(fmt.Sprintf("# %s (`%s`)\n\n", entry.Title, entry.ProcessName))
+			b.WriteString(fmt.Sprintf("**Status**: %s (v%s)\n\n", entry.Status, entry.Version))
+			b.WriteString(fmt.Sprintf("**Category**: %s\n\n", entry.Category))
+			b.WriteString(fmt.Sprintf("## Description\n%s\n\n", entry.Description))
+			if len(entry.Capabilities) > 0 {
+				b.WriteString("## Target Capabilities\n")
+				for _, c := range entry.Capabilities {
+					b.WriteString(fmt.Sprintf("- `%s`\n", c))
+				}
+				b.WriteString("\n")
+			}
+			if entry.AptCommand != "" {
+				b.WriteString(fmt.Sprintf("## APT Installation Command\n```bash\n%s\n```\n", entry.AptCommand))
+			}
+			return b.String()
 		}
 	}
 
