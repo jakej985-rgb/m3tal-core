@@ -1,145 +1,168 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jakej985-rgb/m3tal-core/core/plugins"
+	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
 )
 
-func TestListPluginsByKindOrName(t *testing.T) {
-	// Mock registry
-	mockReg := &plugin.Registry{
-		Routes: []plugin.RoutePlugin{
-			{
-				Metadata: plugin.PluginMetadata{Name: "my-route-plugin"},
-				Service:  "my-service",
-				Enabled:  true,
-			},
-		},
-		Stacks: []plugin.StackPlugin{
-			{
-				Metadata: plugin.PluginMetadata{Name: "my-stack-plugin"},
-				Enabled:  false,
-			},
-		},
+func TestListPlugins_Empty(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "m3tal-plugins-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
 	}
+	defer os.RemoveAll(tempDir)
 
-	h := &PluginHandlers{registry: mockReg}
+	mgr := plugins.NewManager("v0.2.0", tempDir)
+	h := NewPluginHandlers(mgr)
 
-	// 1. Test routes kind
-	req := httptest.NewRequest("GET", "/api/v2/plugins/routes", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("kind", "routes")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req := httptest.NewRequest("GET", "/api/v2/plugins", nil)
 	w := httptest.NewRecorder()
 
-	h.ListPluginsByKind(w, req)
+	h.ListPlugins(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Status string      `json:"status"`
+		Data   []PluginDTO `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Status != "success" {
+		t.Errorf("expected status 'success', got %q", resp.Status)
+	}
+	if len(resp.Data) != 0 {
+		t.Errorf("expected 0 plugins, got %d", len(resp.Data))
+	}
+}
+
+func TestListTabs_Empty(t *testing.T) {
+	mgr := plugins.NewManager("v0.2.0")
+	h := NewPluginHandlers(mgr)
+
+	req := httptest.NewRequest("GET", "/api/v2/plugins/tabs", nil)
+	w := httptest.NewRecorder()
+
+	h.ListTabs(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "my-route-plugin") {
-		t.Errorf("expected my-route-plugin in routes list, got %s", w.Body.String())
+
+	var resp struct {
+		Status string                  `json:"status"`
+		Data   []plugins.PluginTabSpec `json:"data"`
 	}
-
-	// 2. Test fallback by name
-	req2 := httptest.NewRequest("GET", "/api/v2/plugins/my-stack-plugin", nil)
-	rctx2 := chi.NewRouteContext()
-	rctx2.URLParams.Add("kind", "my-stack-plugin") // matching wildcard
-	req2 = req2.WithContext(context.WithValue(req2.Context(), chi.RouteCtxKey, rctx2))
-	w2 := httptest.NewRecorder()
-
-	h.ListPluginsByKind(w2, req2)
-
-	if w2.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", w2.Code)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
 	}
-	if !strings.Contains(w2.Body.String(), "my-stack-plugin") {
-		t.Errorf("expected stack details in name search, got %s", w2.Body.String())
-	}
-
-	// 3. Test not found fallback
-	req3 := httptest.NewRequest("GET", "/api/v2/plugins/nonexistent", nil)
-	rctx3 := chi.NewRouteContext()
-	rctx3.URLParams.Add("kind", "nonexistent")
-	req3 = req3.WithContext(context.WithValue(req3.Context(), chi.RouteCtxKey, rctx3))
-	w3 := httptest.NewRecorder()
-
-	h.ListPluginsByKind(w3, req3)
-
-	if w3.Code != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", w3.Code)
+	if resp.Status != "success" {
+		t.Errorf("expected success, got %q", resp.Status)
 	}
 }
 
-func TestEnablePlugin_UnsatisfiedDependencies(t *testing.T) {
-	// Create mock registry where A requires B, and B is disabled
-	mockReg := &plugin.Registry{
-		Routes: []plugin.RoutePlugin{
-			{
-				Metadata:   plugin.PluginMetadata{Name: "A"},
-				DependsOn:  []string{"B"},
-				SourcePath: "/tmp/a.yml",
-				Enabled:    false,
-			},
-		},
-		Stacks: []plugin.StackPlugin{
-			{
-				Metadata:   plugin.PluginMetadata{Name: "B"},
-				SourcePath: "/tmp/b.yml.disabled",
-				Enabled:    false,
-			},
-		},
-	}
-	mockReg.PopulateWarnings()
+func TestCollectPlugin_NotFound(t *testing.T) {
+	mgr := plugins.NewManager("v0.2.0")
+	h := NewPluginHandlers(mgr)
 
-	// Write mock yml files so LoadPlugin doesn't fail on read
-	err := os.WriteFile("/tmp/a.yml", []byte("apiVersion: m3tal/v1\nkind: Route\nmetadata:\n  name: A\ndepends_on: [\"B\"]\nspec:\n  service: s\n  domain: d\n  port: 80"), 0644)
+	req := httptest.NewRequest("GET", "/api/v2/plugins/nonexistent/collect", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "nonexistent")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	h.CollectPlugin(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}
+
+func TestStartPlugin_NotFound(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "m3tal-test-plugin-start")
 	if err != nil {
-		t.Fatalf("failed to write mock manifest A: %v", err)
+		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.Remove("/tmp/a.yml")
+	defer os.RemoveAll(tempDir)
 
-	h := &PluginHandlers{registry: mockReg}
+	mgr := plugins.NewManager("v0.2.0", tempDir)
+	h := NewPluginHandlers(mgr)
 
-	reqBody := `{"name": "A", "kind": "Route"}`
-	req := httptest.NewRequest("POST", "/api/v2/plugins/enable", bytes.NewBufferString(reqBody))
+	req := httptest.NewRequest("POST", "/api/v2/plugins/missing/start", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "missing")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	h.StartPlugin(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500 for missing plugin start, got %d", w.Code)
+	}
+}
+
+func TestListPlugins_WithDiscovered(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "m3tal-plugins-disc")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a dummy plugin directory with plugin.yaml
+	pDir := filepath.Join(tempDir, "dummy-plugin")
+	_ = os.MkdirAll(pDir, 0755)
+
+	manifestYAML := `
+apiVersion: m3tal.io/v1alpha1
+kind: Plugin
+metadata:
+  name: dummy-plugin
+  version: "1.2.0"
+  description: "A test dummy plugin"
+spec:
+  command: "./dummy"
+  capabilities:
+    - collector
+`
+	_ = os.WriteFile(filepath.Join(pDir, "plugin.yaml"), []byte(manifestYAML), 0644)
+
+	mgr := plugins.NewManager("v0.2.0", tempDir)
+	h := NewPluginHandlers(mgr)
+
+	req := httptest.NewRequest("GET", "/api/v2/plugins", nil)
 	w := httptest.NewRecorder()
 
-	h.Enable(w, req)
+	h.ListPlugins(w, req)
 
-	// Since B is disabled, enabling A should be rejected with 400 Bad Request
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var response struct {
-		Status string `json:"status"`
-		Error  struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
-			Details struct {
-				Warnings []string `json:"warnings"`
-			} `json:"details"`
-		} `json:"error"`
+	var resp struct {
+		Status string      `json:"status"`
+		Data   []PluginDTO `json:"data"`
 	}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
-	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 discovered plugin, got %d", len(resp.Data))
 	}
-
-	if response.Status != "error" || !strings.Contains(response.Error.Message, "unsatisfied dependencies") {
-		t.Errorf("expected error status for unsatisfied dependencies, got: %+v", response)
+	if resp.Data[0].Name != "dummy-plugin" {
+		t.Errorf("expected plugin name dummy-plugin, got %s", resp.Data[0].Name)
 	}
-	if len(response.Error.Details.Warnings) == 0 || !strings.Contains(response.Error.Details.Warnings[0], "Dependency plugin B is disabled") {
-		t.Errorf("expected warning about B being disabled, got warnings: %v", response.Error.Details.Warnings)
+	if resp.Data[0].State != plugins.StateStopped {
+		t.Errorf("expected state stopped, got %s", resp.Data[0].State)
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/docker"
 	"github.com/jakej985-rgb/m3tal-core/core/events"
 	"github.com/jakej985-rgb/m3tal-core/core/orchestrator"
-	"github.com/jakej985-rgb/m3tal-core/core/plugins"
 	"github.com/jakej985-rgb/m3tal-core/core/state"
 	"github.com/jakej985-rgb/m3tal-core/core/traefik"
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
@@ -37,19 +36,10 @@ func (h *StackHandlers) ListStacks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dirs := system.GetPluginDirs()
-	reg, _ := plugin.LoadAll(dirs...)
-
 	var stacks []models.Stack
 	for _, match := range matches {
 		base := filepath.Base(match)
 		name := strings.TrimSuffix(base, "-compose.yml")
-
-		if reg != nil {
-			if sp := reg.GetStack(name); sp != nil && !sp.Enabled {
-				continue
-			}
-		}
 
 		info := models.Stack{
 			Name:        name,
@@ -80,19 +70,18 @@ func (h *StackHandlers) ListStacks(w http.ResponseWriter, r *http.Request) {
 		stacks = []models.Stack{}
 	} else {
 		sort.Slice(stacks, func(i, j int) bool {
-			pI := 100
-			if reg != nil {
-				if sp := reg.GetStack(stacks[i].Name); sp != nil {
-					pI = sp.Priority
+			getPri := func(name string) int {
+				switch name {
+				case "network", "routing":
+					return 10
+				case "m3tal":
+					return 20
+				default:
+					return 100
 				}
 			}
-
-			pJ := 100
-			if reg != nil {
-				if sp := reg.GetStack(stacks[j].Name); sp != nil {
-					pJ = sp.Priority
-				}
-			}
+			pI := getPri(stacks[i].Name)
+			pJ := getPri(stacks[j].Name)
 
 			if pI != pJ {
 				return pI < pJ
@@ -131,18 +120,14 @@ func (h *StackHandlers) LoadStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load plugin registry for service matching suggestions
-	reg, _ := plugin.LoadFromPaths(system.SystemPluginsDir, system.UserPluginsDir)
-
 	// Build service details
 	type serviceDetail struct {
-		Name            string              `json:"name"`
-		Image           string              `json:"image"`
-		Ports           []string            `json:"ports,omitempty"`
-		ContainerPort   int                 `json:"container_port,omitempty"`
-		Labels          map[string]string   `json:"labels,omitempty"`
-		Networks        []string            `json:"networks,omitempty"`
-		SuggestedPlugin *plugin.RoutePlugin `json:"suggested_plugin,omitempty"`
+		Name          string            `json:"name"`
+		Image         string            `json:"image"`
+		Ports         []string          `json:"ports,omitempty"`
+		ContainerPort int               `json:"container_port,omitempty"`
+		Labels        map[string]string `json:"labels,omitempty"`
+		Networks      []string          `json:"networks,omitempty"`
 	}
 
 	var services []serviceDetail
@@ -154,9 +139,6 @@ func (h *StackHandlers) LoadStack(w http.ResponseWriter, r *http.Request) {
 			ContainerPort: cf.GetContainerPort(name),
 			Labels:        cf.GetTraefikLabels(name),
 			Networks:      svc.Networks.Values,
-		}
-		if reg != nil {
-			sd.SuggestedPlugin = reg.MatchService(name, svc.Image, sd.Labels)
 		}
 		services = append(services, sd)
 	}
@@ -320,19 +302,10 @@ func (h *StackHandlers) ScanStacks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dirs := system.GetPluginDirs()
-	reg, _ := plugin.LoadAll(dirs...)
-
 	var stacks []models.Stack
 	for _, match := range matches {
 		base := filepath.Base(match)
 		name := strings.TrimSuffix(base, "-compose.yml")
-
-		if reg != nil {
-			if sp := reg.GetStack(name); sp != nil && !sp.Enabled {
-				continue
-			}
-		}
 
 		info := models.Stack{
 			Name:        name,

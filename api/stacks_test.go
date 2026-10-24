@@ -35,42 +35,6 @@ func TestListStacks(t *testing.T) {
 		}
 	}
 
-	// Create temp deploy/plugins structure in current working directory of test (internal/api)
-	err = os.MkdirAll("deploy/plugins/stacks", 0755)
-	if err != nil {
-		t.Fatalf("failed to create local deploy/plugins dir: %v", err)
-	}
-	defer os.RemoveAll("deploy")
-
-	// Write mock plugin manifests
-	networkPluginYAML := `
-apiVersion: m3tal/v1
-kind: Stack
-metadata:
-  name: network
-spec:
-  composePath: network-compose.yml
-  priority: 1
-`
-	routingPluginYAML := `
-apiVersion: m3tal/v1
-kind: Stack
-metadata:
-  name: routing
-spec:
-  composePath: routing-compose.yml
-  priority: 2
-`
-
-	err = os.WriteFile("deploy/plugins/stacks/network.yml", []byte(networkPluginYAML), 0644)
-	if err != nil {
-		t.Fatalf("failed to write mock network plugin: %v", err)
-	}
-	err = os.WriteFile("deploy/plugins/stacks/routing.yml.disabled", []byte(routingPluginYAML), 0644)
-	if err != nil {
-		t.Fatalf("failed to write mock routing plugin: %v", err)
-	}
-
 	// Make API request to ListStacks
 	h := &StackHandlers{}
 	req := httptest.NewRequest("GET", "/api/v2/stacks", nil)
@@ -102,17 +66,18 @@ spec:
 	}
 	response := apiResponse.Data
 
-	// We expect routing to be filtered out (because it is disabled),
-	// and network to be first (priority 1), custom to be second (priority 100).
-	if len(response) != 2 {
-		t.Fatalf("expected 2 stacks, got %d: %v", len(response), response)
+	if len(response) != 3 {
+		t.Fatalf("expected 3 stacks, got %d: %v", len(response), response)
 	}
 
 	if response[0].Name != "network" {
 		t.Errorf("expected first stack to be 'network', got %q", response[0].Name)
 	}
-	if response[1].Name != "custom" {
-		t.Errorf("expected second stack to be 'custom', got %q", response[1].Name)
+	if response[1].Name != "routing" {
+		t.Errorf("expected second stack to be 'routing', got %q", response[1].Name)
+	}
+	if response[2].Name != "custom" {
+		t.Errorf("expected third stack to be 'custom', got %q", response[2].Name)
 	}
 }
 

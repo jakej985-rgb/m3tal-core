@@ -28,8 +28,6 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/pkg/output"
 	"github.com/jakej985-rgb/m3tal-core/pkg/system"
 	"github.com/spf13/cobra"
-
-	plugin "github.com/jakej985-rgb/m3tal-core/core/plugins"
 )
 
 // Version is injected during build via ldflags.
@@ -979,10 +977,10 @@ ingress:
 
 	composeCmd.AddCommand(composeLintCmd, composeFixCmd, composeGenerateCmd)
 
-	// ─── Plugin Commands ───
+	// ─── Plugin Commands (Supervised via pkg/plugins.Manager) ───
 	var pluginCmd = &cobra.Command{
 		Use:   "plugin",
-		Short: "Manage M3TAL plugins",
+		Short: "Manage M3TAL external plugins",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		},
@@ -990,531 +988,72 @@ ingress:
 
 	var pluginListCmd = &cobra.Command{
 		Use:   "list",
-		Short: "List all discovered plugins",
+		Short: "List all discovered and running plugins",
 		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			categoryFilter, _ := cmd.Flags().GetString("category")
-			subcategoryFilter, _ := cmd.Flags().GetString("subcategory")
-			providerFilter, _ := cmd.Flags().GetString("provider")
-
-			reg, err := c.GetPlugins()
+			list, err := c.GetManagedPlugins()
 			if err != nil {
 				log.Fatalf("❌ Failed to load plugins via API: %v", err)
 			}
 
-			sumText := ""
-			if summaryVal, ok := reg.Summary.(string); ok {
-				sumText = summaryVal
-			} else {
-				sumText = fmt.Sprintf("%d routes | %d middlewares | %d stacks", len(reg.Routes), len(reg.Middleware), len(reg.Stacks))
-			}
-			fmt.Printf("\n🔌 %s\n\n", sumText)
-
-			if len(reg.Stacks) > 0 {
-				printedHeader := false
-				for _, s := range reg.Stacks {
-					if categoryFilter != "" && !strings.EqualFold(s.Category, categoryFilter) {
-						continue
-					}
-					if subcategoryFilter != "" && !strings.EqualFold(s.Subcategory, subcategoryFilter) {
-						continue
-					}
-					if providerFilter != "" && !strings.EqualFold(s.Provider, providerFilter) {
-						continue
-					}
-					if !printedHeader {
-						fmt.Println("📦 Stack Plugins:")
-						printedHeader = true
-					}
-					pri := ""
-					if s.Priority > 0 {
-						pri = fmt.Sprintf(" (priority: %d)", s.Priority)
-					}
-					status := " [enabled]"
-					if !s.Enabled {
-						status = " [disabled]"
-					}
-					name := s.Name
-					if name == "" {
-						name = s.Metadata.Name
-					}
-					desc := s.Description
-					if desc == "" {
-						desc = s.Metadata.Description
-					}
-					fmt.Printf("   %-20s %s%s%s\n", name, desc, pri, status)
-				}
-				if printedHeader {
-					fmt.Println()
-				}
-			}
-
-			if len(reg.Routes) > 0 {
-				printedHeader := false
-				for _, r := range reg.Routes {
-					if categoryFilter != "" && !strings.EqualFold(r.Category, categoryFilter) {
-						continue
-					}
-					if subcategoryFilter != "" && !strings.EqualFold(r.Subcategory, subcategoryFilter) {
-						continue
-					}
-					if providerFilter != "" && !strings.EqualFold(r.Provider, providerFilter) {
-						continue
-					}
-					if !printedHeader {
-						fmt.Println("🚦 Route Plugins:")
-						printedHeader = true
-					}
-					status := " [enabled]"
-					if !r.Enabled {
-						status = " [disabled]"
-					}
-					name := r.Name
-					if name == "" {
-						name = r.Metadata.Name
-					}
-					fmt.Printf("   %-20s %s → %s:%d%s\n", name, r.Domain, r.Service, r.Port, status)
-				}
-				if printedHeader {
-					fmt.Println()
-				}
-			}
-
-			if len(reg.Middleware) > 0 {
-				printedHeader := false
-				for _, m := range reg.Middleware {
-					if categoryFilter != "" && !strings.EqualFold(m.Category, categoryFilter) {
-						continue
-					}
-					if subcategoryFilter != "" && !strings.EqualFold(m.Subcategory, subcategoryFilter) {
-						continue
-					}
-					if providerFilter != "" && !strings.EqualFold(m.Provider, providerFilter) {
-						continue
-					}
-					if !printedHeader {
-						fmt.Println("🔐 Middleware Plugins:")
-						printedHeader = true
-					}
-					status := " [enabled]"
-					if !m.Enabled {
-						status = " [disabled]"
-					}
-					name := m.Name
-					if name == "" {
-						name = m.Metadata.Name
-					}
-					desc := m.Description
-					if desc == "" {
-						desc = m.Metadata.Description
-					}
-					fmt.Printf("   %-20s [%s] %s%s\n", name, m.Type, desc, status)
-				}
-				if printedHeader {
-					fmt.Println()
-				}
-			}
-
-			dirs := system.GetPluginDirs()
-			fmt.Println("Scanned directories:")
-			for _, d := range dirs {
-				marker := "  ✗"
-				if _, err := os.Stat(d); err == nil {
-					marker = "  ✓"
-				}
-				fmt.Printf("%s %s\n", marker, d)
-			}
-		}),
-	}
-	pluginListCmd.Flags().String("category", "", "Filter plugins by category")
-	pluginListCmd.Flags().String("subcategory", "", "Filter plugins by subcategory")
-	pluginListCmd.Flags().String("provider", "", "Filter plugins by provider")
-
-	var pluginValidateCmd = &cobra.Command{
-		Use:   "validate [path]",
-		Short: "Validate a plugin YAML file",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			path := args[0]
-			data, err := os.ReadFile(path)
-			if err != nil {
-				log.Fatalf("❌ Cannot read file: %v", err)
-			}
-
-			res, err := c.ValidatePlugin(string(data))
-			if err != nil {
-				log.Fatalf("❌ Validation failed: %v", err)
-			}
-
-			fmt.Printf("✅ Valid %s plugin: %s\n", res["kind"], res["name"])
-			if desc, ok := res["description"].(string); ok && desc != "" {
-				fmt.Printf("   Description: %s\n", desc)
-			}
-			if ver, ok := res["version"].(string); ok && ver != "" {
-				fmt.Printf("   Version:     %s\n", ver)
-			}
-		}),
-	}
-
-	var pluginEnableCmd = &cobra.Command{
-		Use:   "enable [name]",
-		Short: "Enable a disabled plugin by name",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			name := args[0]
-			fmt.Printf("🔌 Enabling plugin %q via API...\n", name)
-
-			pluginsResp, err := c.GetPlugins()
-			if err != nil {
-				log.Fatalf("❌ Failed to get plugins: %v", err)
-			}
-			kind := ""
-			for _, p := range pluginsResp.Routes {
-				if strings.EqualFold(p.Metadata.Name, name) {
-					kind = "Route"
-					name = p.Metadata.Name
-					break
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Stacks {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Stack"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Middleware {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Middleware"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-			if kind == "" {
-				catalog, err := c.GetPluginCatalog()
-				if err == nil {
-					for _, item := range catalog {
-						if strings.EqualFold(item.Name, name) {
-							kind = item.Kind
-							name = item.Name
-							break
-						}
-					}
-				}
-			}
-
-			if kind == "" {
-				log.Fatalf("❌ Plugin %q not found", name)
-			}
-
-			err = c.EnablePlugin(name, kind)
-			if err != nil {
-				log.Fatalf("❌ Failed to enable plugin: %v", err)
-			}
-			fmt.Printf("✅ Enabled plugin %q\n", name)
-		}),
-	}
-
-	var pluginDisableCmd = &cobra.Command{
-		Use:   "disable [name]",
-		Short: "Disable an active plugin by name",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			name := args[0]
-			fmt.Printf("🔌 Disabling plugin %q via API...\n", name)
-
-			pluginsResp, err := c.GetPlugins()
-			if err != nil {
-				log.Fatalf("❌ Failed to get plugins: %v", err)
-			}
-			kind := ""
-			for _, p := range pluginsResp.Routes {
-				if strings.EqualFold(p.Metadata.Name, name) {
-					kind = "Route"
-					name = p.Metadata.Name
-					break
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Stacks {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Stack"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Middleware {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Middleware"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-
-			if kind == "" {
-				log.Fatalf("❌ Plugin %q not found", name)
-			}
-
-			err = c.DisablePlugin(name, kind)
-			if err != nil {
-				log.Fatalf("❌ Failed to disable plugin: %v", err)
-			}
-			fmt.Printf("✅ Disabled plugin %q\n", name)
-		}),
-	}
-
-	var pluginSyncCmd = &cobra.Command{
-		Use:   "sync",
-		Short: "Synchronize and write Traefik dynamic provider configuration",
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			fmt.Println("🔄 Synchronizing plugins Traefik config via API...")
-			_, err := c.SyncPlugins()
-			if err != nil {
-				log.Fatalf("❌ Failed to sync: %v", err)
-			}
-			fmt.Println("✅ Synced Traefik dynamic provider config successfully.")
-		}),
-	}
-
-	var pluginMatchCmd = &cobra.Command{
-		Use:   "match [service-name]",
-		Short: "Find a route plugin matching the given service information",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			image, _ := cmd.Flags().GetString("image")
-			labelSlice, _ := cmd.Flags().GetStringSlice("label")
-			labels := make(map[string]string)
-			for _, item := range labelSlice {
-				parts := strings.SplitN(item, "=", 2)
-				if len(parts) == 2 {
-					labels[parts[0]] = parts[1]
-				}
-			}
-
-			res, err := c.MatchPlugin(args[0], image, labels)
-			if err != nil {
-				log.Fatalf("❌ Failed to match plugin via API: %v", err)
-			}
-
-			matched, _ := res["matched"].(bool)
-			if matched {
-				pluginMap, _ := res["plugin"].(map[string]any)
-				metadata, _ := pluginMap["metadata"].(map[string]any)
-				fmt.Printf("🎯 Match found! Route Plugin: %s (service: %s, domain: %s, port: %.0f)\n",
-					metadata["name"], pluginMap["service"], pluginMap["domain"], pluginMap["port"])
-			} else {
-				fmt.Println("❌ No matching route plugin found.")
-			}
-		}),
-	}
-	pluginMatchCmd.Flags().String("image", "", "Docker image name to match against")
-	pluginMatchCmd.Flags().StringSlice("label", nil, "Docker labels to match against (format: key=value)")
-
-	var pluginInstallStackCmd = &cobra.Command{
-		Use:   "install-stack [name]",
-		Short: "Install and parameterize a Stack plugin compose template",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			envSlice, _ := cmd.Flags().GetStringSlice("env")
-			vars := make(map[string]string)
-			for _, item := range envSlice {
-				parts := strings.SplitN(item, "=", 2)
-				if len(parts) == 2 {
-					vars[parts[0]] = parts[1]
-				}
-			}
-
-			res, err := c.InstallStackPlugin(args[0], vars)
-			if err != nil {
-				log.Fatalf("❌ Failed to install stack plugin via API: %v", err)
-			}
-
-			fmt.Printf("✅ Stack compose file installed to %s\n", res["path"])
-		}),
-	}
-	pluginInstallStackCmd.Flags().StringSlice("env", nil, "Environment variables to parameterize the template (format: key=value)")
-
-	var pluginCatalogCmd = &cobra.Command{
-		Use:   "catalog",
-		Short: "List all official plugins in the catalog and their status",
-		Run: func(cmd *cobra.Command, args []string) {
-			exportPath, _ := cmd.Flags().GetString("export")
-			if exportPath != "" {
-				// --export serializes the static catalog embedded in the binary.
-				// Does NOT require a running daemon — safe for use in CI pipelines.
-				data, err := json.MarshalIndent(plugin.Catalog, "", "  ")
-				if err != nil {
-					log.Fatalf("❌ Failed to marshal catalog: %v", err)
-				}
-				if err := os.WriteFile(exportPath, data, 0644); err != nil {
-					log.Fatalf("❌ Failed to write catalog file: %v", err)
-				}
-				fmt.Printf("✅ Catalog exported to %s\n", exportPath)
+			fmt.Printf("\n🔌 Managed Plugins (%d discovered)\n\n", len(list))
+			if len(list) == 0 {
+				fmt.Println("   No external plugins installed in search paths.")
+				fmt.Println("   Plugin search paths: ~/.config/m3tal/plugins/, /var/lib/m3tal/plugins/, ./plugins/")
+				fmt.Println()
 				return
 			}
 
-			// Listing with live install status requires the daemon.
-			cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-				categoryFilter, _ := cmd.Flags().GetString("category")
-				subcategoryFilter, _ := cmd.Flags().GetString("subcategory")
-				providerFilter, _ := cmd.Flags().GetString("provider")
-
-				items, err := c.GetPluginCatalog()
-				if err != nil {
-					log.Fatalf("❌ Failed to fetch catalog via API: %v", err)
+			for _, p := range list {
+				procName := p.Name
+				if !strings.HasPrefix(procName, "m3tal-") {
+					procName = "m3tal-" + procName
 				}
-
-				fmt.Println("\n📋 M3TAL Plugin Catalog:")
-				fmt.Println("--------------------------------------------------")
-				for _, item := range items {
-					if categoryFilter != "" && !strings.EqualFold(item.Category, categoryFilter) {
-						continue
-					}
-					if subcategoryFilter != "" && !strings.EqualFold(item.Subcategory, subcategoryFilter) {
-						continue
-					}
-					if providerFilter != "" && !strings.EqualFold(item.Provider, providerFilter) {
-						continue
-					}
-					statusColor := "⚪" // not installed
-					statusStr := "not installed"
-					if item.Installed {
-						if item.Status == "enabled" {
-							statusColor = "🟢"
-							statusStr = "installed & enabled"
-						} else {
-							statusColor = "🟡"
-							statusStr = "installed & disabled"
-						}
-					}
-					fmt.Printf("%s %-16s [%-10s] %s\n", statusColor, item.Name, item.Kind, item.Description)
-					fmt.Printf("   Version: %s | Author: %s | Status: %s\n\n", item.Version, item.Author, statusStr)
+				status := fmt.Sprintf("[%s]", p.State)
+				caps := ""
+				if len(p.Capabilities) > 0 {
+					caps = fmt.Sprintf(" (caps: %s)", strings.Join(p.Capabilities, ", "))
 				}
-			})(cmd, args)
-		},
-	}
-	pluginCatalogCmd.Flags().String("export", "", "Export the static catalog to a JSON file path (no daemon required)")
-	pluginCatalogCmd.Flags().String("category", "", "Filter catalog by category")
-	pluginCatalogCmd.Flags().String("subcategory", "", "Filter catalog by subcategory")
-	pluginCatalogCmd.Flags().String("provider", "", "Filter catalog by provider")
-
-	var pluginInstallCmd = &cobra.Command{
-		Use:   "install [name]",
-		Short: "Download and install a plugin from the catalog by name",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			name := args[0]
-
-			catalog, err := c.GetPluginCatalog()
-			if err != nil {
-				log.Fatalf("❌ Failed to fetch catalog from API: %v", err)
-			}
-
-			var targetItem *models.CatalogItemStatus
-			for i := range catalog {
-				if strings.EqualFold(catalog[i].Name, name) {
-					targetItem = &catalog[i]
-					name = catalog[i].Name // use canonical name
-					break
+				fmt.Printf("   %-20s v%-8s %-12s proc:%-18s%s\n", p.Name, p.Version, status, procName, caps)
+				if p.Description != "" {
+					fmt.Printf("      %s\n", p.Description)
+				}
+				if p.LastError != "" {
+					fmt.Printf("      ⚠️ Error: %s\n", p.LastError)
 				}
 			}
-			if targetItem == nil {
-				log.Fatalf("❌ Plugin %q not found in catalog. Run 'm3tal plugin catalog' to see available plugins.", name)
-			}
-
-			for _, dep := range targetItem.Dependencies {
-				var depItem *models.CatalogItemStatus
-				for i := range catalog {
-					if strings.EqualFold(catalog[i].Name, dep.Name) {
-						depItem = &catalog[i]
-						break
-					}
-				}
-
-				if depItem != nil && !depItem.Installed {
-					if !dep.AutoInstall {
-						fmt.Printf("❓ Missing required dependency %s %q. Install now? [Y/n]: ", dep.Kind, dep.Name)
-						var response string
-						fmt.Scanln(&response)
-						response = strings.TrimSpace(strings.ToLower(response))
-						if response != "" && response != "y" && response != "yes" {
-							log.Fatalf("❌ Aborted installation because required dependency %q was not installed.", dep.Name)
-						}
-					}
-					fmt.Printf("📥 Installing dependency %s %q via API...\n", dep.Kind, dep.Name)
-					err := c.InstallPlugin(dep.Name, dep.Kind)
-					if err != nil {
-						log.Fatalf("❌ Failed to install dependency %q: %v", dep.Name, err)
-					}
-				}
-			}
-
-			fmt.Printf("📥 Installing %s plugin %q via API...\n", targetItem.Kind, name)
-			err = c.InstallPlugin(name, targetItem.Kind)
-			if err != nil {
-				log.Fatalf("❌ Installation failed: %v", err)
-			}
-			fmt.Printf("✅ Plugin %q successfully installed.\n", name)
+			fmt.Println()
 		}),
 	}
 
-	var pluginUninstallCmd = &cobra.Command{
-		Use:   "uninstall [name]",
-		Short: "Uninstall a user-installed plugin by name",
+	var pluginStartCmd = &cobra.Command{
+		Use:   "start [name]",
+		Short: "Start an external plugin subprocess",
 		Args:  cobra.ExactArgs(1),
 		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
 			name := args[0]
-			fmt.Printf("🗑️  Uninstalling plugin %q via API...\n", name)
-			pluginsResp, err := c.GetPlugins()
-			if err != nil {
-				log.Fatalf("❌ Failed to get plugins: %v", err)
+			fmt.Printf("🚀 Starting plugin %q...\n", name)
+			if err := c.StartPlugin(name); err != nil {
+				log.Fatalf("❌ Failed to start plugin: %v", err)
 			}
-			kind := ""
-			for _, p := range pluginsResp.Routes {
-				if strings.EqualFold(p.Metadata.Name, name) {
-					kind = "Route"
-					name = p.Metadata.Name
-					break
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Stacks {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Stack"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-			if kind == "" {
-				for _, p := range pluginsResp.Middleware {
-					if strings.EqualFold(p.Metadata.Name, name) {
-						kind = "Middleware"
-						name = p.Metadata.Name
-						break
-					}
-				}
-			}
-
-			if kind == "" {
-				log.Fatalf("❌ Plugin %q not found", name)
-			}
-
-			err = c.UninstallPlugin(name, kind)
-			if err != nil {
-				log.Fatalf("❌ Failed to uninstall plugin: %v", err)
-			}
-			fmt.Printf("✅ Plugin %q successfully uninstalled.\n", name)
+			fmt.Printf("✅ Plugin %q started successfully.\n", name)
 		}),
 	}
 
-	pluginCmd.AddCommand(pluginListCmd, pluginValidateCmd, pluginEnableCmd, pluginDisableCmd, pluginSyncCmd, pluginMatchCmd, pluginInstallStackCmd, pluginCatalogCmd, pluginInstallCmd, pluginUninstallCmd)
+	var pluginStopCmd = &cobra.Command{
+		Use:   "stop [name]",
+		Short: "Stop a running external plugin subprocess",
+		Args:  cobra.ExactArgs(1),
+		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
+			name := args[0]
+			fmt.Printf("⏹ Stopping plugin %q...\n", name)
+			if err := c.StopPlugin(name); err != nil {
+				log.Fatalf("❌ Failed to stop plugin: %v", err)
+			}
+			fmt.Printf("✅ Plugin %q stopped.\n", name)
+		}),
+	}
+
+	pluginCmd.AddCommand(pluginListCmd, pluginStartCmd, pluginStopCmd)
 
 	// ── Doctor subcommands ─────────────────────────────────────────────────────
 
@@ -1678,40 +1217,6 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 
 	docCmd.AddCommand(doctorScanCmd, doctorFixCmd, doctorReportCmd)
 
-	var aiCmd = &cobra.Command{
-		Use:   "ai [prompt]",
-		Short: "Query the M3TAL AI system",
-		Args:  cobra.ExactArgs(1),
-		Run: cmdutil.WithDaemon(func(c *client.Client, cmd *cobra.Command, args []string) {
-			prompt := args[0]
-			mode, _ := cmd.Flags().GetString("mode")
-
-			payload := map[string]string{
-				"prompt": prompt,
-				"mode":   mode,
-			}
-
-			// Use a longer timeout for AI generation (e.g. 5 minutes)
-			c.HTTPClient.Timeout = 5 * time.Minute
-
-			fmt.Println("🧠 Sending request to M3TAL AI queue...")
-
-			var aiResp struct {
-				Model    string `json:"model"`
-				Response string `json:"response"`
-			}
-			err := c.Request("POST", "/api/v2/ai/run", payload, &aiResp)
-			if err != nil {
-				output.FatalError(err)
-			}
-
-			fmt.Println("\n🤖 Response from AI (" + aiResp.Model + "):")
-			fmt.Println("----------------------------------------")
-			fmt.Println(aiResp.Response)
-		}),
-	}
-	aiCmd.Flags().StringP("mode", "m", "", "AI model mode (e.g., 'code' or 'chat')")
-
 	var uiCmd = &cobra.Command{
 		Use:   "ui",
 		Short: "Launch M3TAL Desktop Application",
@@ -1789,7 +1294,7 @@ fixes. By default runs in dry-run mode — pass --apply to execute the fixes.`,
 		},
 	}
 
-	rootCmd.AddCommand(versionCmd, listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, aiCmd, stacksCmd, uiCmd, headlessCmd, sysmonCmd, dockerDaemonCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
+	rootCmd.AddCommand(versionCmd, listCmd, psCmd, startCmd, stopCmd, statsCmd, daemonCmd, apiCmd, upCmd, downCmd, restartCmd, logsCmd, pullCmd, dashpassCmd, initCmd, docCmd, configCmd, pluginCmd, composeCmd, vpnCmd, initProxyCmds(), initDashCmd(), trayCmd, stacksCmd, uiCmd, headlessCmd, sysmonCmd, dockerDaemonCmd, initStackCmd(), initFixCmd(), initDeployCmd(), initReconcileCmd(), initAgentCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

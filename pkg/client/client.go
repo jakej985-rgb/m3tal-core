@@ -336,6 +336,26 @@ func (c *Client) RunAI(prompt, mode, priority, model string) (string, error) {
 	return result.Response, nil
 }
 
+// GetManagedPlugins returns all discovered and running plugins supervised by the Plugin Manager.
+func (c *Client) GetManagedPlugins() ([]models.ManagedPlugin, error) {
+	var list []models.ManagedPlugin
+	err := c.request("GET", "/api/v2/plugins", nil, &list)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// StartPlugin starts a plugin subprocess.
+func (c *Client) StartPlugin(name string) error {
+	return c.request("POST", "/api/v2/plugins/"+name+"/start", nil, nil)
+}
+
+// StopPlugin stops a plugin subprocess.
+func (c *Client) StopPlugin(name string) error {
+	return c.request("POST", "/api/v2/plugins/"+name+"/stop", nil, nil)
+}
+
 // GetPlugins returns all loaded plugins across all kinds.
 func (c *Client) GetPlugins() (*models.PluginsResponse, error) {
 	var response models.PluginsResponse

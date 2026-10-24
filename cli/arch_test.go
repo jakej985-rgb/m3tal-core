@@ -33,10 +33,6 @@ func TestArchitectureConstraints(t *testing.T) {
 			for _, imp := range fileAST.Imports {
 				importPath := strings.Trim(imp.Path.Value, `"`)
 				if strings.HasPrefix(importPath, "github.com/jakej985-rgb/m3tal-core/core/") {
-					// Allow cli/main.go to import core/plugins for CI catalog export
-					if filePath == "main.go" && importPath == "github.com/jakej985-rgb/m3tal-core/core/plugins" {
-						continue
-					}
 					t.Errorf("Architecture Violation: File %s imports forbidden package %q", filePath, importPath)
 				}
 			}

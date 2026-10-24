@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/jakej985-rgb/m3tal-core/core/docker"
-	"github.com/jakej985-rgb/m3tal-core/core/plugins"
 	"github.com/jakej985-rgb/m3tal-core/core/state"
 	"github.com/jakej985-rgb/m3tal-core/core/traefik"
 	"github.com/jakej985-rgb/m3tal-core/pkg/system"
@@ -191,18 +190,6 @@ func (m *Manager) UnexposeService(domain string) error {
 		if err := m.Store.DeleteRoute(r.ID); err != nil {
 			return err
 		}
-	} else {
-		// Fallback parse from plugin files if no DB
-		dirs := system.GetPluginDirs()
-		reg, err := plugin.LoadAll(dirs...)
-		if err == nil {
-			for _, rp := range reg.Routes {
-				if rp.Domain == domain {
-					serviceName = rp.Service
-					break
-				}
-			}
-		}
 	}
 
 	if serviceName == "" {
@@ -382,15 +369,91 @@ func (m *Manager) DeletePluginFile(service string, domain string) error {
 	return os.Remove(filePath)
 }
 
-// SyncPlugins compiles all route and middleware plugins to generate dynamic config.
+// TraefikDynamicConfig represents the file provider format for Traefik.
+type TraefikDynamicConfig struct {
+	HTTP TraefikHTTPConfig `yaml:"http"`
+}
+
+type TraefikHTTPConfig struct {
+	Routers  map[string]*TraefikRouter  `yaml:"routers,omitempty"`
+	Services map[string]*TraefikService `yaml:"services,omitempty"`
+}
+
+type TraefikRouter struct {
+	Rule        string      `yaml:"rule"`
+	Service     string      `yaml:"service"`
+	EntryPoints []string    `yaml:"entryPoints,omitempty"`
+	Middlewares []string    `yaml:"middlewares,omitempty"`
+	TLS         *TraefikTLS `yaml:"tls,omitempty"`
+}
+
+type TraefikTLS struct {
+	CertResolver string `yaml:"certResolver,omitempty"`
+}
+
+type TraefikService struct {
+	LoadBalancer *TraefikLoadBalancer `yaml:"loadBalancer"`
+}
+
+type TraefikLoadBalancer struct {
+	Servers []TraefikServer `yaml:"servers"`
+}
+
+type TraefikServer struct {
+	URL string `yaml:"url"`
+}
+
+// SyncPlugins compiles all stored routes to generate Traefik dynamic configuration.
 func (m *Manager) SyncPlugins() error {
-	dirs := system.GetPluginDirs()
-	reg, err := plugin.LoadAll(dirs...)
-	if err != nil {
-		return fmt.Errorf("failed to load plugins: %w", err)
+	cfg := TraefikDynamicConfig{
+		HTTP: TraefikHTTPConfig{
+			Routers:  make(map[string]*TraefikRouter),
+			Services: make(map[string]*TraefikService),
+		},
 	}
 
-	configData, err := reg.GenerateTraefikConfig()
+	if m.Store != nil {
+		routes, err := m.Store.ListRoutes()
+		if err == nil {
+			for _, r := range routes {
+				routerName := sanitizeDomainFilename(r.Service + "-" + r.Domain)
+				rule := fmt.Sprintf("Host(`%s`)", r.Domain)
+				eps := []string{"web"}
+				var tls *TraefikTLS
+				if r.SSL {
+					eps = []string{"web", "websecure"}
+					tls = &TraefikTLS{CertResolver: "letsencrypt"}
+				}
+
+				var mwList []string
+				if r.Middlewares != "" {
+					for _, mw := range strings.Split(r.Middlewares, ",") {
+						if trimmed := strings.TrimSpace(mw); trimmed != "" {
+							mwList = append(mwList, trimmed)
+						}
+					}
+				}
+
+				cfg.HTTP.Routers[routerName] = &TraefikRouter{
+					Rule:        rule,
+					Service:     routerName,
+					EntryPoints: eps,
+					Middlewares: mwList,
+					TLS:         tls,
+				}
+
+				cfg.HTTP.Services[routerName] = &TraefikService{
+					LoadBalancer: &TraefikLoadBalancer{
+						Servers: []TraefikServer{
+							{URL: fmt.Sprintf("http://%s:%d", r.Service, r.Port)},
+						},
+					},
+				}
+			}
+		}
+	}
+
+	configData, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to generate Traefik config: %w", err)
 	}
@@ -402,11 +465,7 @@ func (m *Manager) SyncPlugins() error {
 	}
 
 	outputPath := filepath.Join(dynamicDir, "m3tal-plugins.yml")
-	if err := os.WriteFile(outputPath, configData, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(outputPath, configData, 0644)
 }
 
 func sanitizeDomainFilename(domain string) string {

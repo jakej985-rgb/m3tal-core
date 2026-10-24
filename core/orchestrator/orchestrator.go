@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jakej985-rgb/m3tal-core/core/plugins"
 	"github.com/jakej985-rgb/m3tal-core/pkg/system"
 )
 
@@ -18,18 +17,23 @@ type StackManager struct {
 	Files []string
 }
 
+// Default priorities for known core stacks
+var defaultStackPriorities = map[string]int{
+	"network": 10,
+	"routing": 10,
+	"m3tal":   20,
+}
+
 // NewStackManager returns a manager with discovered M3TAL compose files.
 func NewStackManager() *StackManager {
-	dirs := system.GetPluginDirs()
-	reg, _ := plugin.LoadAll(dirs...)
-	paths := discoverComposeFiles(reg)
+	paths := discoverComposeFiles(defaultStackPriorities)
 	return &StackManager{
 		Files: paths,
 	}
 }
 
 // discoverComposeFiles finds all matching compose files across known locations.
-func discoverComposeFiles(reg *plugin.Registry) []string {
+func discoverComposeFiles(priorities map[string]int) []string {
 	var files []string
 
 	dashboardExists := false
@@ -48,23 +52,17 @@ func discoverComposeFiles(reg *plugin.Registry) []string {
 		if !dashboardExists && name == "m3tal-compose.yml" {
 			continue
 		}
-		stackName := strings.TrimSuffix(name, "-compose.yml")
-		if reg != nil {
-			if sp := reg.GetStack(stackName); sp != nil && !sp.Enabled {
-				continue
-			}
-		}
 		files = append(files, match)
 	}
 
 	// Deduplicate and sort for deterministic order
-	files = uniqueSorted(files, reg)
+	files = uniqueSorted(files, priorities)
 
 	return files
 }
 
 // uniqueSorted deduplicates and sorts file paths with priority for infrastructure stacks.
-func uniqueSorted(files []string, reg *plugin.Registry) []string {
+func uniqueSorted(files []string, priorities map[string]int) []string {
 	seen := make(map[string]bool)
 	var unique []string
 	for _, f := range files {
@@ -82,16 +80,16 @@ func uniqueSorted(files []string, reg *plugin.Registry) []string {
 		stackNameJ := strings.TrimSuffix(nameJ, "-compose.yml")
 
 		pI := 100
-		if reg != nil {
-			if sp := reg.GetStack(stackNameI); sp != nil {
-				pI = sp.Priority
+		if priorities != nil {
+			if p, ok := priorities[stackNameI]; ok {
+				pI = p
 			}
 		}
 
 		pJ := 100
-		if reg != nil {
-			if sp := reg.GetStack(stackNameJ); sp != nil {
-				pJ = sp.Priority
+		if priorities != nil {
+			if p, ok := priorities[stackNameJ]; ok {
+				pJ = p
 			}
 		}
 

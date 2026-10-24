@@ -79,3 +79,16 @@ type CatalogItemStatus struct {
 	Installed bool   `json:"installed"`
 	Status    string `json:"status"` // "enabled", "disabled", "not_installed"
 }
+
+// ManagedPlugin represents an external plugin supervised by M3TAL Core.
+type ManagedPlugin struct {
+	Name            string   `json:"name"`
+	Version         string   `json:"version"`
+	Description     string   `json:"description,omitempty"`
+	Author          string   `json:"author,omitempty"`
+	Icon            string   `json:"icon,omitempty"`
+	State           string   `json:"state"`
+	Capabilities    []string `json:"capabilities"`
+	LastError       string   `json:"last_error,omitempty"`
+	LastCollectedAt int64    `json:"last_collected_at,omitempty"`
+}

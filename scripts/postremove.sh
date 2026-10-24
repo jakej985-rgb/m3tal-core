@@ -31,7 +31,6 @@ if [ "$1" = "purge" ]; then
     # Define default stack files and directories to selectively clean up
     DEFAULT_FILES=(
         "README.md"
-        "ai-compose.yml"
         "cloudflared-config.yml"
         "m3tal-compose.local.yml"
         "m3tal-compose.traefik.yml"

@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard';
 import SystemMonitor from './pages/SystemMonitor';
-import Stacks from './pages/Stacks';
-import Containers from './pages/Containers';
-import AI from './pages/AI';
 import Plugins from './pages/Plugins';
 import {
   IconDashboard,
   IconSystemMonitor,
-  IconStacks,
-  IconContainers,
-  IconAI,
   IconPlugins,
   IconSettings,
 } from './components/Icons';
@@ -20,70 +14,26 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tokenInput, setTokenInput] = useState(getToken());
   const [showSettings, setShowSettings] = useState(false);
-  const [pluginsState, setPluginsState] = useState({
-    hasStacks: false,
-    hasContainers: false,
-    hasAI: false,
-    loaded: false,
-  });
+  const [pluginTabs, setPluginTabs] = useState([]);
 
-  const checkInstalledPlugins = async () => {
+  // Fetch dynamic tabs registered by running external plugins
+  const fetchPluginTabs = async () => {
     try {
-      const [resPlugins, resCatalog] = await Promise.all([
-        api.getPlugins(),
-        api.getPluginCatalog(),
-      ]);
-
-      let hasStacks = false;
-      let hasAI = false;
-      let hasContainers = false;
-
-      // 1. Check loaded plugins
-      if (resPlugins?.status === 'success' && resPlugins.data) {
-        const loadedStacks = Array.isArray(resPlugins.data.stacks) ? resPlugins.data.stacks : [];
-        const loadedRoutes = Array.isArray(resPlugins.data.routes) ? resPlugins.data.routes : [];
-        const loadedMiddleware = Array.isArray(resPlugins.data.middleware) ? resPlugins.data.middleware : [];
-        const allLoaded = [...loadedStacks, ...loadedRoutes, ...loadedMiddleware];
-
-        if (loadedStacks.length > 0) {
-          hasStacks = true;
-        }
-        if (allLoaded.some((p) => (p.name || p.id) === 'ai')) {
-          hasAI = true;
-        }
-        if (allLoaded.some((p) => ['docker-monitor', 'docker', 'containers'].includes(p.name || p.id))) {
-          hasContainers = true;
-        }
+      const res = await api.getPluginTabs();
+      if (res?.status === 'success' && Array.isArray(res.data)) {
+        setPluginTabs(res.data);
+      } else {
+        setPluginTabs([]);
       }
-
-      // 2. Check catalog installation state
-      if (resCatalog?.status === 'success' && Array.isArray(resCatalog.data)) {
-        const installed = resCatalog.data.filter((c) => c.installed || c.status === 'enabled');
-        if (installed.some((c) => c.kind === 'Stack' || c.name === 'm3tal' || c.name === 'maintenance')) {
-          hasStacks = true;
-        }
-        if (installed.some((c) => c.name === 'ai')) {
-          hasAI = true;
-        }
-        if (installed.some((c) => ['docker-monitor', 'docker', 'containers'].includes(c.name))) {
-          hasContainers = true;
-        }
-      }
-
-      setPluginsState({
-        hasStacks,
-        hasContainers,
-        hasAI,
-        loaded: true,
-      });
-    } catch (err) {
-      console.warn('Could not refresh plugins state:', err);
+    } catch {
+      // Non-critical, fallback to empty dynamic tabs
+      setPluginTabs([]);
     }
   };
 
   useEffect(() => {
-    checkInstalledPlugins();
-    const interval = setInterval(checkInstalledPlugins, 10000);
+    fetchPluginTabs();
+    const interval = setInterval(fetchPluginTabs, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -99,15 +49,28 @@ export default function App() {
         return <Dashboard />;
       case 'system-monitor':
         return <SystemMonitor />;
-      case 'stacks':
-        return pluginsState.hasStacks ? <Stacks /> : <Dashboard />;
-      case 'containers':
-        return pluginsState.hasContainers ? <Containers /> : <Dashboard />;
-      case 'ai':
-        return pluginsState.hasAI ? <AI /> : <Dashboard />;
       case 'plugins':
         return <Plugins />;
       default:
+        // Check if activeTab matches a dynamic plugin tab
+        const dynamicTab = pluginTabs.find((t) => t.id === activeTab);
+        if (dynamicTab) {
+          return (
+            <div className="space-y-4">
+              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                <span>{dynamicTab.title}</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800">
+                  Plugin View
+                </span>
+              </h1>
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-6 text-slate-300">
+                <p className="text-sm text-slate-400">
+                  Dynamic view provided by plugin: <span className="text-white font-mono">{dynamicTab.plugin || dynamicTab.id}</span>
+                </p>
+              </div>
+            </div>
+          );
+        }
         return <Dashboard />;
     }
   };
@@ -154,50 +117,23 @@ export default function App() {
               <span>System Monitor</span>
             </button>
 
-            {/* Plugin-Dependent Items (Hidden on Fresh Install until Installed) */}
-            {pluginsState.hasStacks && (
+            {/* Dynamic Plugin Tabs */}
+            {pluginTabs.map((tab) => (
               <button
-                onClick={() => setActiveTab('stacks')}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
-                  activeTab === 'stacks'
+                  activeTab === tab.id
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
                     : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
                 }`}
               >
-                <IconStacks className="w-5 h-5 flex-shrink-0" />
-                <span>Stacks Manager</span>
+                <IconPlugins className="w-5 h-5 flex-shrink-0 text-cyan-400" />
+                <span>{tab.title}</span>
               </button>
-            )}
+            ))}
 
-            {pluginsState.hasContainers && (
-              <button
-                onClick={() => setActiveTab('containers')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
-                  activeTab === 'containers'
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                    : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
-                }`}
-              >
-                <IconContainers className="w-5 h-5 flex-shrink-0" />
-                <span>Containers</span>
-              </button>
-            )}
-
-            {pluginsState.hasAI && (
-              <button
-                onClick={() => setActiveTab('ai')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
-                  activeTab === 'ai'
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                    : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
-                }`}
-              >
-                <IconAI className="w-5 h-5 flex-shrink-0" />
-                <span>AI Playground</span>
-              </button>
-            )}
-
-            {/* Plugin Registry (Store / Hub) */}
+            {/* Plugin Manager */}
             <button
               onClick={() => setActiveTab('plugins')}
               className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
@@ -207,7 +143,7 @@ export default function App() {
               }`}
             >
               <IconPlugins className="w-5 h-5 flex-shrink-0" />
-              <span>Plugin Registry</span>
+              <span>Plugin Manager</span>
             </button>
           </nav>
         </div>

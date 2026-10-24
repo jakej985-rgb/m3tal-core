@@ -16,15 +16,15 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/docker"
 	"github.com/jakej985-rgb/m3tal-core/core/events"
 	"github.com/jakej985-rgb/m3tal-core/core/health"
-	"github.com/jakej985-rgb/m3tal-core/core/queue"
 	"github.com/jakej985-rgb/m3tal-core/core/state"
 	"github.com/jakej985-rgb/m3tal-core/core/system"
 	"github.com/jakej985-rgb/m3tal-core/gui"
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
+	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
 )
 
-// GlobalQueueManager manages the background execution queue for the API.
-var GlobalQueueManager *queue.Manager
+// GlobalPluginManager manages the external plugin supervisor.
+var GlobalPluginManager *plugins.Manager
 
 // RunServer automatically initializes the state store and starts the API daemon.
 func RunServer(port string, token string) error {
@@ -54,9 +54,9 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	system.StartMetricsAggregator()
 	srv := NewServer(token)
 
-	// Initialize global queue manager
-	GlobalQueueManager = queue.NewManager(2, 100)
-	defer GlobalQueueManager.Close()
+	// Initialize global plugin manager
+	GlobalPluginManager = plugins.NewManager("v0.2.0")
+	defer GlobalPluginManager.StopAll()
 
 	// Start background Docker events forwarder
 	go func() {
@@ -147,7 +147,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		routeH := &RouteHandlers{Store: db}
 		stackH := &StackHandlers{Store: db}
 		mwH := &MiddlewareHandlers{Store: db}
-		pluginH := NewPluginHandlers(db)
+		pluginH := NewPluginHandlers(GlobalPluginManager)
 		composeH := &ComposeHandlers{Store: db}
 		vpnH := NewVPNHandlers()
 		proxyH := NewProxyHandlers(db)
@@ -188,19 +188,13 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/middleware", mwH.ListMiddleware)
 			r.Post("/middleware", mwH.CreateMiddleware)
 
-			// Plugins
+			// Plugins (Supervised via pkg/plugins.Manager)
 			r.Get("/plugins", pluginH.ListPlugins)
-			r.Get("/plugins/catalog", pluginH.ListCatalog)
-			r.Get("/plugins/{kind}", pluginH.ListPluginsByKind)
-			r.Post("/plugins/reload", pluginH.Reload)
-			r.Post("/plugins/enable", pluginH.Enable)
-			r.Post("/plugins/disable", pluginH.Disable)
-			r.Post("/plugins/sync", pluginH.Sync)
-			r.Post("/plugins/install", pluginH.Install)
-			r.Post("/plugins/uninstall", pluginH.Uninstall)
-			r.Post("/plugins/validate", pluginH.Validate)
-			r.Post("/plugins/match", pluginH.Match)
-			r.Post("/plugins/install-stack", pluginH.InstallStackPlugin)
+			r.Get("/plugins/tabs", pluginH.ListTabs)
+			r.Post("/plugins/{name}/start", pluginH.StartPlugin)
+			r.Post("/plugins/{name}/stop", pluginH.StopPlugin)
+			r.Get("/plugins/{name}/collect", pluginH.CollectPlugin)
+			r.Post("/plugins/{name}/action", pluginH.ExecuteAction)
 
 			// Compose
 			r.Post("/compose/validate", composeH.ValidateCompose)
@@ -262,38 +256,25 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/ws/events", srv.GetWSEvents)
 			r.Get("/ws/logs/{name}", srv.GetWSLogs)
 
-			// Queue/AI
-			r.Get("/queue", ListQueue)
-			r.Get("/ai/queue", ListQueue)
-			r.Post("/queue/cancel", CancelQueueJob)
-			r.Post("/queue/{id}/cancel", CancelQueueJob)
-			r.Get("/ai/models", ListAIModels)
-			r.Post("/ai/run", RunAIInference)
 			r.Post("/system/reconcile", HandleReconcile)
 		})
 
 		log.Println("✅ v2 engine endpoints enabled (SQLite store active)")
 	} else {
 		// Plugin endpoints work without a store
-		pluginH := NewPluginHandlers(nil)
+		pluginH := NewPluginHandlers(GlobalPluginManager)
 		composeH := &ComposeHandlers{Store: nil}
 		vpnH := NewVPNHandlers()
 		proxyH := NewProxyHandlers(nil)
 		r.Route("/api/v2", func(r chi.Router) {
 			r.Use(srv.chiAuthMiddleware)
-			// Plugins
+			// Plugins (Supervised via pkg/plugins.Manager)
 			r.Get("/plugins", pluginH.ListPlugins)
-			r.Get("/plugins/catalog", pluginH.ListCatalog)
-			r.Get("/plugins/{kind}", pluginH.ListPluginsByKind)
-			r.Post("/plugins/reload", pluginH.Reload)
-			r.Post("/plugins/enable", pluginH.Enable)
-			r.Post("/plugins/disable", pluginH.Disable)
-			r.Post("/plugins/sync", pluginH.Sync)
-			r.Post("/plugins/install", pluginH.Install)
-			r.Post("/plugins/uninstall", pluginH.Uninstall)
-			r.Post("/plugins/validate", pluginH.Validate)
-			r.Post("/plugins/match", pluginH.Match)
-			r.Post("/plugins/install-stack", pluginH.InstallStackPlugin)
+			r.Get("/plugins/tabs", pluginH.ListTabs)
+			r.Post("/plugins/{name}/start", pluginH.StartPlugin)
+			r.Post("/plugins/{name}/stop", pluginH.StopPlugin)
+			r.Get("/plugins/{name}/collect", pluginH.CollectPlugin)
+			r.Post("/plugins/{name}/action", pluginH.ExecuteAction)
 
 			// Proxy
 			r.Get("/proxy/discover", proxyH.DiscoverServices)
@@ -365,13 +346,6 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/ws/events", srv.GetWSEvents)
 			r.Get("/ws/logs/{name}", srv.GetWSLogs)
 
-			// Queue/AI
-			r.Get("/queue", ListQueue)
-			r.Get("/ai/queue", ListQueue)
-			r.Post("/queue/cancel", CancelQueueJob)
-			r.Post("/queue/{id}/cancel", CancelQueueJob)
-			r.Get("/ai/models", ListAIModels)
-			r.Post("/ai/run", RunAIInference)
 			r.Post("/system/reconcile", HandleReconcile)
 		})
 

@@ -473,3 +473,34 @@ func (m *Manager) GetAllTabs() []PluginTabSpec {
 	}
 	return tabs
 }
+
+// GetPlugin returns a managed plugin instance by name.
+func (m *Manager) GetPlugin(name string) *PluginInstance {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.plugins[name]
+}
+
+// StartPlugin starts a named plugin.
+func (m *Manager) StartPlugin(ctx context.Context, name string) error {
+	m.mu.Lock()
+	p, exists := m.plugins[name]
+	m.mu.Unlock()
+
+	if !exists {
+		return fmt.Errorf("plugin %q not found", name)
+	}
+	return p.Start(ctx, m.coreVersion)
+}
+
+// StopPlugin stops a named plugin.
+func (m *Manager) StopPlugin(name string) error {
+	m.mu.RLock()
+	p, exists := m.plugins[name]
+	m.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("plugin %q not found", name)
+	}
+	return p.Stop()
+}

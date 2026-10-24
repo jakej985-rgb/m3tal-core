@@ -4,46 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/jakej985-rgb/m3tal-core/core/plugins"
 )
 
 func TestUniqueSorted(t *testing.T) {
-	// Create mock registry
-	plugins := []plugin.Plugin{
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "priority-five"},
-			Spec:       map[string]any{"composePath": "priority-five-compose.yml", "priority": 5},
-			Enabled:    true,
-		},
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "priority-one"},
-			Spec:       map[string]any{"composePath": "priority-one-compose.yml", "priority": 1},
-			Enabled:    true,
-		},
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "priority-ten-a"},
-			Spec:       map[string]any{"composePath": "priority-ten-a-compose.yml", "priority": 10},
-			Enabled:    true,
-		},
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "priority-ten-b"},
-			Spec:       map[string]any{"composePath": "priority-ten-b-compose.yml", "priority": 10},
-			Enabled:    true,
-		},
-	}
-
-	reg, err := plugin.BuildRegistry(plugins)
-	if err != nil {
-		t.Fatalf("BuildRegistry failed: %v", err)
+	priorities := map[string]int{
+		"priority-five":  5,
+		"priority-one":   1,
+		"priority-ten-a": 10,
+		"priority-ten-b": 10,
 	}
 
 	files := []string{
@@ -55,7 +23,7 @@ func TestUniqueSorted(t *testing.T) {
 		"/path/to/priority-five-compose.yml", // duplicate
 	}
 
-	sorted := uniqueSorted(files, reg)
+	sorted := uniqueSorted(files, priorities)
 
 	// Check duplicates removed
 	if len(sorted) != 5 {
@@ -109,40 +77,21 @@ func TestDiscoverComposeFiles(t *testing.T) {
 		}
 	}
 
-	// Construct registry with one active stack plugin, one disabled stack plugin
-	plugins := []plugin.Plugin{
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "active-one"},
-			Spec:       map[string]any{"composePath": "active-one-compose.yml", "priority": 10},
-			Enabled:    true,
-		},
-		{
-			APIVersion: plugin.APIVersion,
-			Kind:       plugin.KindStack,
-			Metadata:   plugin.PluginMetadata{Name: "disabled-stack"},
-			Spec:       map[string]any{"composePath": "disabled-stack-compose.yml", "priority": 2},
-			Enabled:    false,
-		},
+	priorities := map[string]int{
+		"active-one": 10,
 	}
 
-	reg, err := plugin.BuildRegistry(plugins)
-	if err != nil {
-		t.Fatalf("failed to build registry: %v", err)
-	}
+	discovered := discoverComposeFiles(priorities)
 
-	discovered := discoverComposeFiles(reg)
-
-	// We expect active-one and custom-stack. disabled-stack should be filtered out.
-	// Order should be: active-one (priority 10), custom-stack (priority 100)
-	if len(discovered) != 2 {
-		t.Fatalf("expected 2 discovered files, got %d: %v", len(discovered), discovered)
+	// Order should be: active-one (priority 10), then others alphabetically
+	if len(discovered) != 3 {
+		t.Fatalf("expected 3 discovered files, got %d: %v", len(discovered), discovered)
 	}
 
 	expected := []string{
 		"active-one-compose.yml",
 		"custom-stack-compose.yml",
+		"disabled-stack-compose.yml",
 	}
 
 	for i, exp := range expected {
