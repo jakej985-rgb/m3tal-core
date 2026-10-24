@@ -251,17 +251,31 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 		procName = "m3tal-" + procName
 	}
 
-	binDir := ""
-	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
-		binDir = filepath.Join(cacheDir, "m3tal", "plugins-bin")
-	} else {
-		binDir = filepath.Join(os.TempDir(), "m3tal-plugins-bin")
-	}
-	_ = os.MkdirAll(binDir, 0755)
-	canonicalExec := filepath.Join(binDir, procName)
-	_ = os.Remove(canonicalExec)
 	if absCmdPath, err := filepath.Abs(cmdPath); err == nil {
-		if err := os.Symlink(absCmdPath, canonicalExec); err == nil {
+		cmdPath = absCmdPath
+	}
+
+	// 1. Direct Execution: If the binary is already canonically named (e.g. m3tal-docker),
+	// execute it directly from its install location without creating any symlink.
+	// 2. Third-Party / Non-Canonical: Create a canonical symlink in the secure daemon runtime
+	// directory ($RUNTIME_DIRECTORY or /run/m3tal/plugins-bin) or user cache rather than /tmp.
+	if filepath.Base(cmdPath) != procName {
+		binDir := ""
+		if rtDir := os.Getenv("RUNTIME_DIRECTORY"); rtDir != "" {
+			binDir = filepath.Join(rtDir, "plugins-bin")
+		} else if _, err := os.Stat("/run/m3tal"); err == nil && os.Geteuid() == 0 {
+			binDir = "/run/m3tal/plugins-bin"
+		} else if xdgRt := os.Getenv("XDG_RUNTIME_DIR"); xdgRt != "" {
+			binDir = filepath.Join(xdgRt, "m3tal", "plugins-bin")
+		} else if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+			binDir = filepath.Join(cacheDir, "m3tal", "plugins-bin")
+		} else {
+			binDir = filepath.Join(os.TempDir(), "m3tal-plugins-bin")
+		}
+		_ = os.MkdirAll(binDir, 0755)
+		canonicalExec := filepath.Join(binDir, procName)
+		_ = os.Remove(canonicalExec)
+		if err := os.Symlink(cmdPath, canonicalExec); err == nil {
 			cmdPath = canonicalExec
 		}
 	}

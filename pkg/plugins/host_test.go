@@ -132,6 +132,63 @@ done
 	}
 }
 
+func TestDirectExecutionCanonicalName(t *testing.T) {
+	tempDir := t.TempDir()
+	mockPluginDir := filepath.Join(tempDir, "canonical-plugin")
+	if err := os.MkdirAll(mockPluginDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock plugin dir: %v", err)
+	}
+
+	// Create binary named canonically m3tal-echo
+	scriptContent := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"m3tal.init"'*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"name":"echo","version":"1.0.0","capabilities":["collector"]}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":0,"result":{}}'
+      ;;
+  esac
+done
+`
+	binaryPath := filepath.Join(mockPluginDir, "m3tal-echo")
+	if err := os.WriteFile(binaryPath, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to write mock binary: %v", err)
+	}
+
+	manifest := PluginManifest{
+		APIVersion: APIVersionV1Alpha1,
+		Kind:       KindPlugin,
+		Metadata: PluginMeta{
+			Name: "echo",
+		},
+		Spec: PluginSpec{
+			Command:      "./m3tal-echo",
+			ProcessName:  "m3tal-echo",
+			Capabilities: []Capability{CapabilityCollector},
+		},
+		Dir: mockPluginDir,
+	}
+
+	inst := &PluginInstance{
+		Manifest: manifest,
+		State:    StateStopped,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := inst.Start(ctx, "1.0.0"); err != nil {
+		t.Fatalf("Plugin start failed: %v", err)
+	}
+	defer inst.Stop()
+
+	if inst.State != StateRunning {
+		t.Fatalf("Expected state StateRunning, got %s", inst.State)
+	}
+}
+
 func TestManagerFullLifecycleIntegration(t *testing.T) {
 	tempDir := t.TempDir()
 	mockPluginDir := filepath.Join(tempDir, "mock-manager-plugin")
