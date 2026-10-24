@@ -8,6 +8,7 @@ import {
   IconContainers,
   IconPlugins,
   IconSettings,
+  IconLayers,
 } from './components/Icons';
 import { getToken, setToken, getApiBase, api } from './api';
 
@@ -43,7 +44,19 @@ export default function App() {
   const pluginCategories = useMemo(() => {
     const groups = {};
     pluginTabs.forEach((tab) => {
-      const catKey = tab.category || tab.plugin || tab.id;
+      let catKey = tab.category;
+      if (!catKey) {
+        if (
+          tab.plugin === 'docker-monitor' ||
+          tab.id === 'docker_containers' ||
+          tab.plugin === 'compose' ||
+          tab.id === 'compose_editor'
+        ) {
+          catKey = 'containers';
+        } else {
+          catKey = tab.plugin || tab.id;
+        }
+      }
       if (!groups[catKey]) {
         groups[catKey] = {
           key: catKey,
@@ -77,7 +90,9 @@ export default function App() {
         const currentCat = pluginCategories.find((c) => c.key === activeTab || c.tabs.some((t) => t.id === activeTab));
         if (currentCat) {
           const subTabs = currentCat.tabs;
-          const activeSubTabId = activeSubTabs[currentCat.key] || subTabs[0]?.id;
+          const activeSubTabId =
+            activeSubTabs[currentCat.key] ||
+            (subTabs.some((t) => t.id === activeTab) ? activeTab : subTabs[0]?.id);
           const currentSubTab = subTabs.find((t) => t.id === activeSubTabId) || subTabs[0];
 
           if (currentSubTab) {
@@ -87,9 +102,25 @@ export default function App() {
               <div className="w-full h-full flex flex-col -m-6 md:-m-8" style={{ height: 'calc(100vh - 0px)' }}>
                 {/* Dynamic Top Sub-Tab Switcher (rendered when category has multiple plugins) */}
                 {subTabs.length > 1 && (
-                  <div className="bg-[#161b22] border-b border-[#30363d] px-6 py-2 flex items-center gap-2 flex-shrink-0">
+                  <div className="bg-[#161b22] border-b border-[#30363d] px-6 py-2.5 flex items-center gap-2 flex-shrink-0">
                     {subTabs.map((sub) => {
                       const isSubActive = sub.id === currentSubTab.id;
+                      let displayTitle = sub.title;
+                      if (currentCat.key === 'containers') {
+                        if (
+                          sub.id === 'docker_containers' ||
+                          sub.plugin === 'docker-monitor' ||
+                          sub.title === 'Containers'
+                        ) {
+                          displayTitle = 'Fleet';
+                        } else if (
+                          sub.id === 'compose_editor' ||
+                          sub.plugin === 'compose' ||
+                          sub.title === 'Compose Editor'
+                        ) {
+                          displayTitle = 'Compose';
+                        }
+                      }
                       return (
                         <button
                           key={sub.id}
@@ -100,7 +131,14 @@ export default function App() {
                               : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
                           }`}
                         >
-                          <span>{sub.title}</span>
+                          {currentCat.key === 'containers' && (
+                            displayTitle === 'Fleet' ? (
+                              <IconContainers className="w-3.5 h-3.5 text-cyan-300" />
+                            ) : (
+                              <IconLayers className="w-3.5 h-3.5 text-cyan-300" />
+                            )
+                          )}
+                          <span>{displayTitle}</span>
                         </button>
                       );
                     })}
