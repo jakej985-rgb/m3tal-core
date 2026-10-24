@@ -584,4 +584,3 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 		"uninstalled": true,
 	}, nil)
 }
-

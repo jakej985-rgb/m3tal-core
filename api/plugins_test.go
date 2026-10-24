@@ -209,4 +209,3 @@ func TestGetPluginCatalog(t *testing.T) {
 		t.Errorf("expected docker-monitor in catalog")
 	}
 }
-
