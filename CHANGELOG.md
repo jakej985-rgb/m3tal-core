@@ -4,6 +4,23 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.11.0] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.11.0 delivers updates across 2 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(gui): group Fleet and Compose plugins under Containers with top sub-tabs** (`ef20e9f`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🐛 Bug Fixes & Stability
+- **fix(plugins): map roadmap aliases to plugin folders and synthesize changelog specs** (`93891bd`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.10.0] - 2026-10-24
 
 ### Overview & Release Highlights
