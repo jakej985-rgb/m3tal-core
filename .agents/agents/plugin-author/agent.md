@@ -36,6 +36,7 @@ m3tal-plugins/<plugin-name>/
 │       └── plugin-maintainer/
 │           └── agent.md         # Dedicated In-Repo Custodian Agent
 ├── plugin.yaml                  # Standard Manifest
+├── CHANGELOG.md                 # Version history following Keep a Changelog & SemVer
 ├── Makefile                     # Build & Test automation
 ├── bin/                         # Compiled binary or entrypoint executable
 ├── config/
@@ -131,6 +132,7 @@ You are the resident custodian for this plugin repository. Your duty is to imple
    - `m3tal.action`: Action dispatcher (must return `{ status: "ok" }` or `{ error: ... }`).
    - `m3tal.shutdown`: Graceful cleanup within 5 seconds.
 4. **UI Assets**: All static UI assets in `ui/dist/` must use relative links (`./assets/...`) so they render seamlessly when mounted under `/plugins/{{PLUGIN_NAME}}/`.
+5. **Changelog**: Maintain `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) format and SemVer for every feature, fix, and release.
 
 ## Development Commands
 - **Build Backend**: `make build`
@@ -268,5 +270,6 @@ When tasked with creating a new plugin:
 5. Generate `ui/dist/index.html` (if `ui_view`).
 6. Generate `config/config.schema.json`.
 7. Generate `Makefile` with targets: `build`, `test`, `test-ipc`, `clean`.
-8. **Generate `.agents/agents/plugin-maintainer/agent.md`** customized to this plugin.
-9. Run `make build` and verify that the binary compiles and all files are placed cleanly.
+8. Generate `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) and SemVer.
+9. **Generate `.agents/agents/plugin-maintainer/agent.md`** customized to this plugin.
+10. Run `make build` and verify that the binary compiles and all files are placed cleanly.

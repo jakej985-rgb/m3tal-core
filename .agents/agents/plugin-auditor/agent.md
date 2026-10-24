@@ -36,6 +36,7 @@ For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-na
 - [ ] `spec.rpc.transport` is either `stdio` or `unix_socket`.
 
 ### Gate 2: Directory Layout & Self-Containment
+- [ ] `CHANGELOG.md` exists documenting version history following Keep a Changelog & SemVer.
 - [ ] `bin/` contains the backend executable or compilation script.
 - [ ] `config/` contains `config.schema.json` defining valid plugin settings.
 - [ ] If `capabilities` contains `ui_view`:

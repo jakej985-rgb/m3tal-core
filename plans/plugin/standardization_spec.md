@@ -44,6 +44,7 @@ m3tal-plugins/<plugin-name>/
 │       └── plugin-maintainer/
 │           └── agent.md         # Dedicated In-Repo Custodian Agent
 ├── plugin.yaml                  # Mandatory: Plugin Manifest & Configuration
+├── CHANGELOG.md                 # Mandatory: Version history following Keep a Changelog & SemVer
 ├── Makefile                     # Build & test rules
 ├── bin/
 │   └── <executable>             # Backend executable (compiled Go/Rust/C binary or shell/python entrypoint)
