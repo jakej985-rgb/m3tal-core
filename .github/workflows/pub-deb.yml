@@ -35,21 +35,15 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             TAG_COMMIT=$(git rev-parse "$TAG^{commit}" 2>/dev/null || true)
             HEAD_COMMIT=$(git rev-parse HEAD)
-            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
-              echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping patch version..."
-              BASE=$(echo "$CLEAN_VERSION" | cut -d. -f1,2)
-              PATCH=$(echo "$CLEAN_VERSION" | cut -d. -f3)
-              NEW_PATCH=$((PATCH + 1))
-              CLEAN_VERSION="${BASE}.${NEW_PATCH}"
-              TAG="v${CLEAN_VERSION}"
-
-              echo "✅ Bumping to $TAG"
-              echo "$TAG" > VERSION
+              echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping semantic version..."
+              ./scripts/bump-version.sh auto
+              TAG=$(cat VERSION | tr -d '[:space:]')
+              CLEAN_VERSION=$(echo "$TAG" | sed 's/^v//')
 
               git config --global user.name "github-actions[bot]"
               git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add VERSION
-              git commit -m "chore: auto-bump version to $TAG [skip ci]"
+              git add VERSION CHANGELOG.md gui/package.json
+              git commit -m "chore(release): auto-bump version to $TAG [skip ci]"
               git pull --rebase origin main
               git push origin HEAD:main
             fi

@@ -85,11 +85,11 @@ Never push until every required gate is green.
    - Repeat the repair cycle up to 3 times. Only if failures remain unresolved after 3 complete cycles should you stop, declare PUSH BLOCKED, and report blocking errors for human review.
 
 5. **Automated Version Bump & Changelog Synchronization**:
-   - Invoke `release-changelog` or run:
+   - Run the automated semantic version bumping system:
      ```bash
-     python3 scripts/generate_release_changelog.py --bump auto --apply
+     ./scripts/bump-version.sh auto
      ```
-   - Automatically synchronizes `VERSION`, `gui/package.json`, and `CHANGELOG.md`.
+   - Automatically inspects Conventional Commits (`feat:` -> minor, `fix:` -> patch, `BREAKING CHANGE:` -> major), updates `VERSION`, `gui/package.json`, and prepends to `CHANGELOG.md`.
    - Synchronize with `M3tal-Hub`:
      ```bash
      python3 scripts/sync_hub_manifest.py --manifest /home/m3tal/apps/M3tal-Hub/apps/manifest.yml --version $(cat VERSION)

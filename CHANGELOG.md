@@ -4,6 +4,23 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.2.0] - 2026-10-23
+
+### Overview & Release Highlights
+Release v0.2.0 delivers updates across 2 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **chore(plugins): purge bundled plugins from core and document plugin catalog/standardization spec (v0.1.19)** (`d4993650`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(dashboard): integrate expandable host info & subsystem health into top bar, purge legacy deploy plugins & catalog (v0.1.20)** (`68c3294b`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.1.1] - 2026-10-21
 
 ### Overview & Release Highlights
