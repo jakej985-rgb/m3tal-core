@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -207,5 +208,59 @@ func TestGetPluginCatalog(t *testing.T) {
 	}
 	if !foundDocker {
 		t.Errorf("expected docker-monitor in catalog")
+	}
+}
+
+func TestStartPlugin_Discovered(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "m3tal-plugins-start-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	pDir := filepath.Join(tempDir, "mock-run")
+	_ = os.MkdirAll(pDir, 0755)
+
+	script := filepath.Join(pDir, "run.sh")
+	scriptContent := `#!/bin/sh
+while read -r line; do
+  case "$line" in
+    *'m3tal.init'*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"name":"mock-run","version":"1.0.0","capabilities":["collector"]}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":99,"result":{}}'
+      ;;
+  esac
+done
+`
+	_ = os.WriteFile(script, []byte(scriptContent), 0755)
+
+	manifestYAML := fmt.Sprintf(`
+apiVersion: m3tal.io/v1alpha1
+kind: Plugin
+metadata:
+  name: mock-run
+  version: 1.0.0
+spec:
+  command: %s
+  capabilities:
+    - collector
+`, script)
+	_ = os.WriteFile(filepath.Join(pDir, "plugin.yaml"), []byte(manifestYAML), 0644)
+
+	mgr := plugins.NewManager("v0.2.0", tempDir)
+	h := NewPluginHandlers(mgr)
+
+	req := httptest.NewRequest("POST", "/api/v2/plugins/mock-run/start", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "mock-run")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	h.StartPlugin(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for discovered plugin start, got %d: %s", w.Code, w.Body.String())
 	}
 }

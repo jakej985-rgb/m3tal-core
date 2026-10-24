@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -54,8 +55,9 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	system.StartMetricsAggregator()
 	srv := NewServer(token)
 
-	// Initialize global plugin manager
+	// Initialize global plugin manager with background auto-sensing & auto-start
 	GlobalPluginManager = plugins.NewManager("v0.2.0")
+	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
 	defer GlobalPluginManager.StopAll()
 
 	// Start background Docker events forwarder

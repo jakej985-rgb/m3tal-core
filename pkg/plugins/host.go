@@ -46,9 +46,10 @@ type PluginInstance struct {
 	mu     sync.Mutex
 	cancel context.CancelFunc
 
-	LastCollectedAt time.Time
-	LastResult      *CollectResult
-	LastError       string
+	LastCollectedAt   time.Time
+	LastResult        *CollectResult
+	LastError         string
+	ExplicitlyStopped bool
 }
 
 // Manager supervises discovery, lifecycle, and communication for all plugins.
@@ -58,19 +59,24 @@ type Manager struct {
 	searchPaths  []string
 	coreVersion  string
 	pollInterval time.Duration
+	cancel       context.CancelFunc
 }
 
 // NewManager creates a new plugin manager with standard search paths.
 func NewManager(coreVersion string, customPaths ...string) *Manager {
-	home, _ := os.UserHomeDir()
-	paths := []string{
-		"./plugins",
+	var paths []string
+	if len(customPaths) > 0 {
+		paths = customPaths
+	} else {
+		home, _ := os.UserHomeDir()
+		paths = []string{
+			"./plugins",
+		}
+		if home != "" {
+			paths = append(paths, filepath.Join(home, ".config", "m3tal", "plugins"))
+		}
+		paths = append(paths, "/var/lib/m3tal/plugins", "/usr/lib/m3tal/plugins", "/etc/m3tal/plugins")
 	}
-	if home != "" {
-		paths = append(paths, filepath.Join(home, ".config", "m3tal", "plugins"))
-	}
-	paths = append(paths, "/var/lib/m3tal/plugins", "/usr/lib/m3tal/plugins")
-	paths = append(paths, customPaths...)
 
 	return &Manager{
 		plugins:      make(map[string]*PluginInstance),
@@ -127,6 +133,82 @@ func (m *Manager) Discover() ([]PluginManifest, error) {
 			if !seen[name] {
 				seen[name] = true
 				discovered = append(discovered, manifest)
+
+				m.mu.Lock()
+				if inst, exists := m.plugins[name]; exists {
+					if inst.State == StateStopped || inst.State == StateCrashed {
+						inst.Manifest = manifest
+					}
+				} else {
+					m.plugins[name] = &PluginInstance{
+						Manifest: manifest,
+						State:    StateStopped,
+					}
+				}
+				m.mu.Unlock()
+			}
+		}
+	}
+
+	return discovered, nil
+}
+
+// StartAutoDiscovery launches a background routine that periodically senses
+// newly installed plugins across all search paths and automatically starts them.
+func (m *Manager) StartAutoDiscovery(ctx context.Context, interval time.Duration) {
+	m.mu.Lock()
+	if m.cancel != nil {
+		m.mu.Unlock()
+		return
+	}
+	subCtx, cancel := context.WithCancel(ctx)
+	m.cancel = cancel
+	m.mu.Unlock()
+
+	// Initial synchronous discovery and auto-start
+	_, _ = m.DiscoverAndAutoStart(subCtx)
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-subCtx.Done():
+				return
+			case <-ticker.C:
+				_, _ = m.DiscoverAndAutoStart(subCtx)
+			}
+		}
+	}()
+}
+
+// DiscoverAndAutoStart scans all search paths and automatically starts any newly
+// discovered plugins that have not been explicitly stopped by the operator.
+func (m *Manager) DiscoverAndAutoStart(ctx context.Context) ([]PluginManifest, error) {
+	discovered, err := m.Discover()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, manifest := range discovered {
+		name := manifest.Metadata.Name
+		m.mu.Lock()
+		inst, exists := m.plugins[name]
+		if !exists {
+			inst = &PluginInstance{
+				Manifest: manifest,
+				State:    StateStopped,
+			}
+			m.plugins[name] = inst
+		}
+		m.mu.Unlock()
+
+		if inst.State == StateStopped && !inst.ExplicitlyStopped {
+			if err := inst.Start(ctx, m.coreVersion); err != nil {
+				log.Printf("[plugins] Auto-start skipped or failed for %q: %v", name, err)
+			} else {
+				log.Printf("[plugins] Auto-started plugin %q", name)
 			}
 		}
 	}
@@ -136,26 +218,8 @@ func (m *Manager) Discover() ([]PluginManifest, error) {
 
 // LoadAndStart starts all discovered plugins.
 func (m *Manager) LoadAndStart(ctx context.Context) error {
-	discovered, err := m.Discover()
-	if err != nil {
-		return err
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for _, manifest := range discovered {
-		inst := &PluginInstance{
-			Manifest: manifest,
-			State:    StateStopped,
-		}
-		m.plugins[manifest.Metadata.Name] = inst
-		if err := inst.Start(ctx, m.coreVersion); err != nil {
-			log.Printf("[plugins] Failed to start plugin %q: %v", manifest.Metadata.Name, err)
-		}
-	}
-
-	return nil
+	_, err := m.DiscoverAndAutoStart(ctx)
+	return err
 }
 
 // Start spawns the plugin subprocess and performs the m3tal.init handshake.
@@ -441,12 +505,20 @@ func (p *PluginInstance) callLocked(ctx context.Context, method string, params a
 	}
 }
 
-// StopAll stops all active plugins.
+// StopAll stops all active plugins and terminates background auto-discovery.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	pluginsCopy := make([]*PluginInstance, 0, len(m.plugins))
 	for _, p := range m.plugins {
+		pluginsCopy = append(pluginsCopy, p)
+	}
+	m.mu.Unlock()
+
+	for _, p := range pluginsCopy {
 		_ = p.Stop()
 	}
 }
@@ -480,19 +552,62 @@ func (m *Manager) GetAllTabs() []PluginTabSpec {
 // GetPlugin returns a managed plugin instance by name.
 func (m *Manager) GetPlugin(name string) *PluginInstance {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.plugins[name]
+	p, exists := m.plugins[name]
+	if !exists {
+		for _, inst := range m.plugins {
+			if inst.Manifest.Spec.ProcessName == name ||
+				inst.Manifest.Metadata.Name == strings.TrimPrefix(name, "m3tal-") ||
+				"m3tal-"+inst.Manifest.Metadata.Name == name {
+				p = inst
+				break
+			}
+		}
+	}
+	m.mu.RUnlock()
+	return p
 }
 
 // StartPlugin starts a named plugin.
 func (m *Manager) StartPlugin(ctx context.Context, name string) error {
 	m.mu.Lock()
 	p, exists := m.plugins[name]
+	if !exists {
+		for _, inst := range m.plugins {
+			if inst.Manifest.Spec.ProcessName == name ||
+				inst.Manifest.Metadata.Name == strings.TrimPrefix(name, "m3tal-") ||
+				"m3tal-"+inst.Manifest.Metadata.Name == name {
+				p = inst
+				exists = true
+				break
+			}
+		}
+	}
 	m.mu.Unlock()
+
+	if !exists {
+		// Run discovery to refresh search paths if newly installed
+		if _, err := m.Discover(); err == nil {
+			m.mu.Lock()
+			p, exists = m.plugins[name]
+			if !exists {
+				for _, inst := range m.plugins {
+					if inst.Manifest.Spec.ProcessName == name ||
+						inst.Manifest.Metadata.Name == strings.TrimPrefix(name, "m3tal-") ||
+						"m3tal-"+inst.Manifest.Metadata.Name == name {
+						p = inst
+						exists = true
+						break
+					}
+				}
+			}
+			m.mu.Unlock()
+		}
+	}
 
 	if !exists {
 		return fmt.Errorf("plugin %q not found", name)
 	}
+	p.ExplicitlyStopped = false
 	return p.Start(ctx, m.coreVersion)
 }
 
@@ -500,10 +615,22 @@ func (m *Manager) StartPlugin(ctx context.Context, name string) error {
 func (m *Manager) StopPlugin(name string) error {
 	m.mu.RLock()
 	p, exists := m.plugins[name]
+	if !exists {
+		for _, inst := range m.plugins {
+			if inst.Manifest.Spec.ProcessName == name ||
+				inst.Manifest.Metadata.Name == strings.TrimPrefix(name, "m3tal-") ||
+				"m3tal-"+inst.Manifest.Metadata.Name == name {
+				p = inst
+				exists = true
+				break
+			}
+		}
+	}
 	m.mu.RUnlock()
 
 	if !exists {
 		return fmt.Errorf("plugin %q not found", name)
 	}
+	p.ExplicitlyStopped = true
 	return p.Stop()
 }

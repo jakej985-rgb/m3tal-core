@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -233,5 +234,97 @@ done
 	}
 	if renderRes.Content == "" {
 		t.Errorf("Expected non-empty render content")
+	}
+}
+
+func TestAutoDiscoveryAndAutoStart(t *testing.T) {
+	tempDir := t.TempDir()
+
+	mgr := NewManager("1.0.0", tempDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mgr.StartAutoDiscovery(ctx, 50*time.Millisecond)
+	defer mgr.StopAll()
+
+	if len(mgr.GetAllPlugins()) != 0 {
+		t.Fatalf("expected 0 plugins initially")
+	}
+
+	// Dynamically add a new plugin while manager is running
+	mockPluginDir := filepath.Join(tempDir, "auto-plugin")
+	if err := os.MkdirAll(mockPluginDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock plugin dir: %v", err)
+	}
+
+	mockScript := filepath.Join(mockPluginDir, "run.sh")
+	scriptContent := `#!/bin/sh
+while read -r line; do
+  case "$line" in
+    *'m3tal.init'*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"name":"auto-plugin","version":"0.1.0","capabilities":["collector"]}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":99,"result":{}}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(mockScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to write mock script: %v", err)
+	}
+
+	manifestContent := fmt.Sprintf(`
+apiVersion: m3tal.io/v1alpha1
+kind: Plugin
+metadata:
+  name: auto-plugin
+  version: 0.1.0
+spec:
+  command: %s
+  capabilities:
+    - collector
+`, mockScript)
+
+	if err := os.WriteFile(filepath.Join(mockPluginDir, "plugin.yaml"), []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("Failed to write plugin.yaml: %v", err)
+	}
+
+	// Wait for auto-discovery tick
+	var p *PluginInstance
+	for i := 0; i < 20; i++ {
+		time.Sleep(25 * time.Millisecond)
+		p = mgr.GetPlugin("auto-plugin")
+		if p != nil && p.State == StateRunning {
+			break
+		}
+	}
+
+	if p == nil {
+		t.Fatalf("auto-plugin was not sensed by auto-discovery")
+	}
+	if p.State != StateRunning {
+		t.Fatalf("expected auto-plugin to auto-start, got state=%s (error: %s)", p.State, p.LastError)
+	}
+
+	// Test explicit stop: should stay stopped and not be auto-restarted
+	if err := mgr.StopPlugin("auto-plugin"); err != nil {
+		t.Fatalf("failed to stop plugin: %v", err)
+	}
+	if p.State != StateStopped {
+		t.Fatalf("expected state stopped, got %s", p.State)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if p.State != StateStopped {
+		t.Fatalf("expected explicitly stopped plugin to remain stopped, got %s", p.State)
+	}
+
+	// Test explicit start: should start and clear ExplicitlyStopped
+	if err := mgr.StartPlugin(ctx, "auto-plugin"); err != nil {
+		t.Fatalf("failed to restart plugin: %v", err)
+	}
+	if p.State != StateRunning {
+		t.Fatalf("expected state running after explicit start, got %s", p.State)
 	}
 }
