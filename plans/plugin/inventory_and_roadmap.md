@@ -8,13 +8,14 @@
 
 ## 1. Executive Summary
 
-M3TAL Core is designed as a high-performance, lightweight Linux system supervisor and control plane. Rather than bundling third-party tools, container orchestrators, and AI engines into the core repository, all non-core capabilities are transitioning to independent, self-contained plugins.
+M3TAL Core is designed as a high-performance, lightweight Linux system supervisor and control plane. Rather than bundling third-party tools, container orchestrators, and AI engines into the core repository, all non-core capabilities reside in the centralized **`m3tal-plugins`** repository (`jakej985-rgb/m3tal-plugins`).
 
-When a plugin is installed:
-1. All plugin code (backend binary/scripts, frontend UI assets, manifest, routes, systemd configs) lives strictly inside the plugin's own directory.
-2. The core supervisor executes the plugin as a dedicated canonical process (`m3tal-<plugin-name>`).
-3. The Web GUI dynamically mounts the plugin's tab and UI without requiring hardcoded components in the core frontend.
-4. If a plugin is not installed, it consumes zero background processes and does not appear in the sidebar.
+When a plugin is developed and installed:
+1. All plugin code lives directly in `m3tal-plugins/<plugin-name>/` (no intermediate wrapper folders).
+2. Debian packages (`m3tal-plugin-<name>_<version>_amd64.deb`) are built in `m3tal-plugins` and dispatched to `jakej985-rgb/m3tal-apt-key` for official GPG signing and APT repository ingestion.
+3. The core supervisor executes the plugin as a dedicated canonical process (`m3tal-<plugin-name>`).
+4. The Web GUI dynamically mounts the plugin's tab and UI without requiring hardcoded components in the core frontend.
+5. If a plugin is not installed, it consumes zero background processes and does not appear in the sidebar.
 
 ---
 
@@ -117,8 +118,11 @@ The following plugins are scheduled for development under the new standardized p
 
 ---
 
-## 4. Next Steps for Core Purge & Standardization
-
-1. **Document the Standardization Architecture**: Define the exact filesystem hierarchy, manifest fields, JSON-RPC IPC interface, and dynamic UI mounting in `plans/plugin/standardization_spec.md`.
-2. **Purge Bundled Plugins**: Remove `plugins/docker-monitor` and unnecessary bundled artifacts from the M3TAL Core repository so the core is completely clean and decoupled.
-3. **Verify Core Integrity**: Ensure all core quality gates, unit tests, Web GUI compilation, and Debian packaging remain 100% green without bundled plugins.
+## 4. Packaging, Signing & Release Pipeline
+ 
+1. **Centralized Plugin Monorepo**: All plugins live in `jakej985-rgb/m3tal-plugins/<plugin-name>/` with their own manifests, JSON-RPC 2.0 handlers, static UI bundles, and embedded `.agents/agents/plugin-maintainer/agent.md`.
+2. **Automated Debian Builds**: `m3tal-plugins/scripts/build-plugin-deb.sh <plugin-name>` packages the plugin into `m3tal-plugin-<name>_<version>_amd64.deb`.
+3. **Official GPG Signing**: Built `.deb` packages are dispatched via GitHub Actions to `jakej985-rgb/m3tal-apt-key` (`publish-deb`), signed with the central M3TAL repository key, and published to the APT repository for one-command installation:
+   ```bash
+   sudo apt update && sudo apt install m3tal-plugin-<name>
+   ```

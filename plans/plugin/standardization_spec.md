@@ -22,20 +22,30 @@
 
 ---
 
-## 2. Standard Plugin Directory Layout
+## 2. Standard Plugin Directory Layout & Monorepo Architecture
 
-Every M3TAL plugin must adhere to the following directory structure:
+All official and community M3TAL plugins reside in the dedicated **`m3tal-plugins`** repository (`jakej985-rgb/m3tal-plugins`).
+
+To keep the repository clean and avoid unnecessary nesting:
+- **Each plugin lives directly in its own top-level folder** (`<plugin-name>/`, e.g. `docker-monitor/`, `ai-engine/`, `smart-disk/`).
+- There is **no extra intermediate wrapper directory** (e.g. no `plugins/` folder).
+
+Every M3TAL plugin directory adheres to the following structure:
 
 ```text
-m3tal-<plugin-name>/
+m3tal-plugins/<plugin-name>/
+├── .agents/
+│   └── agents/
+│       └── plugin-maintainer/
+│           └── agent.md         # Dedicated In-Repo Custodian Agent
 ├── plugin.yaml                  # Mandatory: Plugin Manifest & Configuration
+├── Makefile                     # Build & test rules
 ├── bin/
 │   └── <executable>             # Backend executable (compiled Go/Rust/C binary or shell/python entrypoint)
 ├── ui/                          # Frontend User Interface
 │   ├── dist/                    # Compiled static web bundle served by the plugin host
-│   │   ├── index.html           # Main UI entrypoint
-│   │   ├── assets/              # Bundled JS, CSS, images, and fonts
-│   │   └── manifest.json        # UI metadata and route definitions
+│   │   ├── index.html           # Main UI entrypoint (with relative asset links)
+│   │   └── assets/              # Bundled JS, CSS, images, and fonts
 │   └── src/                     # Optional: React / Vue / HTML source files
 ├── config/
 │   └── config.schema.json       # JSON Schema defining configurable settings
@@ -158,6 +168,7 @@ Plugins communicate with M3TAL Core over `stdio` or a local Unix socket using JS
 - Implement dynamic `/plugins/{name}/*` static file router in `api/server.go`.
 - Update `gui/src/App.jsx` to dynamically render sidebar tabs and route views from `GET /api/v2/plugins` instead of hardcoded JSX pages.
 
-### Phase 3: Externalize Plugins into Dedicated Repositories
-- Create standalone repositories (e.g. `github.com/jakej985-rgb/m3tal-plugin-docker`).
-- Package plugins as `.tar.gz` or `.deb` files downloadable via the M3TAL Plugin Registry catalog.
+### Phase 3: Centralize in `m3tal-plugins` & Sign via `m3tal-apt-key`
+- Consolidate all external plugins into `jakej985-rgb/m3tal-plugins`, each located in `<plugin-name>/` (no wrapper directory).
+- Build `.deb` packages directly in `m3tal-plugins` (`scripts/build-plugin-deb.sh` producing `m3tal-plugin-<name>_<version>_amd64.deb`).
+- Automatically dispatch built packages to `jakej985-rgb/m3tal-apt-key` (`publish-deb` event), where the central APT repository signs the indices with the official GPG key and updates the APT pool.

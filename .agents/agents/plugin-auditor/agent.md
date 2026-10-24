@@ -22,7 +22,7 @@ Your purpose is to rigorously inspect external M3TAL plugins against the **M3TAL
 
 ## 1. Compliance Checklist & Scoring Gates
 
-For any target plugin directory (e.g. `/path/to/m3tal-plugin-example`), you must evaluate and score the following 6 gates:
+For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-name>`), you must evaluate and score the following 6 gates:
 
 ### Gate 1: Manifest Schema & Metadata (`plugin.yaml`)
 - [ ] File exists at plugin root (`plugin.yaml`).

@@ -36,16 +36,18 @@ Your mission is to oversee, coordinate, and safeguard the entire external plugin
 1. **Zero Core Footprint**:
    - Never allow plugin-specific UI components, API endpoints, database models, or CLI subcommands to be merged into `m3tal-core`.
    - Core is purely the platform: Host Supervisor (`pkg/plugins.Manager`), System Monitor, Authentication, Process Manager, and Dynamic Plugin Loader.
-2. **Standardization Compliance**:
+2. **Standardization & Monorepo Compliance**:
+   - All external plugins reside in the centralized monorepo **`m3tal-plugins`** (`jakej985-rgb/m3tal-plugins` at `/home/m3tal/apps/m3tal-plugins/`).
+   - Each plugin lives directly in its own top-level directory (`<plugin-name>/`, e.g. `docker-monitor/`, `smart-disk/`) with NO intermediate wrapper folder.
    - Every plugin must conform to `plans/plugin/standardization_spec.md`.
    - Manifest must use `apiVersion: m3tal.io/v1alpha1`, `kind: Plugin`.
    - Subprocess must strictly identify as `m3tal-<plugin-name>` via Linux process naming (`prctl(PR_SET_NAME)`).
    - IPC communication must follow JSON-RPC 2.0 over `stdio` or Unix socket.
 3. **Delegation to Specialized Agents**:
    - **Audit & Compliance**: Delegate to `plugin-auditor` whenever a plugin needs review, validation, or compliance verification.
-   - **Authoring & Scaffolding**: Delegate to `plugin-author` when creating a new plugin repository or adding features to an existing plugin. Ensure `plugin-author` generates the dedicated in-repo maintainer agent (`.agents/agents/plugin-maintainer/agent.md`).
+   - **Authoring & Scaffolding**: Delegate to `plugin-author` when creating a new plugin folder in `m3tal-plugins/<name>/` or adding features. Ensure `plugin-author` generates the dedicated in-repo maintainer agent (`.agents/agents/plugin-maintainer/agent.md`).
    - **Protocol & Headless Testing**: Delegate to `plugin-tester` to simulate M3TAL Core's supervisor and verify `m3tal.init`, `m3tal.collect`, `m3tal.action`, and `m3tal.shutdown`.
-   - **Packaging & Cataloging**: Delegate to `plugin-packager` to create release tarballs (`.tar.gz`) or Debian packages (`.deb`) and generate catalog metadata for M3TAL Hub.
+   - **Packaging & Central APT Signing**: Delegate to `plugin-packager` to build Debian packages (`m3tal-plugin-<name>_<version>_amd64.deb`) in `m3tal-plugins` and trigger dispatch to `jakej985-rgb/m3tal-apt-key` for official GPG signing and APT repository ingestion.
 
 ---
 

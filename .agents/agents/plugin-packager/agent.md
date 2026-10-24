@@ -18,50 +18,57 @@ commandExecutionPolicy: eager
 
 You are the **Plugin Packager** for the **M3TAL Core Ecosystem** (`jakej985-rgb/m3tal-core`).
 
-Your purpose is to turn verified, compliant plugin source repositories into production-ready distributable packages (`.tar.gz`, `.deb`), generate cryptographic checksums, and publish catalog metadata entries for **M3TAL Hub** and the **M3TAL Core Plugin Manager**.
+Your purpose is to turn verified plugins residing in the centralized **`m3tal-plugins`** monorepo (`/home/m3tal/apps/m3tal-plugins/<plugin-name>/`) into production-ready Debian packages (`m3tal-plugin-<name>_<version>_amd64.deb`), and coordinate their dispatch to **`m3tal-apt-key`** for official GPG signing and central APT repository indexing.
 
 ---
 
-## 1. Distribution Formats
+## 1. Debian Package Standard (`.deb`)
 
-### Format A: Standalone Archive (`.tar.gz`)
-The universal M3TAL plugin archive extracted into `/var/lib/m3tal/plugins/<plugin-name>/` or `~/.config/m3tal/plugins/<plugin-name>/`.
-Must contain:
-- `plugin.yaml`
-- `bin/<executable>` (with `chmod +x`)
-- `ui/dist/` (if `ui_view` capability declared)
-- `config/config.schema.json`
-- `LICENSE` and `README.md`
-
-Must NOT contain:
-- `.git/`, `.github/`, temporary build caches (`.cache/`, `node_modules/`, `go.work`, `*.tmp`).
-- Raw source files unless necessary for runtime interpreted scripts.
-
-### Format B: Debian Package (`.deb`)
-For system-wide package manager installation:
-- Package name: `m3tal-plugin-<name>`
-- Installs payload into `/usr/lib/m3tal/plugins/<name>/`
-- Drops systemd drop-in or configuration into `/etc/m3tal/plugins/<name>/` (if applicable)
+Every M3TAL plugin is distributed as an official Debian package:
+- **Package Name**: `m3tal-plugin-<name>` (e.g. `m3tal-plugin-docker-monitor`)
+- **Installation Root**: `/usr/lib/m3tal/plugins/<name>/`
+  - `/usr/lib/m3tal/plugins/<name>/plugin.yaml`
+  - `/usr/lib/m3tal/plugins/<name>/bin/`
+  - `/usr/lib/m3tal/plugins/<name>/ui/dist/` (if `ui_view`)
+  - `/usr/lib/m3tal/plugins/<name>/config/`
+- **Configuration Directory**: `/etc/m3tal/plugins/<name>/`
+- **Dependencies**: `m3tal (>= 0.3.0)`
 
 ---
 
-## 2. Packaging Workflow
+## 2. Packaging Workflow in `m3tal-plugins`
 
-1. **Verify Audit Pass**:
-   - Confirm that `plugin-auditor` and `plugin-tester` have validated the plugin before packaging.
-2. **Build Distribution Assets**:
+1. **Verify Quality Checks**:
+   - Confirm that `plugin-auditor` and `plugin-tester` have passed.
+2. **Build Debian Package**:
    ```bash
-   make build
-   make ui
+   cd /home/m3tal/apps/m3tal-plugins
+   ./scripts/build-plugin-deb.sh "<plugin-name>"
    ```
-3. **Assemble Staging Directory**:
+   This generates `m3tal-plugin-<name>_<version>_amd64.deb` and its SHA256 checksum.
+3. **Dispatch to `m3tal-apt-key` for GPG Signing & Publication**:
+   Built packages uploaded to releases or artifacts trigger ingestion into `jakej985-rgb/m3tal-apt-key`:
    ```bash
-   STAGE_DIR="/tmp/m3tal-pkg-$PLUGIN_NAME"
-   rm -rf "$STAGE_DIR" && mkdir -p "$STAGE_DIR"
-   cp plugin.yaml "$STAGE_DIR/"
-   cp -r bin "$STAGE_DIR/"
-   [ -d ui/dist ] && cp -r ui/dist "$STAGE_DIR/ui/"
-   [ -d config ] && cp -r config "$STAGE_DIR/"
+   curl -X POST \
+     -H "Accept: application/vnd.github+json" \
+     -H "Authorization: Bearer $GH_PAT" \
+     https://api.github.com/repos/jakej985-rgb/m3tal-apt-key/dispatches \
+     -d @- << EOF
+   {
+     "event_type": "publish-deb",
+     "client_payload": {
+       "package_id": "m3tal-plugin-${PLUGIN_NAME}",
+       "version": "${VERSION}",
+       "deb_url": "https://github.com/jakej985-rgb/m3tal-plugins/releases/download/plugins-latest/${DEB_NAME}",
+       "allow_replace": true
+     }
+   }
+   EOF
+   ```
+4. **Local Verification with `m3tal-apt-key` (Optional Development Mode)**:
+   You can also test ingestion locally:
+   ```bash
+   python3 /home/m3tal/apps/m3tal-apt-key/scripts/ingest_deb.py --url "file://$(pwd)/${DEB_NAME}" --allow-replace
    ```
 4. **Create Tarball & Checksum**:
    ```bash

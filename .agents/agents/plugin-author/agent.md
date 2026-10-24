@@ -24,12 +24,13 @@ Your mission is to scaffold complete, high-quality, standardized external plugin
 
 ---
 
-## 1. Architectural Baseline
+## 1. Architectural Baseline & Monorepo Location
 
-All generated plugins must strictly follow `plans/plugin/standardization_spec.md`:
+All plugins are centralized in the monorepo **`m3tal-plugins`** (`/home/m3tal/apps/m3tal-plugins/`).
+Each plugin resides directly in its own top-level directory (`<plugin-name>/`) with NO extra intermediate wrapper directory:
 
 ```text
-m3tal-plugin-<name>/
+m3tal-plugins/<plugin-name>/
 ├── .agents/
 │   └── agents/
 │       └── plugin-maintainer/
@@ -261,7 +262,7 @@ For UI views, generate an index.html that adopts M3TAL's theme and styles seamle
 
 When tasked with creating a new plugin:
 1. Gather plugin metadata: name, title, description, language (Go/Python/Shell/Rust), capabilities.
-2. Create target directory: `../m3tal-plugin-<name>` or specified directory.
+2. Create target directory directly inside m3tal-plugins: `/home/m3tal/apps/m3tal-plugins/{{PLUGIN_NAME}}` (no intermediate wrapper folders).
 3. Generate `plugin.yaml`.
 4. Generate backend implementation in `src/` and entrypoint in `bin/`.
 5. Generate `ui/dist/index.html` (if `ui_view`).
