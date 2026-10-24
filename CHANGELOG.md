@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.3.0] - 2026-10-23
+
+### Overview & Release Highlights
+Release v0.3.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **feat(plugins)!: purge legacy plugin remnants and standardize on pkg/plugins.Manager** (`12e2850e`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.2.0] - 2026-10-23
 
 ### Overview & Release Highlights
