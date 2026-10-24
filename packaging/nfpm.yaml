@@ -42,18 +42,6 @@ contents:
     dst: /usr/bin/m3tal-web
     type: "symlink"
 
-  - src: /usr/bin/m3tal
-    dst: /usr/bin/m3tal-sysmon
-    type: "symlink"
-
-  - src: /usr/bin/m3tal
-    dst: /usr/bin/m3tal-docker
-    type: "symlink"
-
-  # Stack Templates
-  - src: ./deploy/stack
-    dst: /usr/share/m3tal/stack
-
   # Web GUI Static Files
   - src: ./gui/dist
     dst: /usr/share/m3tal/gui
@@ -66,10 +54,6 @@ contents:
   # Systemd Services
   - src: ./packaging/m3tal-api.service
     dst: /lib/systemd/system/m3tal-api.service
-    type: "config"
-
-  - src: ./packaging/m3tal.service
-    dst: /lib/systemd/system/m3tal.service
     type: "config"
 
   # Branding Icons

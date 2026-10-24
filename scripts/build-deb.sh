@@ -29,7 +29,6 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
 
     mkdir -p "$STAGE_DIR/DEBIAN"
     mkdir -p "$STAGE_DIR/usr/bin"
-    mkdir -p "$STAGE_DIR/usr/share/m3tal/stack"
     mkdir -p "$STAGE_DIR/usr/share/m3tal/gui"
     mkdir -p "$STAGE_DIR/etc/m3tal"
     mkdir -p "$STAGE_DIR/lib/systemd/system"
@@ -37,7 +36,7 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
     mkdir -p "$STAGE_DIR/usr/share/pixmaps"
     mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 
-    # Copy binaries & create component aliases
+    # Copy binaries & create core CLI aliases
     cp ./m3tal "$STAGE_DIR/usr/bin/"
     cp ./m3tal-api "$STAGE_DIR/usr/bin/"
     chmod 755 "$STAGE_DIR/usr/bin/m3tal" "$STAGE_DIR/usr/bin/m3tal-api"
@@ -45,21 +44,15 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-gui"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-headless"
     ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-web"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-sysmon"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-docker"
 
-    # Copy stacks & gui
-    if [ -d "deploy/stack" ]; then
-        cp -r deploy/stack/* "$STAGE_DIR/usr/share/m3tal/stack/"
-    fi
+    # Copy GUI static assets
     if [ -d "gui/dist" ]; then
         cp -r gui/dist/* "$STAGE_DIR/usr/share/m3tal/gui/"
     fi
 
-    # Config & systemd
+    # Config & primary systemd service
     cp ./.env.example "$STAGE_DIR/etc/m3tal/.env.example"
     cp ./packaging/m3tal-api.service "$STAGE_DIR/lib/systemd/system/"
-    cp ./packaging/m3tal.service "$STAGE_DIR/lib/systemd/system/"
     cp ./packaging/m3tal.desktop "$STAGE_DIR/usr/share/applications/"
 
     # Icons
