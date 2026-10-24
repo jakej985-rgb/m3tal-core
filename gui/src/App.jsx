@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Dashboard from './pages/Dashboard';
 import SystemMonitor from './pages/SystemMonitor';
 import Plugins from './pages/Plugins';
 import {
   IconDashboard,
   IconSystemMonitor,
+  IconContainers,
   IconPlugins,
   IconSettings,
 } from './components/Icons';
@@ -12,6 +13,7 @@ import { getToken, setToken, getApiBase, api } from './api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeSubTabs, setActiveSubTabs] = useState({});
   const [tokenInput, setTokenInput] = useState(getToken());
   const [showSettings, setShowSettings] = useState(false);
   const [pluginTabs, setPluginTabs] = useState([]);
@@ -37,6 +39,25 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Group plugin tabs into categories with ordered sub-tabs
+  const pluginCategories = useMemo(() => {
+    const groups = {};
+    pluginTabs.forEach((tab) => {
+      const catKey = tab.category || tab.plugin || tab.id;
+      if (!groups[catKey]) {
+        groups[catKey] = {
+          key: catKey,
+          title: tab.category_title || (catKey === 'containers' ? 'Containers' : tab.title),
+          order: tab.order || 50,
+          tabs: []
+        };
+      }
+      groups[catKey].tabs.push(tab);
+      groups[catKey].tabs.sort((a, b) => (a.order || 50) - (b.order || 50));
+    });
+    return Object.values(groups).sort((a, b) => a.order - b.order);
+  }, [pluginTabs]);
+
   const handleTokenChange = (e) => {
     const val = e.target.value;
     setTokenInput(val);
@@ -52,20 +73,48 @@ export default function App() {
       case 'plugins':
         return <Plugins />;
       default:
-        // Check if activeTab matches a dynamic plugin tab
-        const dynamicTab = pluginTabs.find((t) => t.id === activeTab);
-        if (dynamicTab) {
-          const pluginName = dynamicTab.plugin || (dynamicTab.id === 'docker_containers' ? 'docker-monitor' : dynamicTab.id);
-          const pluginUrl = dynamicTab.url || `/plugins/${pluginName}/`;
-          return (
-            <div className="w-full h-full flex flex-col -m-6 md:-m-8" style={{ height: 'calc(100vh - 0px)' }}>
-              <iframe
-                src={`${pluginUrl}?token=${tokenInput}`}
-                title={dynamicTab.title}
-                className="w-full h-full flex-1 border-0 bg-[#0d1117]"
-              />
-            </div>
-          );
+        // 1. Check if activeTab matches a plugin category (e.g. 'containers')
+        const currentCat = pluginCategories.find((c) => c.key === activeTab || c.tabs.some((t) => t.id === activeTab));
+        if (currentCat) {
+          const subTabs = currentCat.tabs;
+          const activeSubTabId = activeSubTabs[currentCat.key] || subTabs[0]?.id;
+          const currentSubTab = subTabs.find((t) => t.id === activeSubTabId) || subTabs[0];
+
+          if (currentSubTab) {
+            const pluginName = currentSubTab.plugin || (currentSubTab.id === 'docker_containers' ? 'docker-monitor' : currentSubTab.id);
+            const pluginUrl = currentSubTab.url || `/plugins/${pluginName}/`;
+            return (
+              <div className="w-full h-full flex flex-col -m-6 md:-m-8" style={{ height: 'calc(100vh - 0px)' }}>
+                {/* Dynamic Top Sub-Tab Switcher (rendered when category has multiple plugins) */}
+                {subTabs.length > 1 && (
+                  <div className="bg-[#161b22] border-b border-[#30363d] px-6 py-2 flex items-center gap-2 flex-shrink-0">
+                    {subTabs.map((sub) => {
+                      const isSubActive = sub.id === currentSubTab.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => setActiveSubTabs((prev) => ({ ...prev, [currentCat.key]: sub.id }))}
+                          className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-2 ${
+                            isSubActive
+                              ? 'bg-emerald-600 text-white shadow shadow-emerald-900/30'
+                              : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
+                          }`}
+                        >
+                          <span>{sub.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <iframe
+                  key={currentSubTab.id}
+                  src={`${pluginUrl}?token=${tokenInput}`}
+                  title={currentSubTab.title}
+                  className="w-full h-full flex-1 border-0 bg-[#0d1117]"
+                />
+              </div>
+            );
+          }
         }
         return <Dashboard />;
     }
@@ -113,21 +162,33 @@ export default function App() {
               <span>System Monitor</span>
             </button>
 
-            {/* Dynamic Plugin Tabs */}
-            {pluginTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
-                  activeTab === tab.id
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                    : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
-                }`}
-              >
-                <IconPlugins className="w-5 h-5 flex-shrink-0 text-cyan-400" />
-                <span>{tab.title}</span>
-              </button>
-            ))}
+            {/* Dynamic Plugin Category Navigation */}
+            {pluginCategories.map((cat) => {
+              const isCatActive = activeTab === cat.key || cat.tabs.some((t) => t.id === activeTab);
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveTab(cat.key)}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-3 ${
+                    isCatActive
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
+                      : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
+                  }`}
+                >
+                  {cat.key === 'containers' ? (
+                    <IconContainers className="w-5 h-5 flex-shrink-0 text-cyan-400" />
+                  ) : (
+                    <IconPlugins className="w-5 h-5 flex-shrink-0 text-cyan-400" />
+                  )}
+                  <span>{cat.title}</span>
+                  {cat.tabs.length > 1 && (
+                    <span className="ml-auto text-[10px] font-bold bg-[#0d1117] text-slate-400 px-1.5 py-0.5 rounded border border-[#30363d]">
+                      {cat.tabs.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
             {/* Plugin Manager */}
             <button

@@ -557,15 +557,58 @@ func (m *Manager) GetAllTabs() []PluginTabSpec {
 	var tabs []PluginTabSpec
 	for _, p := range m.plugins {
 		if p.State == StateRunning {
-			for _, tab := range p.Tabs {
-				tabCopy := tab
-				if tabCopy.Plugin == "" {
-					tabCopy.Plugin = p.Manifest.Metadata.Name
+			if len(p.Tabs) > 0 {
+				for _, tab := range p.Tabs {
+					tabCopy := tab
+					if tabCopy.Plugin == "" {
+						tabCopy.Plugin = p.Manifest.Metadata.Name
+					}
+					if tabCopy.URL == "" {
+						tabCopy.URL = "/plugins/" + p.Manifest.Metadata.Name + "/"
+					}
+					if tabCopy.Category == "" {
+						if p.Manifest.Spec.UI.Category != "" {
+							tabCopy.Category = p.Manifest.Spec.UI.Category
+						} else if p.Manifest.Spec.UI.Route != "" {
+							tabCopy.Category = strings.TrimPrefix(p.Manifest.Spec.UI.Route, "/")
+						} else {
+							tabCopy.Category = tabCopy.Plugin
+						}
+					}
+					if tabCopy.CategoryTitle == "" {
+						if p.Manifest.Spec.UI.CategoryTitle != "" {
+							tabCopy.CategoryTitle = p.Manifest.Spec.UI.CategoryTitle
+						} else if p.Manifest.Spec.UI.Title != "" {
+							tabCopy.CategoryTitle = p.Manifest.Spec.UI.Title
+						}
+					}
+					tabs = append(tabs, tabCopy)
 				}
-				if tabCopy.URL == "" {
-					tabCopy.URL = "/plugins/" + p.Manifest.Metadata.Name + "/"
+			} else if p.Manifest.HasCapability(CapabilityUIView) {
+				title := p.Manifest.Spec.UI.Title
+				if title == "" {
+					title = p.Manifest.Metadata.Name
 				}
-				tabs = append(tabs, tabCopy)
+				category := p.Manifest.Spec.UI.Category
+				if category == "" && p.Manifest.Spec.UI.Route != "" {
+					category = strings.TrimPrefix(p.Manifest.Spec.UI.Route, "/")
+				}
+				if category == "" {
+					category = p.Manifest.Metadata.Name
+				}
+				categoryTitle := p.Manifest.Spec.UI.CategoryTitle
+				if categoryTitle == "" {
+					categoryTitle = title
+				}
+				tabs = append(tabs, PluginTabSpec{
+					ID:            p.Manifest.Metadata.Name + "_view",
+					Title:         title,
+					Category:      category,
+					CategoryTitle: categoryTitle,
+					Order:         p.Manifest.Spec.UI.Order,
+					Plugin:        p.Manifest.Metadata.Name,
+					URL:           "/plugins/" + p.Manifest.Metadata.Name + "/",
+				})
 			}
 		}
 	}

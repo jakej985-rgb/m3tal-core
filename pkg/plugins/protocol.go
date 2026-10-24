@@ -49,6 +49,20 @@ type PluginSpec struct {
 	ProcessName  string       `yaml:"process_name,omitempty" json:"process_name,omitempty"`
 	Capabilities []Capability `yaml:"capabilities" json:"capabilities"`
 	PollInterval string       `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
+	UI           PluginUISpec `yaml:"ui,omitempty" json:"ui,omitempty"`
+}
+
+// PluginUISpec declares static web UI configuration in plugin.yaml.
+type PluginUISpec struct {
+	Entry         string   `yaml:"entry,omitempty" json:"entry,omitempty"`
+	Route         string   `yaml:"route,omitempty" json:"route,omitempty"`
+	Category      string   `yaml:"category,omitempty" json:"category,omitempty"`
+	CategoryTitle string   `yaml:"category_title,omitempty" json:"category_title,omitempty"`
+	TabID         string   `yaml:"tab_id,omitempty" json:"tab_id,omitempty"`
+	Title         string   `yaml:"title,omitempty" json:"title,omitempty"`
+	Sidebar       bool     `yaml:"sidebar,omitempty" json:"sidebar,omitempty"`
+	Order         int      `yaml:"order,omitempty" json:"order,omitempty"`
+	Roles         []string `yaml:"roles,omitempty" json:"roles,omitempty"`
 }
 
 // HasCapability checks if the plugin declared a given capability.
@@ -123,8 +137,10 @@ type PluginTabSpec struct {
 	Description string       `json:"description,omitempty"`
 	Order       int          `json:"order,omitempty"`
 	Actions     []ActionSpec `json:"actions,omitempty"`
-	Plugin      string       `json:"plugin,omitempty"`
-	URL         string       `json:"url,omitempty"`
+	Plugin        string       `json:"plugin,omitempty"`
+	URL           string       `json:"url,omitempty"`
+	Category      string       `json:"category,omitempty"`
+	CategoryTitle string       `json:"category_title,omitempty"`
 }
 
 // ActionSpec defines an executable action (e.g. restart service, flush cache).
