@@ -35,6 +35,7 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             TAG_COMMIT=$(git rev-parse "$TAG^{commit}" 2>/dev/null || true)
             HEAD_COMMIT=$(git rev-parse HEAD)
+            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
               echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping semantic version..."
               ./scripts/bump-version.sh auto
               TAG=$(cat VERSION | tr -d '[:space:]')

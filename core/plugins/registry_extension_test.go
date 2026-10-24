@@ -144,6 +144,10 @@ apiVersion: m3tal/v1
 kind: Route
 metadata:
   name: example-app
+spec:
+  service: example-service
+  domain: example.local
+  port: 8080
 `))
 	}))
 	defer ts.Close()

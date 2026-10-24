@@ -65,6 +65,13 @@ func (eb *ChannelEventBus) Publish(eventType string, payload any) {
 	}
 }
 
+// SubscriberCount returns the number of active subscribers.
+func (eb *ChannelEventBus) SubscriberCount() int {
+	eb.mu.RLock()
+	defer eb.mu.RUnlock()
+	return len(eb.subscribers)
+}
+
 // GlobalEventBus is the shared channel-based bus for the entire application.
 // Used by api for WebSocket event streaming.
 var GlobalEventBus = NewChannelEventBus()

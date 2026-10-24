@@ -54,10 +54,20 @@ func TestGetWSEvents_Upgrade(t *testing.T) {
 	}
 	defer conn.Close()
 
+	// Wait until handler subscribes
+	deadline := time.Now().Add(3 * time.Second)
+	for events.GlobalEventBus.SubscriberCount() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for ws event subscriber")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// Publish test event
 	events.GlobalEventBus.Publish("ws.test", "ws-payload")
 
 	// Read event from socket
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("failed to read message: %v", err)
