@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.8.2] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.8.2 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 📚 Documentation & Specifications
+- **docs(spec): document direct execution for canonical binaries and runtime symlinks** (`3fcaa5d`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.8.1] - 2026-10-24
 
 ### Overview & Release Highlights
