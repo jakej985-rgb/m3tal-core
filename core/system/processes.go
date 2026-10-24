@@ -88,7 +88,7 @@ func KillProcess(pid int32) error {
 }
 
 // ResolveProcessName maps system process names and command-line arguments
-// to canonical M3TAL process titles (e.g. m3tal-zygote (SB), m3tal-render, m3tal-docker).
+// to canonical M3TAL process titles (e.g. m3tal-chrome-zygote (SB), m3tal-chrome-render (#5), m3tal-docker).
 func ResolveProcessName(name, cmdline string) string {
 	cmdLower := strings.ToLower(cmdline)
 
@@ -113,29 +113,50 @@ func ResolveProcessName(name, cmdline string) string {
 		strings.Contains(cmdline, "--user-data-dir=") && strings.Contains(cmdline, "m3tal/browser-profile") {
 		// Chrome subprocesses belonging specifically to M3TAL Desktop App Window
 		if strings.Contains(cmdLower, "--type=renderer") {
-			return "m3tal-render"
+			clientID := extractRendererClientID(cmdline)
+			if clientID != "" {
+				return fmt.Sprintf("m3tal-chrome-render (#%s)", clientID)
+			}
+			return "m3tal-chrome-render"
 		} else if strings.Contains(cmdLower, "--type=gpu-process") {
-			return "m3tal-gpu"
+			return "m3tal-chrome-gpu"
 		} else if strings.Contains(cmdLower, "--type=utility") {
 			if strings.Contains(cmdLower, "network.mojom") {
-				return "m3tal-net"
+				return "m3tal-chrome-net"
 			} else if strings.Contains(cmdLower, "storage.mojom") {
-				return "m3tal-storage"
+				return "m3tal-chrome-storage"
+			} else if strings.Contains(cmdLower, "audio.mojom") {
+				return "m3tal-chrome-audio"
 			}
-			return "m3tal-utility"
+			return "m3tal-chrome-utility"
 		} else if strings.Contains(cmdLower, "--type=zygote") {
 			if strings.Contains(cmdLower, "--no-zygote-sandbox") {
-				return "m3tal-zygote"
+				return "m3tal-chrome-zygote"
 			}
-			return "m3tal-zygote (SB)"
+			return "m3tal-chrome-zygote (SB)"
 		} else if strings.Contains(cmdLower, "--type=broker") {
-			return "m3tal-broker"
+			return "m3tal-chrome-broker"
 		} else if strings.Contains(cmdLower, "crashpad-handler") || strings.Contains(cmdLower, "chrome_crashpad") {
-			return "m3tal-crashpad"
+			return "m3tal-chrome-crashpad"
 		} else if strings.Contains(cmdLower, "--app=") {
-			return "m3tal-gui"
+			return "m3tal-chrome-gui"
 		}
+		return "m3tal-chrome"
 	}
 
 	return name
+}
+
+func extractRendererClientID(cmdline string) string {
+	const prefix = "--renderer-client-id="
+	idx := strings.Index(cmdline, prefix)
+	if idx == -1 {
+		return ""
+	}
+	start := idx + len(prefix)
+	end := strings.IndexAny(cmdline[start:], " \t\r\n\"'")
+	if end == -1 {
+		return cmdline[start:]
+	}
+	return cmdline[start : start+end]
 }
