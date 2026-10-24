@@ -1053,41 +1053,7 @@ ingress:
 		}),
 	}
 
-	var exportCatalogPath string
-	var pluginCatalogCmd = &cobra.Command{
-		Use:   "catalog",
-		Short: "Display or export the M3TAL external plugin catalog",
-		Run: func(cmd *cobra.Command, args []string) {
-			catalog := api.GetDefaultCatalog()
-			if exportCatalogPath != "" {
-				if err := os.MkdirAll(filepath.Dir(exportCatalogPath), 0755); err != nil {
-					log.Fatalf("❌ Failed to create directory: %v", err)
-				}
-				data, err := json.MarshalIndent(catalog, "", "  ")
-				if err != nil {
-					log.Fatalf("❌ Failed to marshal catalog: %v", err)
-				}
-				if err := os.WriteFile(exportCatalogPath, data, 0644); err != nil {
-					log.Fatalf("❌ Failed to export catalog to %s: %v", exportCatalogPath, err)
-				}
-				fmt.Printf("✅ Plugin catalog exported to %s (%d items)\n", exportCatalogPath, len(catalog))
-				return
-			}
-
-			fmt.Printf("\n📦 M3TAL Plugin Catalog (%d plugins)\n\n", len(catalog))
-			for _, item := range catalog {
-				fmt.Printf("   %-20s v%-8s [%s] proc:%-16s\n", item.Name, item.Version, item.Status, item.ProcessName)
-				fmt.Printf("      %s\n", item.Description)
-				if item.AptCommand != "" {
-					fmt.Printf("      👉 %s\n", item.AptCommand)
-				}
-			}
-			fmt.Println()
-		},
-	}
-	pluginCatalogCmd.Flags().StringVar(&exportCatalogPath, "export", "", "Export catalog to JSON file path")
-
-	pluginCmd.AddCommand(pluginListCmd, pluginStartCmd, pluginStopCmd, pluginCatalogCmd)
+	pluginCmd.AddCommand(pluginListCmd, pluginStartCmd, pluginStopCmd)
 
 	// ── Doctor subcommands ─────────────────────────────────────────────────────
 

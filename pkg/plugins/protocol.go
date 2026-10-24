@@ -16,9 +16,10 @@ type Capability string
 
 const (
 	CapabilityCollector Capability = "collector"  // Periodically emits telemetry metrics & tables
-	CapabilityTUIWidget Capability = "tui_widget" // Renders custom views/tabs in the TUI
+	CapabilityUIView    Capability = "ui_view"    // Mounts dedicated view in Web GUI
 	CapabilityActions   Capability = "actions"    // Exposes executable actions/commands
 	CapabilityExporter  Capability = "exporter"   // Streams or exports core telemetry
+	CapabilityTUIWidget Capability = "tui_widget" // Deprecated: legacy terminal UI widget
 )
 
 // PluginManifest represents the static definition file (plugin.yaml) for an external plugin.

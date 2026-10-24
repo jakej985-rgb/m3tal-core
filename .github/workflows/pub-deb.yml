@@ -180,8 +180,7 @@ jobs:
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          go build -o m3tal ./cli
-          ./m3tal plugin catalog --export plugin-repo/catalog.json
+          python3 scripts/generate_catalog.py --output plugin-repo/catalog.json
           
           # Detect available signing key
           GPG_KEY_ID=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep '^fpr:' | head -n1 | cut -d: -f10 || true)
