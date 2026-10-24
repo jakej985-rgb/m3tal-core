@@ -178,8 +178,11 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 		return errors.New(p.LastError)
 	}
 
-	// Canonical process naming: all plugins follow m3tal-<plugin-name>
-	procName := p.Manifest.Metadata.Name
+	// Canonical process naming: all plugins follow m3tal-<process>
+	procName := p.Manifest.Spec.ProcessName
+	if procName == "" {
+		procName = p.Manifest.Metadata.Name
+	}
 	if !strings.HasPrefix(procName, "m3tal-") {
 		procName = "m3tal-" + procName
 	}

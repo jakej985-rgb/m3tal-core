@@ -13,8 +13,13 @@
    - Core is purely the platform: Host Supervisor, System Monitor, Authentication, Process Manager, and Dynamic Plugin Host.
 2. **Complete Self-Containment**:
    - Every plugin is an independent package containing its own manifest, backend executable, frontend UI bundle, RPC handlers, and configuration schemas.
-3. **Canonical Process Naming**:
-   - Every running plugin subprocess strictly follows the `m3tal-<plugin-name>` convention (e.g. `m3tal-docker`, `m3tal-ai`, `m3tal-smart`) enforced via Linux `prctl(PR_SET_NAME)` and isolated execution symlinks.
+3. **Canonical Process Naming (`m3tal-<process>`)**:
+   - Every single process spawned by M3TAL (the core app, supervisor, and every plugin daemon, worker, collector, or helper subprocess) MUST explicitly identify as `m3tal-<process>` (e.g. `m3tal-core`, `m3tal-api`, `m3tal-docker`, `m3tal-smart`, `m3tal-ai`, `m3tal-collector`).
+   - **Operational Rationale**: High-Usage Attribution. When monitoring system health in `top`, `htop`, `m3tal-sysmon`, or `/proc/$pid/comm`, operators can immediately identify which exact subsystem or plugin is responsible for high CPU, memory, or disk I/O spikes without confusing generic names like `python3`, `node`, `bash`, or `main`.
+   - **Implementation & Enforcement**:
+     - *Supervisor Level*: `pkg/plugins.Manager` creates canonical execution symlinks in `$XDG_CACHE_DIR/m3tal/plugins-bin/m3tal-<process>` and passes `M3TAL_PROCESS_NAME=m3tal-<process>`.
+     - *Code Level*: Plugins should also set their thread/process title via Linux `prctl(PR_SET_NAME, "m3tal-<process>")` (in Go/C) or `setproctitle` (in Python).
+     - *Sub-workers & Daemons*: Any helper threads or child processes spawned by a plugin must also follow the `m3tal-<process>-<worker>` convention.
 4. **Dynamic GUI Integration**:
    - The Web GUI dynamically discovers installed plugins and mounts their sidebar tabs, routing, and views at runtime without rebuilding the core frontend.
 5. **Zero Resource Overhead When Uninstalled**:

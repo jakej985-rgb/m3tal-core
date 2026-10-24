@@ -70,6 +70,15 @@ Send via stdin:
 - Plugin acknowledges termination request.
 - Subprocess exits cleanly with code `0` within 5000ms without needing SIGKILL.
 
+### Test 6: Canonical Process Identity (`m3tal-<process>`)
+Inspect running process title via Linux procfs:
+```bash
+ps -o comm= -p $PID
+```
+**Assertions**:
+- Command/comm name MUST match `^m3tal-[a-z0-9_-]+$` (e.g. `m3tal-docker`, `m3tal-smart`).
+- Ensures instant high-usage attribution and resource tracking in `top`, `htop`, and `m3tal-sysmon`.
+
 ---
 
 ## 2. Test Suite: UI Asset Verification

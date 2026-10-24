@@ -124,7 +124,7 @@ You are the resident custodian for this plugin repository. Your duty is to imple
 
 ## Absolute Rules
 1. **Self-Containment**: All code for this plugin lives strictly in this repository. NEVER add files or modifications to `m3tal-core`.
-2. **Process Identity**: This plugin executes as `m3tal-{{PLUGIN_NAME}}`. Do not alter the process naming convention.
+2. **Process Identity (`m3tal-<process>`)**: This plugin and all of its subprocesses must execute with the canonical process title `m3tal-{{PLUGIN_NAME}}` (and `m3tal-{{PLUGIN_NAME}}-<worker>` for sub-workers). This is strictly required so operators and monitoring tools (`top`, `htop`, `m3tal-sysmon`) can track high resource usage directly to this plugin. Never run processes with generic names like `python3`, `node`, `bash`, or `worker`.
 3. **RPC Contract**: Always preserve valid JSON-RPC 2.0 handling over `stdio`:
    - `m3tal.init`: Handshake returning version and config validation.
    - `m3tal.collect`: Telemetry metric collector.

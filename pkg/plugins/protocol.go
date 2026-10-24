@@ -45,6 +45,7 @@ type PluginMeta struct {
 type PluginSpec struct {
 	Command      string       `yaml:"command" json:"command"`
 	Args         []string     `yaml:"args,omitempty" json:"args,omitempty"`
+	ProcessName  string       `yaml:"process_name,omitempty" json:"process_name,omitempty"`
 	Capabilities []Capability `yaml:"capabilities" json:"capabilities"`
 	PollInterval string       `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
 }

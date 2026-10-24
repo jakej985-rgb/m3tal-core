@@ -30,7 +30,7 @@ For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-na
 - [ ] `kind` equals `Plugin`.
 - [ ] `metadata` includes `name`, `version`, `title`, `description`, `author`, `license`, and `icon`.
 - [ ] `spec.command` is specified and points to a binary inside `bin/` or executable entrypoint.
-- [ ] `spec.process_name` is explicitly set to `m3tal-<name>` (e.g. `m3tal-docker`, `m3tal-ai`).
+- [ ] `spec.process_name` is explicitly set to `m3tal-<process>` (e.g. `m3tal-docker`, `m3tal-ai`, `m3tal-smart`). Required for high-usage telemetry tracking.
 - [ ] `spec.capabilities` is a list containing only valid capabilities: `collector`, `actions`, `ui_view`, `websocket_stream`, `orchestrator`, `network_tunnel`, `alerts`.
 - [ ] `spec.rpc.protocol` is `jsonrpc-2.0`.
 - [ ] `spec.rpc.transport` is either `stdio` or `unix_socket`.
