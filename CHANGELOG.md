@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.6.0] - 2026-10-24
+
+### Overview & Release Highlights
+Release v0.6.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🐛 Bug Fixes & Stability
+- **feat(system): differentiate sandboxed zygote (SB) and fix crashpad process labeling** (`11e3f4d`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.5.0] - 2026-10-24
 
 ### Overview & Release Highlights
