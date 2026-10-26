@@ -41,8 +41,8 @@ export default function EventLogWidget({
         </span>
       }
       actions={headerActions}
-      className={`min-h-[340px] flex flex-col ${className}`}
-      bodyClassName="h-[280px]"
+      className={className}
+      bodyClassName="flex-1 min-h-0 overflow-y-auto"
     >
       <div className="h-full overflow-y-auto space-y-2 pr-2 text-xs font-mono">
         {events.length === 0 ? (

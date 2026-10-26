@@ -32,12 +32,16 @@ export default function WidgetCard({
     4: 'col-span-1 md:col-span-2 lg:col-span-4',
   }[colSpan] || 'col-span-1';
 
-  // Map rowSpan
+  // Map rowSpan to explicit modular grid unit heights:
+  // Base 1x1 block unit H = 260px, Gap G = 24px (gap-6)
+  // rowSpan 1: H = 260px (1 block down)
+  // rowSpan 2: 2 * 260 + 24 = 544px (2 blocks down)
+  // rowSpan 3: 3 * 260 + 48 = 828px (3 blocks down)
   const rowSpanClass = {
-    1: 'row-span-1',
-    2: 'row-span-2',
-    3: 'row-span-3',
-  }[rowSpan] || 'row-span-1';
+    1: 'row-span-1 min-h-[260px] lg:h-[260px]',
+    2: 'row-span-2 min-h-[544px] lg:h-[544px]',
+    3: 'row-span-3 min-h-[828px] lg:h-[828px]',
+  }[rowSpan] || 'row-span-1 min-h-[260px] lg:h-[260px]';
 
   const hasHeader = Boolean(title || subtitle || Icon || badge || actions);
 
@@ -113,7 +117,7 @@ export default function WidgetCard({
         </div>
       )}
 
-      <div className={`flex-1 flex flex-col justify-between ${bodyClassName}`}>
+      <div className={`flex-1 min-h-0 flex flex-col justify-between ${bodyClassName}`}>
         {children}
       </div>
     </div>

@@ -303,68 +303,68 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 4-Column Modular Widget Grid Engine */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-        {/* 1. Top Bar Control Plane Widget (4x1) */}
-        <TopBarWidget
-          metrics={metrics}
-          health={health}
-          onOpenDoctor={() => setIsDoctorOpen(true)}
-          onReconcile={handleReconcile}
-          isReconciling={isReconciling}
-          onCleanup={handleSystemCleanup}
-          isCleaning={isCleaning}
-          onRefresh={handleManualRefresh}
-          isRefreshing={isRefreshing}
-          error={error}
-          isEditMode={isEditMode}
-          onToggleEditMode={() => setIsEditMode((prev) => !prev)}
-        />
+      {/* 1. Top Bar Control Plane Widget (Full-width header) */}
+      <TopBarWidget
+        metrics={metrics}
+        health={health}
+        onOpenDoctor={() => setIsDoctorOpen(true)}
+        onReconcile={handleReconcile}
+        isReconciling={isReconciling}
+        onCleanup={handleSystemCleanup}
+        isCleaning={isCleaning}
+        onRefresh={handleManualRefresh}
+        isRefreshing={isRefreshing}
+        error={error}
+        isEditMode={isEditMode}
+        onToggleEditMode={() => setIsEditMode((prev) => !prev)}
+      />
 
-        {/* Edit Mode Customization Banner */}
-        {isEditMode && (
-          <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 animate-fade-in shadow-md">
-            <div className="flex items-center gap-2">
-              <span className="text-base">🛠️</span>
-              <div>
-                <span className="font-bold text-amber-300">Dashboard Edit Mode:</span>{' '}
-                <span>Reorder cards using ◀ and ▶ or ✕ to hide. Positions save to your browser automatically.</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {hiddenWidgets.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-slate-400 text-[11px]">Hidden ({hiddenWidgets.length}):</span>
-                  {hiddenWidgets.map((wid) => (
-                    <button
-                      key={wid}
-                      onClick={() => handleRestoreWidget(wid)}
-                      className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-semibold transition-colors flex items-center gap-1"
-                      title={`Restore ${getWidgetLabel(wid)}`}
-                    >
-                      <span>+</span>
-                      <span>{getWidgetLabel(wid)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={handleResetLayout}
-                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] transition-colors"
-                title="Reset dashboard grid layout to factory defaults"
-              >
-                Reset Default
-              </button>
-              <button
-                onClick={() => setIsEditMode(false)}
-                className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-sm"
-              >
-                Done Editing
-              </button>
+      {/* Edit Mode Customization Banner */}
+      {isEditMode && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 animate-fade-in shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🛠️</span>
+            <div>
+              <span className="font-bold text-amber-300">Dashboard Edit Mode:</span>{' '}
+              <span>Reorder cards using ◀ and ▶ or ✕ to hide. Positions save to your browser automatically.</span>
             </div>
           </div>
-        )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {hiddenWidgets.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-slate-400 text-[11px]">Hidden ({hiddenWidgets.length}):</span>
+                {hiddenWidgets.map((wid) => (
+                  <button
+                    key={wid}
+                    onClick={() => handleRestoreWidget(wid)}
+                    className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-semibold transition-colors flex items-center gap-1"
+                    title={`Restore ${getWidgetLabel(wid)}`}
+                  >
+                    <span>+</span>
+                    <span>{getWidgetLabel(wid)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={handleResetLayout}
+              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] transition-colors"
+              title="Reset dashboard grid layout to factory defaults"
+            >
+              Reset Default
+            </button>
+            <button
+              onClick={() => setIsEditMode(false)}
+              className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-sm"
+            >
+              Done Editing
+            </button>
+          </div>
+        </div>
+      )}
 
+      {/* 4-Column Modular Uniform Block Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-[260px]">
         {/* Dynamic Re-orderable Widget Grid */}
         {layoutOrder.map((widgetId, index) => {
           if (hiddenWidgets.includes(widgetId)) return null;
@@ -409,7 +409,7 @@ export default function Dashboard() {
             }
             case 'network-stats':
               return (
-                <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2">
+                <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2 row-span-1 min-h-[260px] lg:h-[260px]">
                   <NetworkSummary networkInterfaces={metrics?.network_interfaces} {...moveProps} />
                 </div>
               );

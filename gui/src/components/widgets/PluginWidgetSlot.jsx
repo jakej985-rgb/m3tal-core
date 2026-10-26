@@ -26,7 +26,7 @@ export default function PluginWidgetSlot({
   // Dedicated container fleet overview widget owned by m3tal-docker / docker-monitor
   if (widget.id === 'docker-fleet' || widget.id === 'container-fleet' || widget.id === 'fleet-containers') {
     return (
-      <div className={`col-span-1 md:col-span-2 lg:col-span-2 ${className}`}>
+      <div className={`col-span-1 md:col-span-2 lg:col-span-2 row-span-1 min-h-[260px] lg:h-[260px] ${className}`}>
         <FleetMiniOverview
           isEditMode={isEditMode}
           onMoveLeft={onMoveLeft}

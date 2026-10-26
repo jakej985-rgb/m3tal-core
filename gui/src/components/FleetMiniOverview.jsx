@@ -158,11 +158,11 @@ export default function FleetMiniOverview({
         isEditMode
           ? 'border-amber-500/50 ring-1 ring-amber-500/30'
           : 'border-slate-800'
-      } rounded-2xl p-6 flex flex-col justify-between shadow-sm relative overflow-hidden ${className}`}
+      } rounded-2xl p-5 flex flex-col justify-between shadow-sm relative overflow-hidden h-full min-h-[260px] lg:h-[260px] ${className}`}
     >
       {/* Edit Mode Customization Toolbar */}
       {isEditMode && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 -mx-6 -mt-6 mb-4 px-3 py-1 flex items-center justify-between text-xs text-amber-300 select-none">
+        <div className="bg-amber-500/10 border-b border-amber-500/20 -mx-5 -mt-5 mb-3 px-3 py-1 flex items-center justify-between text-xs text-amber-300 select-none">
           <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
             2x1 GRID
           </span>

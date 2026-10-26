@@ -139,13 +139,16 @@ export default function StatCardWidget({
               </span>
               <span className="text-lg font-bold text-white">{gpuVal.toFixed(1)}%</span>
             </div>
-            {metrics.gpu_temp > 0 ? (
-              <div className="text-xs text-amber-400/90 mb-3 font-mono">
-                🌡️ {metrics.gpu_temp.toFixed(1)}°C ({(metrics.gpu_temp * 1.8 + 32).toFixed(1)}°F)
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500 mb-3 font-mono">Graphics Processor</div>
-            )}
+            <div className="flex justify-between items-center text-xs mb-3 font-mono">
+              <span className={metrics.gpu_temp > 0 ? 'text-amber-400/90' : 'text-slate-500'}>
+                {metrics.gpu_temp > 0 ? `🌡️ ${metrics.gpu_temp.toFixed(1)}°C ({(metrics.gpu_temp * 1.8 + 32).toFixed(1)}°F)` : 'Graphics Processor'}
+              </span>
+              {metrics.gpu_mem_total > 0 && (
+                <span className="text-slate-400 text-[11px]" title="VRAM Usage">
+                  VRAM {metrics.gpu_mem_used?.toFixed(0) || 0}/{metrics.gpu_mem_total?.toFixed(0) || 0} MB
+                </span>
+              )}
+            </div>
             <div className="w-full bg-slate-800 rounded-full h-2 mt-2">
               <div
                 className={`h-2 rounded-full transition-all duration-500 ${getUsageColor(gpuVal)} ${getUsageGlow(gpuVal)}`}
@@ -153,24 +156,7 @@ export default function StatCardWidget({
               ></div>
             </div>
           </div>
-
-          {/* VRAM Gauge */}
-          <div className="mt-5 bg-slate-950/40 p-3 rounded-lg border border-slate-800/40">
-            <div className="flex justify-between text-xs text-slate-400 mb-1.5 font-mono">
-              <span>VRAM</span>
-              <span>
-                {metrics.gpu_mem_used?.toFixed(0) || 0} / {metrics.gpu_mem_total?.toFixed(0) || 0} MB
-              </span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5">
-              <div
-                className="h-1.5 rounded-full bg-indigo-400 transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, metrics.gpu_mem_total > 0 ? ((metrics.gpu_mem_used / metrics.gpu_mem_total) * 100) : 0)}%`,
-                }}
-              ></div>
-            </div>
-          </div>
+          {renderSparkline('gpu_usage', 'GPU History')}
         </WidgetCard>
       );
     }

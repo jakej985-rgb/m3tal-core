@@ -186,7 +186,8 @@ export default function StorageDetailedWidget({
         </span>
       }
       actions={headerActions}
-      className={`space-y-6 ${className}`}
+      className={className}
+      bodyClassName="overflow-y-auto pr-1.5 space-y-6"
     >
       <div className="space-y-6">
         {/* 1. Host System Storage */}
