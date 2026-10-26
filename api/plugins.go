@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
@@ -782,6 +784,16 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Gracefully stop plugin subprocess if currently running before updating binary
+	var wasRunning bool
+	if existing := h.Manager.GetPlugin(name); existing != nil {
+		wasRunning = (existing.State == plugins.StateRunning || existing.State == plugins.StateStarting)
+		if wasRunning {
+			_ = h.Manager.StopPlugin(name)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
 	if req.Method == "sudo" {
 		// Run sudo -S dpkg -i <debPath>
 		cmd := exec.Command("sudo", "-S", "-p", "", "dpkg", "-i", debPath)
@@ -855,8 +867,15 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Trigger discovery
+	// Trigger re-discovery to reload new manifest and binary paths
 	_, _ = h.Manager.Discover()
+
+	// If plugin was running before update, restart it with the new version
+	if wasRunning {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = h.Manager.StartPlugin(ctx, name)
+	}
 
 	sendSuccess(w, http.StatusOK, map[string]any{
 		"name":      name,
