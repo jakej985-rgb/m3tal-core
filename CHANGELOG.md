@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.20.2] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.20.2 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🐛 Bug Fixes & Stability
+- **fix(plugins): add automatic dependency recovery on unmet dependencies** (`d9df72ee`):
+  - *What Changed*: If low-level dpkg -i encounters unmet dependencies, automatically invoke sudo apt-get install -f -y to resolve, download, and configure missing dependencies directly from the APT keyring.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.1] - 2026-10-26
 
 ### Overview & Release Highlights
