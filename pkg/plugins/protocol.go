@@ -131,12 +131,12 @@ type InitResult struct {
 
 // PluginTabSpec defines a UI tab/viewport provided by a plugin.
 type PluginTabSpec struct {
-	ID          string       `json:"id"`
-	Title       string       `json:"title"`
-	Shortcut    string       `json:"shortcut,omitempty"`
-	Description string       `json:"description,omitempty"`
-	Order       int          `json:"order,omitempty"`
-	Actions     []ActionSpec `json:"actions,omitempty"`
+	ID            string       `json:"id"`
+	Title         string       `json:"title"`
+	Shortcut      string       `json:"shortcut,omitempty"`
+	Description   string       `json:"description,omitempty"`
+	Order         int          `json:"order,omitempty"`
+	Actions       []ActionSpec `json:"actions,omitempty"`
 	Plugin        string       `json:"plugin,omitempty"`
 	URL           string       `json:"url,omitempty"`
 	Category      string       `json:"category,omitempty"`

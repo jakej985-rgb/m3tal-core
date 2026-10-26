@@ -298,4 +298,3 @@ func TestGetPluginChangelog(t *testing.T) {
 		}
 	}
 }
-
