@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.18.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.18.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **feat(settings): implement dedicated settings page and dynamic plugin settings architecture** (`3e7cea8a`):
+  - *What Changed*: Introduce dedicated Settings page with core host maintenance and preferences alongside dynamic registration and config dispatch for plugins declaring CapabilitySettings.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.17.0] - 2026-10-26
 
 ### Overview & Release Highlights
