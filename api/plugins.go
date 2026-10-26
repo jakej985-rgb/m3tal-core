@@ -37,6 +37,7 @@ type PluginDTO struct {
 	State           plugins.PluginState     `json:"state"`
 	Capabilities    []plugins.Capability    `json:"capabilities"`
 	Tabs            []plugins.PluginTabSpec `json:"tabs,omitempty"`
+	Widgets         []plugins.PluginWidget  `json:"widgets,omitempty"`
 	Actions         []plugins.ActionSpec    `json:"actions,omitempty"`
 	LastCollectedAt int64                   `json:"last_collected_at,omitempty"`
 	LastError       string                  `json:"last_error,omitempty"`
@@ -66,6 +67,7 @@ func (h *PluginHandlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 			Icon:         m.Metadata.Icon,
 			State:        plugins.StateStopped,
 			Capabilities: m.Spec.Capabilities,
+			Widgets:      m.Spec.Widgets,
 			Manifest:     m,
 		}
 

@@ -17,6 +17,7 @@ type Capability string
 const (
 	CapabilityCollector Capability = "collector"  // Periodically emits telemetry metrics & tables
 	CapabilityUIView    Capability = "ui_view"    // Mounts dedicated view in Web GUI
+	CapabilityUIWidget  Capability = "ui_widget"  // Exposes dashboard grid widgets
 	CapabilityActions   Capability = "actions"    // Exposes executable actions/commands
 	CapabilityExporter  Capability = "exporter"   // Streams or exports core telemetry
 	CapabilityTUIWidget Capability = "tui_widget" // Deprecated: legacy terminal UI widget
@@ -42,14 +43,27 @@ type PluginMeta struct {
 	Icon        string `yaml:"icon,omitempty" json:"icon,omitempty"`
 }
 
+// PluginWidget declares an optional modular dashboard widget provided by the plugin.
+type PluginWidget struct {
+	ID              string `yaml:"id" json:"id"`
+	Title           string `yaml:"title" json:"title"`
+	Subtitle        string `yaml:"subtitle,omitempty" json:"subtitle,omitempty"`
+	Size            []int  `yaml:"size,omitempty" json:"size,omitempty"` // [colSpan, rowSpan], e.g. [2, 1] or [1, 1]
+	Type            string `yaml:"type,omitempty" json:"type,omitempty"` // "card" or "embed"
+	URL             string `yaml:"url,omitempty" json:"url,omitempty"`
+	RefreshInterval string `yaml:"refresh_interval,omitempty" json:"refresh_interval,omitempty"`
+	Endpoint        string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+}
+
 // PluginSpec defines the execution model and capabilities for the plugin.
 type PluginSpec struct {
-	Command      string       `yaml:"command" json:"command"`
-	Args         []string     `yaml:"args,omitempty" json:"args,omitempty"`
-	ProcessName  string       `yaml:"process_name,omitempty" json:"process_name,omitempty"`
-	Capabilities []Capability `yaml:"capabilities" json:"capabilities"`
-	PollInterval string       `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
-	UI           PluginUISpec `yaml:"ui,omitempty" json:"ui,omitempty"`
+	Command      string         `yaml:"command" json:"command"`
+	Args         []string       `yaml:"args,omitempty" json:"args,omitempty"`
+	ProcessName  string         `yaml:"process_name,omitempty" json:"process_name,omitempty"`
+	Capabilities []Capability   `yaml:"capabilities" json:"capabilities"`
+	PollInterval string         `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
+	UI           PluginUISpec   `yaml:"ui,omitempty" json:"ui,omitempty"`
+	Widgets      []PluginWidget `yaml:"widgets,omitempty" json:"widgets,omitempty"`
 }
 
 // PluginUISpec declares static web UI configuration in plugin.yaml.

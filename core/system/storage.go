@@ -2,7 +2,9 @@ package system
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -243,4 +245,37 @@ func GetSambaShares() ([]models.SambaShare, error) {
 	}
 
 	return shares, nil
+}
+
+// UnmountDrive safely unmounts a removable, USB, or external storage drive.
+// It strictly prevents unmounting root and protected system directories.
+func UnmountDrive(mountpoint string) error {
+	cleanMP := filepath.Clean(mountpoint)
+	criticalMounts := map[string]bool{
+		"/":     true,
+		"/home": true,
+		"/tmp":  true,
+		"/boot": true,
+		"/efi":  true,
+		"/var":  true,
+		"/usr":  true,
+		"/etc":  true,
+		"/dev":  true,
+		"/proc": true,
+		"/sys":  true,
+	}
+	if criticalMounts[cleanMP] || cleanMP == "." || cleanMP == "/" || strings.HasPrefix(cleanMP, "/boot") {
+		return fmt.Errorf("refusing to unmount protected system directory: %s", cleanMP)
+	}
+
+	// Flush file system caches
+	_ = exec.Command("sync").Run()
+
+	// Execute unmount command
+	cmd := exec.Command("umount", cleanMP)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("unmount failed: %s (%v)", strings.TrimSpace(string(output)), err)
+	}
+	return nil
 }

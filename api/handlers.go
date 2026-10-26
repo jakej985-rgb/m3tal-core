@@ -15,6 +15,7 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/auth"
 	"github.com/jakej985-rgb/m3tal-core/core/docker"
 	"github.com/jakej985-rgb/m3tal-core/core/doctor"
+	"github.com/jakej985-rgb/m3tal-core/core/events"
 	"github.com/jakej985-rgb/m3tal-core/core/health"
 	"github.com/jakej985-rgb/m3tal-core/core/preflight"
 	"github.com/jakej985-rgb/m3tal-core/core/system"
@@ -841,6 +842,42 @@ func (s *Server) GetSystemStorage(w http.ResponseWriter, r *http.Request) {
 	sendSuccess(w, http.StatusOK, map[string]any{
 		"partitions": partitions,
 		"samba":      shares,
+	}, nil)
+}
+
+// UnmountStorage safely unmounts a removable or user storage drive.
+// POST /api/v2/system/storage/unmount
+func (s *Server) UnmountStorage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		sendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", nil)
+		return
+	}
+
+	var req struct {
+		Mountpoint string `json:"mountpoint"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "INVALID_JSON", err.Error(), nil)
+		return
+	}
+
+	if req.Mountpoint == "" {
+		sendError(w, http.StatusBadRequest, "VALIDATION_FAILED", "mountpoint is required", nil)
+		return
+	}
+
+	if err := system.UnmountDrive(req.Mountpoint); err != nil {
+		sendError(w, http.StatusInternalServerError, "UNMOUNT_FAILED", err.Error(), nil)
+		return
+	}
+
+	events.GlobalEventBus.Publish("storage.unmounted", map[string]string{
+		"mountpoint": req.Mountpoint,
+	})
+
+	sendSuccess(w, http.StatusOK, map[string]any{
+		"unmounted":  true,
+		"mountpoint": req.Mountpoint,
 	}, nil)
 }
 
