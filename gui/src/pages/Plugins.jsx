@@ -331,10 +331,15 @@ export default function Plugins() {
     setInstallLoading(true);
     setInstallError(null);
 
+    const activeMode = getActiveMode(installTarget);
+    const targetPkg = activeMode?.package_name || installTarget.package_name || installTarget.name;
+
     try {
       const res = await api.installPlugin(installTarget.name, {
         method: installMethod,
         password: sudoPassword,
+        package: targetPkg,
+        mode: activeMode?.id,
       });
 
       if (res?.status === 'success') {

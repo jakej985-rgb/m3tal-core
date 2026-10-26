@@ -833,6 +833,8 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Method   string `json:"method"`   // "sudo" (default) or "user"
 		Password string `json:"password"` // sudo password
+		Mode     string `json:"mode"`     // optional mode e.g. "cluster", "node", "mesh"
+		Package  string `json:"package"`  // optional explicit package name
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -841,7 +843,28 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		req.Method = "sudo"
 	}
 
-	debPath, debName := findPluginDeb(name)
+	searchTargets := []string{name}
+	if req.Package != "" {
+		searchTargets = append([]string{req.Package}, searchTargets...)
+	}
+	if req.Mode != "" {
+		searchTargets = append([]string{
+			req.Mode,
+			name + "-" + req.Mode,
+			"m3tal-" + name + "-" + req.Mode,
+			"m3tal-plugin-" + name + "-" + req.Mode,
+		}, searchTargets...)
+	}
+
+	var debPath, debName string
+	for _, target := range searchTargets {
+		dp, dn := findPluginDeb(target)
+		if dp != "" {
+			debPath, debName = dp, dn
+			break
+		}
+	}
+
 	if debPath == "" {
 		sendError(w, http.StatusNotFound, "DEB_NOT_FOUND", "Debian package not found for "+name, nil)
 		return
