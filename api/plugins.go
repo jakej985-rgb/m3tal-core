@@ -194,6 +194,16 @@ func (h *PluginHandlers) ListTabs(w http.ResponseWriter, r *http.Request) {
 	sendSuccess(w, http.StatusOK, tabs, nil)
 }
 
+// CatalogModeDTO represents an installation variant or mode for a catalog plugin.
+type CatalogModeDTO struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	PackageName string `json:"package_name"`
+	AptCommand  string `json:"apt_command"`
+	ProcessName string `json:"process_name,omitempty"`
+}
+
 // CatalogPluginDTO represents a catalog entry with version, changelog, download, and install info.
 type CatalogPluginDTO struct {
 	Name             string               `json:"name"`
@@ -211,6 +221,7 @@ type CatalogPluginDTO struct {
 	DownloadURL      string               `json:"download_url,omitempty"`
 	AptCommand       string               `json:"apt_command,omitempty"`
 	Changelog        string               `json:"changelog,omitempty"`
+	Modes            []CatalogModeDTO     `json:"modes,omitempty"`
 }
 
 // GetDefaultCatalog returns the list of default plugin catalog entries.
@@ -244,6 +255,46 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Version:      "0.1.0",
 		Status:       "available",
 		AptCommand:   "sudo apt install -y m3tal-plugin-compose",
+	},
+	{
+		Name:         "mesh",
+		Title:        "Cluster & Mesh Federation",
+		ProcessName:  "m3tal-mesh",
+		PackageName:  "m3tal-plugin-mesh-cluster",
+		Category:     "Networking & Fleet",
+		Description:  "Local network discovery, multi-node clustering, and telemetry federation across M3TAL workstations, servers, and NAS nodes.",
+		Capabilities: []plugins.Capability{"collector", "actions", "ui_view"},
+		Version:      "0.1.0",
+		Status:       "available",
+		HasDeb:       true,
+		DebFilename:  "m3tal-plugin-mesh-cluster_0.1.0_amd64.deb",
+		AptCommand:   "sudo apt install -y m3tal-plugin-mesh-cluster",
+		Modes: []CatalogModeDTO{
+			{
+				ID:          "mesh",
+				Label:       "Viewer (Mesh)",
+				Description: "Reader & dashboard UI. Scans LAN to view and monitor other connected M3TAL nodes from your desktop.",
+				PackageName: "m3tal-plugin-mesh",
+				AptCommand:  "sudo apt install -y m3tal-plugin-mesh",
+				ProcessName: "m3tal-mesh",
+			},
+			{
+				ID:          "node",
+				Label:       "Node (Sender)",
+				Description: "Headless sender daemon. Broadcasts CPU, GPU, and disk metrics without running a GUI. Ideal for servers & NAS.",
+				PackageName: "m3tal-plugin-mesh-node",
+				AptCommand:  "sudo apt install -y m3tal-plugin-mesh-node",
+				ProcessName: "m3tal-mesh-node",
+			},
+			{
+				ID:          "cluster",
+				Label:       "Cluster (Full)",
+				Description: "Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.",
+				PackageName: "m3tal-plugin-mesh-cluster",
+				AptCommand:  "sudo apt install -y m3tal-plugin-mesh-cluster",
+				ProcessName: "m3tal-mesh",
+			},
+		},
 	},
 	{
 		Name:         "stack-orchestrator",
@@ -343,6 +394,10 @@ var pluginMetadataMap = map[string]pluginMeta{
 	"m3tal-docker":       {ProcessName: "m3tal-docker", PackageName: "m3tal-plugin-docker-monitor", FolderName: "m3tal-docker"},
 	"compose":            {ProcessName: "m3tal-compose", PackageName: "m3tal-plugin-compose", FolderName: "m3tal-compose"},
 	"m3tal-compose":      {ProcessName: "m3tal-compose", PackageName: "m3tal-plugin-compose", FolderName: "m3tal-compose"},
+	"mesh":               {ProcessName: "m3tal-mesh", PackageName: "m3tal-plugin-mesh-cluster", FolderName: "m3tal-mesh"},
+	"m3tal-mesh":         {ProcessName: "m3tal-mesh", PackageName: "m3tal-plugin-mesh", FolderName: "m3tal-mesh"},
+	"m3tal-mesh-node":    {ProcessName: "m3tal-mesh-node", PackageName: "m3tal-plugin-mesh-node", FolderName: "m3tal-mesh-node"},
+	"m3tal-mesh-cluster": {ProcessName: "m3tal-mesh", PackageName: "m3tal-plugin-mesh-cluster", FolderName: "m3tal-mesh"},
 	"stack-orchestrator": {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},
 	"stacks":             {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},
 	"m3tal-stacks":       {ProcessName: "m3tal-stacks", PackageName: "m3tal-plugin-stacks", FolderName: "m3tal-stacks"},

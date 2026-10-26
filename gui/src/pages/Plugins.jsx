@@ -43,6 +43,46 @@ const FALLBACK_PLANNED_PLUGINS = [
     apt_command: 'sudo apt install -y m3tal-plugin-compose',
   },
   {
+    name: 'mesh',
+    title: 'Cluster & Mesh Federation',
+    process_name: 'm3tal-mesh',
+    package_name: 'm3tal-plugin-mesh-cluster',
+    category: 'Networking & Fleet',
+    description: 'Local network discovery, multi-node clustering, and telemetry federation across M3TAL workstations, servers, and NAS nodes.',
+    capabilities: ['collector', 'actions', 'ui_view'],
+    version: '0.1.0',
+    status: 'available',
+    has_deb: true,
+    deb_filename: 'm3tal-plugin-mesh-cluster_0.1.0_amd64.deb',
+    apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
+    modes: [
+      {
+        id: 'mesh',
+        label: 'Viewer (Mesh)',
+        description: 'Reader & dashboard UI. Scans LAN to view and monitor other connected M3TAL nodes from your desktop.',
+        package_name: 'm3tal-plugin-mesh',
+        apt_command: 'sudo apt install -y m3tal-plugin-mesh',
+        process_name: 'm3tal-mesh',
+      },
+      {
+        id: 'node',
+        label: 'Node (Sender)',
+        description: 'Headless sender daemon. Broadcasts CPU, GPU, and disk metrics without running a GUI. Ideal for servers & NAS.',
+        package_name: 'm3tal-plugin-mesh-node',
+        apt_command: 'sudo apt install -y m3tal-plugin-mesh-node',
+        process_name: 'm3tal-mesh-node',
+      },
+      {
+        id: 'cluster',
+        label: 'Cluster (Full)',
+        description: 'Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.',
+        package_name: 'm3tal-plugin-mesh-cluster',
+        apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
+        process_name: 'm3tal-mesh',
+      },
+    ],
+  },
+  {
     name: 'stack-orchestrator',
     title: 'Compose Stacks (Template DB)',
     process_name: 'm3tal-stacks',
@@ -137,6 +177,17 @@ export default function Plugins() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [copiedName, setCopiedName] = useState(null);
+  const [selectedModes, setSelectedModes] = useState({});
+
+  const getActiveMode = (item) => {
+    if (!item?.modes || item.modes.length === 0) return null;
+    const selectedId = selectedModes[item.name];
+    if (selectedId) {
+      return item.modes.find((m) => m.id === selectedId) || item.modes[0];
+    }
+    // Default to 'cluster' if present, otherwise first mode
+    return item.modes.find((m) => m.id === 'cluster') || item.modes[0];
+  };
 
   // Modals state
   const [selectedChangelog, setSelectedChangelog] = useState(null);
@@ -516,13 +567,21 @@ export default function Plugins() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {catalog.map((item) => {
+              const activeMode = getActiveMode(item);
               const cleanItemName = (item.name || '').replace(/^m3tal-/, '');
               const cleanProcName = (item.process_name || item.processName || '').replace(/^m3tal-/, '');
+              const effectiveProcName = activeMode?.process_name || item.process_name || item.processName;
+              const effectiveAptCommand = activeMode?.apt_command || item.apt_command;
 
               const isInstalled = item.status === 'installed' || plugins.some((p) => {
                 const pName = p.manifest?.metadata?.name || p.name || '';
                 const cleanP = pName.replace(/^m3tal-/, '');
-                return pName === item.name || cleanP === cleanItemName || cleanP === cleanProcName;
+                return (
+                  pName === item.name ||
+                  cleanP === cleanItemName ||
+                  cleanP === cleanProcName ||
+                  (activeMode && (pName === activeMode.id || cleanP === activeMode.id))
+                );
               });
 
               const hasDeb = Boolean(item.has_deb || item.deb_filename || item.name === 'docker-monitor' || item.name === 'compose');
@@ -540,7 +599,7 @@ export default function Plugins() {
                             v{item.version || '0.1.0'}
                           </span>
                         </div>
-                        <span className="text-[11px] font-mono text-cyan-400">proc: {item.process_name || item.processName}</span>
+                        <span className="text-[11px] font-mono text-cyan-400">proc: {effectiveProcName}</span>
                       </div>
 
                       <div className="flex flex-col items-end gap-1.5">
@@ -567,6 +626,38 @@ export default function Plugins() {
                     {/* Description */}
                     <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
 
+                    {/* Mode Selector for Multi-Target Plugins (e.g. Mesh / Node / Cluster) */}
+                    {item.modes && item.modes.length > 0 && (
+                      <div className="pt-2 space-y-2">
+                        <div className="text-[11px] font-semibold text-slate-400">Target Role / Installation Mode:</div>
+                        <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0d1117] border border-[#30363d] rounded-lg">
+                          {item.modes.map((m) => {
+                            const isSelected = activeMode?.id === m.id;
+                            return (
+                              <button
+                                key={m.id}
+                                onClick={() => setSelectedModes((prev) => ({ ...prev, [item.name]: m.id }))}
+                                className={`px-2 py-1.5 text-xs font-semibold rounded-md transition-all text-center truncate ${
+                                  isSelected
+                                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-950'
+                                    : 'text-slate-400 hover:text-white hover:bg-[#21262d]'
+                                }`}
+                                title={m.description}
+                              >
+                                {m.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {activeMode && (
+                          <div className="p-2.5 rounded-lg bg-[#0d1117]/80 border border-[#21262d] text-[11px] text-slate-300 leading-relaxed">
+                            <span className="font-semibold text-cyan-400">{activeMode.label}: </span>
+                            <span>{activeMode.description}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Capabilities */}
                     {item.capabilities && (
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -579,15 +670,15 @@ export default function Plugins() {
                     )}
 
                     {/* APT Command Snippet */}
-                    {item.apt_command && (
+                    {effectiveAptCommand && (
                       <div className="pt-2">
                         <div className="flex items-center justify-between p-2 rounded-lg bg-[#0d1117] border border-[#30363d] text-xs font-mono text-slate-400">
-                          <span className="truncate">{item.apt_command}</span>
+                          <span className="truncate">{effectiveAptCommand}</span>
                           <button
-                            onClick={() => copyToClipboard(item.apt_command, item.name)}
+                            onClick={() => copyToClipboard(effectiveAptCommand, `${item.name}-${activeMode?.id || 'default'}`)}
                             className="ml-2 px-2.5 py-1 text-[10px] font-semibold rounded bg-[#21262d] hover:bg-[#30363d] text-slate-300 transition-colors flex items-center gap-1"
                           >
-                            {copiedName === item.name ? (
+                            {copiedName === `${item.name}-${activeMode?.id || 'default'}` ? (
                               <>
                                 <IconCheck className="w-3 h-3 text-emerald-400" />
                                 <span className="text-emerald-400">Copied</span>
