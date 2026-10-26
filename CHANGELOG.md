@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.15.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.15.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(gui): implement dashboard edit mode and grid layout persistence** (`bb5952b1`):
+  - *What Changed*: - Add edit mode toggle (Edit Grid / Done Editing) in TopBarWidget - Implement reorder controls (move left/right) and hide action with amber toolbar across all widgets - Add drag-and-drop widget reordering and hidden widget management in Dashboard - Persist custom widget layout and visibility preferences in localStorage with reset option - Update WidgetCard, StatCardWidget, StorageDetailedWidget, FleetMiniOverview, NetworkSummary, EventLogWidget, and PluginWidgetSlot
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.14.0] - 2026-10-26
 
 ### Overview & Release Highlights
