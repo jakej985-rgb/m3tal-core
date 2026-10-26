@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.13.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.13.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(dashboard): modular 4-column widget grid and comprehensive storage management** (`4a7b9e44`):
+  - *What Changed*: - introduce modular 4-column responsive grid layout on dashboard - add StatCardWidget, TopBarWidget, StorageDetailedWidget, and EventLogWidget - support dynamic plugin widgets with ui_widget capability and schema in protocol - implement safe USB drive unmount endpoint with protected system directory guards - filter mountpoint noise (docker, proc, sys, efi/boot) and group physical storage partitions
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.12.1] - 2026-10-26
 
 ### Overview & Release Highlights
