@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.14.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.14.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(dashboard): overhaul container fleet status overview and host network stats widget** (`c8ac2d19`):
+  - *What Changed*: - Add color-coded status badges in FleetMiniOverview for healthy, action required, and crashed/version conflicts - Transform network summary into dedicated host network telemetry widget with interface list, IP assignments, and RX/TX bandwidth metrics - Introduce GET /api/v2/system/network endpoint and include network interfaces in DetailedStats
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.13.0] - 2026-10-26
 
 ### Overview & Release Highlights
