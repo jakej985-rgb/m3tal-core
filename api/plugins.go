@@ -902,9 +902,30 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 				sendError(w, http.StatusUnauthorized, "AUTH_FAILED", "Sudo authentication failed. Incorrect password.", nil)
 				return
 			}
+
+			// If dpkg encountered dependency problems, automatically resolve and configure via apt-get install -f -y
+			if strings.Contains(errStr, "dependency problems") || strings.Contains(errStr, "depends on") || strings.Contains(errStr, "unmet dependencies") {
+				fixCmd := exec.Command("sudo", "-S", "-p", "", "apt-get", "install", "-f", "-y")
+				var fixStdin bytes.Buffer
+				if req.Password != "" {
+					fixStdin.WriteString(req.Password + "\n")
+				}
+				fixCmd.Stdin = &fixStdin
+				var fixOut, fixErr bytes.Buffer
+				fixCmd.Stdout = &fixOut
+				fixCmd.Stderr = &fixErr
+
+				if fixCode := fixCmd.Run(); fixCode == nil {
+					// Dependencies cleanly auto-resolved from APT keyring!
+					goto SudoInstalled
+				}
+			}
+
 			sendError(w, http.StatusInternalServerError, "INSTALL_FAILED", fmt.Sprintf("sudo dpkg failed: %v: %s", err, errStr), nil)
 			return
 		}
+
+	SudoInstalled:
 	} else {
 		// User space installation to ~/.config/m3tal/plugins/<name>
 		home, err := os.UserHomeDir()
