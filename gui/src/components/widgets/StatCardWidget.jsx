@@ -4,6 +4,10 @@ export default function StatCardWidget({
   type = 'cpu', // 'cpu' | 'ram' | 'gpu' | 'disk'
   metrics,
   history = [],
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
   className = '',
 }) {
   if (!metrics) return null;
@@ -53,6 +57,10 @@ export default function StatCardWidget({
         <WidgetCard
           colSpan={1}
           rowSpan={1}
+          isEditMode={isEditMode}
+          onMoveLeft={onMoveLeft}
+          onMoveRight={onMoveRight}
+          onHide={onHide}
           className={className}
         >
           <div>
@@ -85,6 +93,10 @@ export default function StatCardWidget({
         <WidgetCard
           colSpan={1}
           rowSpan={1}
+          isEditMode={isEditMode}
+          onMoveLeft={onMoveLeft}
+          onMoveRight={onMoveRight}
+          onHide={onHide}
           className={className}
         >
           <div>
@@ -114,6 +126,10 @@ export default function StatCardWidget({
         <WidgetCard
           colSpan={1}
           rowSpan={1}
+          isEditMode={isEditMode}
+          onMoveLeft={onMoveLeft}
+          onMoveRight={onMoveRight}
+          onHide={onHide}
           className={className}
         >
           <div>
@@ -165,6 +181,10 @@ export default function StatCardWidget({
         <WidgetCard
           colSpan={1}
           rowSpan={1}
+          isEditMode={isEditMode}
+          onMoveLeft={onMoveLeft}
+          onMoveRight={onMoveRight}
+          onHide={onHide}
           className={className}
         >
           <div>

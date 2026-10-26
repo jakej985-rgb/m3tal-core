@@ -7,6 +7,10 @@ export default function StorageDetailedWidget({
   onCleanup,
   isCleaning,
   onUnmount,
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
   className = '',
 }) {
   const [filterVirtual, setFilterVirtual] = useState(true);
@@ -170,6 +174,10 @@ export default function StorageDetailedWidget({
     <WidgetCard
       colSpan={4}
       rowSpan={3}
+      isEditMode={isEditMode}
+      onMoveLeft={onMoveLeft}
+      onMoveRight={onMoveRight}
+      onHide={onHide}
       title="Storage & Mounted Drives"
       subtitle="Physical disk partitions, removable media, and remote network mounts"
       badge={

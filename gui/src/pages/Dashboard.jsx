@@ -9,6 +9,28 @@ import StorageDetailedWidget from '../components/widgets/StorageDetailedWidget';
 import EventLogWidget from '../components/widgets/EventLogWidget';
 import PluginWidgetSlot from '../components/widgets/PluginWidgetSlot';
 
+const DEFAULT_LAYOUT = [
+  'stat-cpu',
+  'stat-ram',
+  'stat-gpu',
+  'stat-disk',
+  'storage-detailed',
+  'fleet-containers',
+  'network-stats',
+  'event-log',
+];
+
+const WIDGET_TITLES = {
+  'stat-cpu': 'CPU Metric Card',
+  'stat-ram': 'RAM Metric Card',
+  'stat-gpu': 'GPU Metric Card',
+  'stat-disk': 'Root Disk Card',
+  'storage-detailed': 'Storage & Drives',
+  'fleet-containers': 'Container Fleet',
+  'network-stats': 'Network Statistics',
+  'event-log': 'Live Event Log',
+};
+
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
   const [history, setHistory] = useState([]);
@@ -23,6 +45,101 @@ export default function Dashboard() {
   const [isCleaning, setIsCleaning] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // Edit Dashboard Mode and Layout Persistence
+  const STORAGE_KEY = 'm3tal_dashboard_layout_v1';
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [layoutOrder, setLayoutOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.order) && parsed.order.length > 0) return parsed.order;
+      }
+    } catch {
+      // Ignore
+    }
+    return DEFAULT_LAYOUT;
+  });
+
+  const [hiddenWidgets, setHiddenWidgets] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.hidden)) return parsed.hidden;
+      }
+    } catch {
+      // Ignore
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ order: layoutOrder, hidden: hiddenWidgets }));
+    } catch {
+      // Ignore
+    }
+  }, [layoutOrder, hiddenWidgets]);
+
+  // Sync external plugin widgets into layout order if not yet added
+  useEffect(() => {
+    if (pluginWidgets.length > 0) {
+      setLayoutOrder((prev) => {
+        const next = [...prev];
+        pluginWidgets.forEach((pw) => {
+          const key = `plugin-${pw.id || pw.title}`;
+          if (!next.includes(key) && !hiddenWidgets.includes(key)) {
+            next.push(key);
+          }
+        });
+        return next;
+      });
+    }
+  }, [pluginWidgets, hiddenWidgets]);
+
+  const handleMoveWidget = (widgetId, direction) => {
+    setLayoutOrder((prev) => {
+      const currentIndex = prev.indexOf(widgetId);
+      if (currentIndex === -1) return prev;
+      const targetIndex = currentIndex + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const newOrder = [...prev];
+      const [movedItem] = newOrder.splice(currentIndex, 1);
+      newOrder.splice(targetIndex, 0, movedItem);
+      return newOrder;
+    });
+  };
+
+  const handleHideWidget = (widgetId) => {
+    setHiddenWidgets((prev) => (prev.includes(widgetId) ? prev : [...prev, widgetId]));
+  };
+
+  const handleRestoreWidget = (widgetId) => {
+    setHiddenWidgets((prev) => prev.filter((id) => id !== widgetId));
+    setLayoutOrder((prev) => (prev.includes(widgetId) ? prev : [...prev, widgetId]));
+  };
+
+  const handleResetLayout = () => {
+    setLayoutOrder(DEFAULT_LAYOUT);
+    setHiddenWidgets([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const getWidgetLabel = (wid) => {
+    if (WIDGET_TITLES[wid]) return WIDGET_TITLES[wid];
+    if (wid.startsWith('plugin-')) {
+      const pw = pluginWidgets.find((w) => `plugin-${w.id || w.title}` === wid);
+      if (pw?.title) return `Plugin: ${pw.title}`;
+    }
+    return wid;
+  };
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -151,6 +268,19 @@ export default function Dashboard() {
     }
   };
 
+  const handlePluginAction = async (pluginName, action) => {
+    try {
+      const res = await api.pluginAction(pluginName, action);
+      if (res.status === 'success') {
+        showToast(`Action executed: ${action}`, 'success');
+      } else {
+        showToast(res.error || 'Action failed', 'error');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Floating Action Toast */}
@@ -177,7 +307,7 @@ export default function Dashboard() {
 
       {/* 4-Column Modular Widget Grid Engine */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-        {/* 1. Top Bar Widget (4x1) */}
+        {/* 1. Top Bar Control Plane Widget (4x1) */}
         <TopBarWidget
           metrics={metrics}
           health={health}
@@ -189,55 +319,123 @@ export default function Dashboard() {
           onRefresh={handleManualRefresh}
           isRefreshing={isRefreshing}
           error={error}
+          isEditMode={isEditMode}
+          onToggleEditMode={() => setIsEditMode((prev) => !prev)}
         />
 
-        {/* 2. System Stat Cards Row (1x1 each: CPU, RAM, GPU, Root Disk) */}
-        <StatCardWidget type="cpu" metrics={metrics} history={history} />
-        <StatCardWidget type="ram" metrics={metrics} history={history} />
-        <StatCardWidget type="gpu" metrics={metrics} history={history} />
-        <StatCardWidget type="disk" metrics={metrics} history={history} />
+        {/* Edit Mode Customization Banner */}
+        {isEditMode && (
+          <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200 animate-fade-in shadow-md">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🛠️</span>
+              <div>
+                <span className="font-bold text-amber-300">Dashboard Edit Mode:</span>{' '}
+                <span>Reorder cards using ◀ and ▶ or ✕ to hide. Positions save to your browser automatically.</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {hiddenWidgets.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-400 text-[11px]">Hidden ({hiddenWidgets.length}):</span>
+                  {hiddenWidgets.map((wid) => (
+                    <button
+                      key={wid}
+                      onClick={() => handleRestoreWidget(wid)}
+                      className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-semibold transition-colors flex items-center gap-1"
+                      title={`Restore ${getWidgetLabel(wid)}`}
+                    >
+                      <span>+</span>
+                      <span>{getWidgetLabel(wid)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={handleResetLayout}
+                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] transition-colors"
+                title="Reset dashboard grid layout to factory defaults"
+              >
+                Reset Default
+              </button>
+              <button
+                onClick={() => setIsEditMode(false)}
+                className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-sm"
+              >
+                Done Editing
+              </button>
+            </div>
+          </div>
+        )}
 
-        {/* 3. Detailed Storage Widget (4x3) with Partition & Mount Filtering */}
-        <StorageDetailedWidget
-          diskPartitions={metrics?.disk_partitions || []}
-          onCleanup={handleSystemCleanup}
-          isCleaning={isCleaning}
-          onUnmount={handleUnmountStorage}
-        />
+        {/* Dynamic Re-orderable Widget Grid */}
+        {layoutOrder.map((widgetId, index) => {
+          if (hiddenWidgets.includes(widgetId)) return null;
 
-        {/* 4. Fleet Overview (2x1) & Network Summary (2x1) */}
-        <div className="col-span-1 md:col-span-2 lg:col-span-2">
-          <FleetMiniOverview />
-        </div>
-        <div className="col-span-1 md:col-span-2 lg:col-span-2">
-          <NetworkSummary networkInterfaces={metrics?.network_interfaces} />
-        </div>
+          const moveProps = {
+            isEditMode,
+            onMoveLeft: index > 0 ? () => handleMoveWidget(widgetId, -1) : undefined,
+            onMoveRight: index < layoutOrder.length - 1 ? () => handleMoveWidget(widgetId, 1) : undefined,
+            onHide: () => handleHideWidget(widgetId),
+          };
 
-        {/* 5. Dynamic External Plugin Widgets (optional) */}
-        {pluginWidgets.map((pw) => (
-          <PluginWidgetSlot
-            key={pw.id}
-            widget={pw}
-            onAction={async (pluginName, action) => {
-              try {
-                const res = await api.pluginAction(pluginName, action);
-                if (res.status === 'success') {
-                  showToast(`Action executed: ${action}`, 'success');
-                } else {
-                  showToast(res.error || 'Action failed', 'error');
+          switch (widgetId) {
+            case 'stat-cpu':
+              return <StatCardWidget key={widgetId} type="cpu" metrics={metrics} history={history} {...moveProps} />;
+            case 'stat-ram':
+              return <StatCardWidget key={widgetId} type="ram" metrics={metrics} history={history} {...moveProps} />;
+            case 'stat-gpu':
+              return <StatCardWidget key={widgetId} type="gpu" metrics={metrics} history={history} {...moveProps} />;
+            case 'stat-disk':
+              return <StatCardWidget key={widgetId} type="disk" metrics={metrics} history={history} {...moveProps} />;
+            case 'storage-detailed':
+              return (
+                <StorageDetailedWidget
+                  key={widgetId}
+                  diskPartitions={metrics?.disk_partitions || []}
+                  onCleanup={handleSystemCleanup}
+                  isCleaning={isCleaning}
+                  onUnmount={handleUnmountStorage}
+                  {...moveProps}
+                />
+              );
+            case 'fleet-containers':
+              return (
+                <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2">
+                  <FleetMiniOverview {...moveProps} />
+                </div>
+              );
+            case 'network-stats':
+              return (
+                <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2">
+                  <NetworkSummary networkInterfaces={metrics?.network_interfaces} {...moveProps} />
+                </div>
+              );
+            case 'event-log':
+              return (
+                <EventLogWidget
+                  key={widgetId}
+                  events={events}
+                  onClear={() => setEvents([])}
+                  {...moveProps}
+                />
+              );
+            default:
+              if (widgetId.startsWith('plugin-')) {
+                const pw = pluginWidgets.find((w) => `plugin-${w.id || w.title}` === widgetId);
+                if (pw) {
+                  return (
+                    <PluginWidgetSlot
+                      key={widgetId}
+                      widget={pw}
+                      onAction={handlePluginAction}
+                      {...moveProps}
+                    />
+                  );
                 }
-              } catch (err) {
-                showToast(err.message, 'error');
               }
-            }}
-          />
-        ))}
-
-        {/* 6. Live System Event Log (4x2) */}
-        <EventLogWidget
-          events={events}
-          onClear={() => setEvents([])}
-        />
+              return null;
+          }
+        })}
       </div>
 
       {/* Doctor Diagnostics Modal */}

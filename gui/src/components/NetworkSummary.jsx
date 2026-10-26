@@ -2,7 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
 import { IconNetwork, IconRefresh } from './Icons';
 
-export default function NetworkSummary({ networkInterfaces: propInterfaces }) {
+export default function NetworkSummary({
+  networkInterfaces: propInterfaces,
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
+  className = '',
+}) {
   const [interfaces, setInterfaces] = useState(propInterfaces || []);
   const [loading, setLoading] = useState(!propInterfaces || propInterfaces.length === 0);
 
@@ -73,7 +80,54 @@ export default function NetworkSummary({ networkInterfaces: propInterfaces }) {
   }, [interfaces]);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between shadow-sm relative overflow-hidden">
+    <div
+      className={`bg-slate-900 border ${
+        isEditMode
+          ? 'border-amber-500/50 ring-1 ring-amber-500/30'
+          : 'border-slate-800'
+      } rounded-2xl p-6 flex flex-col justify-between shadow-sm relative overflow-hidden ${className}`}
+    >
+      {/* Edit Mode Customization Toolbar */}
+      {isEditMode && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 -mx-6 -mt-6 mb-4 px-3 py-1 flex items-center justify-between text-xs text-amber-300 select-none">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+            2x1 GRID
+          </span>
+          <div className="flex items-center gap-1">
+            {onMoveLeft && (
+              <button
+                type="button"
+                onClick={onMoveLeft}
+                className="p-1 rounded hover:bg-amber-500/20 text-amber-200 transition-colors"
+                title="Move earlier in grid"
+              >
+                ◀
+              </button>
+            )}
+            {onMoveRight && (
+              <button
+                type="button"
+                onClick={onMoveRight}
+                className="p-1 rounded hover:bg-amber-500/20 text-amber-200 transition-colors"
+                title="Move later in grid"
+              >
+                ▶
+              </button>
+            )}
+            {onHide && (
+              <button
+                type="button"
+                onClick={onHide}
+                className="px-1.5 py-0.5 rounded hover:bg-rose-500/20 text-rose-300 transition-colors font-bold text-[11px] ml-1"
+                title="Hide this widget"
+              >
+                ✕ Hide
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div>
         {/* Header */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800/60">

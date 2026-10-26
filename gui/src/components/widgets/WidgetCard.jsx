@@ -16,6 +16,10 @@ export default function WidgetCard({
   icon: Icon,
   badge,
   actions,
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
   className = '',
   bodyClassName = '',
   children,
@@ -39,8 +43,52 @@ export default function WidgetCard({
 
   return (
     <div
-      className={`bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-sm backdrop-blur-md relative overflow-hidden flex flex-col justify-between transition-all hover:border-slate-700/80 ${colSpanClass} ${rowSpanClass} ${className}`}
+      className={`bg-slate-900 border ${
+        isEditMode
+          ? 'border-amber-500/50 ring-1 ring-amber-500/30'
+          : 'border-slate-800/80 hover:border-slate-700/80'
+      } rounded-2xl p-5 shadow-sm backdrop-blur-md relative overflow-hidden flex flex-col justify-between transition-all ${colSpanClass} ${rowSpanClass} ${className}`}
     >
+      {/* Edit Mode Customization Toolbar */}
+      {isEditMode && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 -mx-5 -mt-5 mb-3 px-3 py-1 flex items-center justify-between text-xs text-amber-300 select-none">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+            {colSpan}x{rowSpan} GRID
+          </span>
+          <div className="flex items-center gap-1">
+            {onMoveLeft && (
+              <button
+                type="button"
+                onClick={onMoveLeft}
+                className="p-1 rounded hover:bg-amber-500/20 text-amber-200 transition-colors"
+                title="Move earlier in grid"
+              >
+                ◀
+              </button>
+            )}
+            {onMoveRight && (
+              <button
+                type="button"
+                onClick={onMoveRight}
+                className="p-1 rounded hover:bg-amber-500/20 text-amber-200 transition-colors"
+                title="Move later in grid"
+              >
+                ▶
+              </button>
+            )}
+            {onHide && (
+              <button
+                type="button"
+                onClick={onHide}
+                className="px-1.5 py-0.5 rounded hover:bg-rose-500/20 text-rose-300 transition-colors font-bold text-[11px] ml-1"
+                title="Hide this widget"
+              >
+                ✕ Hide
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {hasHeader && (
         <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/60 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">

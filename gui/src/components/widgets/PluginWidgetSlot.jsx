@@ -14,6 +14,10 @@ import WidgetCard from './WidgetCard';
 export default function PluginWidgetSlot({
   widget,
   onAction,
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
   className = '',
 }) {
   if (!widget) return null;
@@ -27,6 +31,10 @@ export default function PluginWidgetSlot({
       <WidgetCard
         colSpan={colSpan}
         rowSpan={rowSpan}
+        isEditMode={isEditMode}
+        onMoveLeft={onMoveLeft}
+        onMoveRight={onMoveRight}
+        onHide={onHide}
         title={widget.title || 'Plugin Widget'}
         subtitle={widget.plugin_name}
         badge={
@@ -51,6 +59,10 @@ export default function PluginWidgetSlot({
     <WidgetCard
       colSpan={colSpan}
       rowSpan={rowSpan}
+      isEditMode={isEditMode}
+      onMoveLeft={onMoveLeft}
+      onMoveRight={onMoveRight}
+      onHide={onHide}
       title={widget.title || 'Plugin Widget'}
       subtitle={widget.subtitle || widget.plugin_name}
       badge={

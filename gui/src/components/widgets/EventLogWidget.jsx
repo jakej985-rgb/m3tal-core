@@ -3,6 +3,10 @@ import WidgetCard from './WidgetCard';
 export default function EventLogWidget({
   events = [],
   onClear,
+  isEditMode = false,
+  onMoveLeft,
+  onMoveRight,
+  onHide,
   className = '',
 }) {
   const headerActions = (
@@ -25,6 +29,10 @@ export default function EventLogWidget({
     <WidgetCard
       colSpan={4}
       rowSpan={2}
+      isEditMode={isEditMode}
+      onMoveLeft={onMoveLeft}
+      onMoveRight={onMoveRight}
+      onHide={onHide}
       title="Live System Event Log"
       subtitle="Streaming real-time daemon, service state transitions, and audit records"
       badge={

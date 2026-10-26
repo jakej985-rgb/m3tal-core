@@ -20,6 +20,8 @@ export default function TopBarWidget({
   onRefresh,
   isRefreshing,
   error,
+  isEditMode = false,
+  onToggleEditMode,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -140,6 +142,19 @@ export default function TopBarWidget({
             title="Refresh statistics now"
           >
             <IconRefresh className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+
+          {/* Edit Dashboard / Customize Toggle */}
+          <button
+            onClick={onToggleEditMode}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shadow-sm active:scale-95 ${
+              isEditMode
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold ring-2 ring-amber-500/40'
+                : 'bg-slate-800 hover:bg-slate-750 text-slate-300 border-slate-700 hover:text-white'
+            }`}
+            title={isEditMode ? 'Finish customizing dashboard grid' : 'Customize dashboard layout, reorder cards, or hide widgets'}
+          >
+            <span>{isEditMode ? '✓ Done Editing' : '✏️ Edit Grid'}</span>
           </button>
 
           {/* System Status Pill */}
