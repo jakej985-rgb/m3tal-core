@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.20.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.20.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **feat(plugins): implement dynamic APT candidate discovery and repository management** (`da0eface`):
+  - *What Changed*: - Eliminate hardcoded plugin versions from Core source code (api/plugins.go, gui/src/pages/Plugins.jsx) - Implement dynamic APT candidate version discovery in api/apt.go using apt-cache policy with in-memory caching and cache invalidation - Implement Plugin Repositories management API in api/repositories.go (GET/POST/DELETE repositories, POST refresh) and register routes in api/server.go - Add Plugin Repositories section to gui/src/pages/Settings.jsx with keyring status, release channel toggle, live discovered APT candidate table, and custom repository modal - Add Check for Updates live APT polling button to gui/src/pages/Plugins.jsx
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.19.1] - 2026-10-26
 
 ### Overview & Release Highlights
