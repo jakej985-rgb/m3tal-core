@@ -37,6 +37,8 @@ type PluginInstance struct {
 	Capabilities []Capability
 	Tabs         []PluginTabSpec
 	Actions      []ActionSpec
+	Widgets      []PluginWidget
+	Settings     []PluginSettingSection
 
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
@@ -336,6 +338,14 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 	p.Capabilities = initRes.Capabilities
 	p.Tabs = initRes.Tabs
 	p.Actions = initRes.Actions
+	p.Widgets = initRes.Widgets
+	if len(p.Widgets) == 0 {
+		p.Widgets = p.Manifest.Spec.Widgets
+	}
+	p.Settings = initRes.Settings
+	if len(p.Settings) == 0 {
+		p.Settings = p.Manifest.Spec.Settings
+	}
 	p.State = StateRunning
 
 	// Monitor process termination in background
@@ -613,6 +623,34 @@ func (m *Manager) GetAllTabs() []PluginTabSpec {
 		}
 	}
 	return tabs
+}
+
+// GetAllSettings gathers all settings sections declared by running or installed plugins.
+func (m *Manager) GetAllSettings() []PluginSettingSection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var sections []PluginSettingSection
+	for _, p := range m.plugins {
+		if len(p.Settings) > 0 {
+			for _, sec := range p.Settings {
+				secCopy := sec
+				if secCopy.Plugin == "" {
+					secCopy.Plugin = p.Manifest.Metadata.Name
+				}
+				sections = append(sections, secCopy)
+			}
+		} else if p.Manifest.HasCapability(CapabilitySettings) && len(p.Manifest.Spec.Settings) > 0 {
+			for _, sec := range p.Manifest.Spec.Settings {
+				secCopy := sec
+				if secCopy.Plugin == "" {
+					secCopy.Plugin = p.Manifest.Metadata.Name
+				}
+				sections = append(sections, secCopy)
+			}
+		}
+	}
+	return sections
 }
 
 // GetPlugin returns a managed plugin instance by name.

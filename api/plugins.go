@@ -29,19 +29,20 @@ func NewPluginHandlers(mgr *plugins.Manager) *PluginHandlers {
 
 // PluginDTO represents the JSON response for a managed plugin.
 type PluginDTO struct {
-	Name            string                  `json:"name"`
-	Version         string                  `json:"version"`
-	Description     string                  `json:"description,omitempty"`
-	Author          string                  `json:"author,omitempty"`
-	Icon            string                  `json:"icon,omitempty"`
-	State           plugins.PluginState     `json:"state"`
-	Capabilities    []plugins.Capability    `json:"capabilities"`
-	Tabs            []plugins.PluginTabSpec `json:"tabs,omitempty"`
-	Widgets         []plugins.PluginWidget  `json:"widgets,omitempty"`
-	Actions         []plugins.ActionSpec    `json:"actions,omitempty"`
-	LastCollectedAt int64                   `json:"last_collected_at,omitempty"`
-	LastError       string                  `json:"last_error,omitempty"`
-	Manifest        plugins.PluginManifest  `json:"manifest"`
+	Name            string                         `json:"name"`
+	Version         string                         `json:"version"`
+	Description     string                         `json:"description,omitempty"`
+	Author          string                         `json:"author,omitempty"`
+	Icon            string                         `json:"icon,omitempty"`
+	State           plugins.PluginState            `json:"state"`
+	Capabilities    []plugins.Capability           `json:"capabilities"`
+	Tabs            []plugins.PluginTabSpec        `json:"tabs,omitempty"`
+	Widgets         []plugins.PluginWidget         `json:"widgets,omitempty"`
+	Settings        []plugins.PluginSettingSection `json:"settings,omitempty"`
+	Actions         []plugins.ActionSpec           `json:"actions,omitempty"`
+	LastCollectedAt int64                          `json:"last_collected_at,omitempty"`
+	LastError       string                         `json:"last_error,omitempty"`
+	Manifest        plugins.PluginManifest         `json:"manifest"`
 }
 
 // ListPlugins returns all discovered and managed plugins.
@@ -68,6 +69,7 @@ func (h *PluginHandlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 			State:        plugins.StateStopped,
 			Capabilities: m.Spec.Capabilities,
 			Widgets:      m.Spec.Widgets,
+			Settings:     m.Spec.Settings,
 			Manifest:     m,
 		}
 
@@ -77,6 +79,12 @@ func (h *PluginHandlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 			dto.Tabs = inst.Tabs
 			dto.Actions = inst.Actions
 			dto.LastError = inst.LastError
+			if len(inst.Widgets) > 0 {
+				dto.Widgets = inst.Widgets
+			}
+			if len(inst.Settings) > 0 {
+				dto.Settings = inst.Settings
+			}
 			if !inst.LastCollectedAt.IsZero() {
 				dto.LastCollectedAt = inst.LastCollectedAt.Unix()
 			}

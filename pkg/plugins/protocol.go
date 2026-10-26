@@ -19,6 +19,7 @@ const (
 	CapabilityUIView    Capability = "ui_view"    // Mounts dedicated view in Web GUI
 	CapabilityUIWidget  Capability = "ui_widget"  // Exposes dashboard grid widgets
 	CapabilityActions   Capability = "actions"    // Exposes executable actions/commands
+	CapabilitySettings  Capability = "settings"   // Exposes configurable settings sections
 	CapabilityExporter  Capability = "exporter"   // Streams or exports core telemetry
 	CapabilityTUIWidget Capability = "tui_widget" // Deprecated: legacy terminal UI widget
 )
@@ -55,15 +56,37 @@ type PluginWidget struct {
 	Endpoint        string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 }
 
+// PluginSettingField defines a single configurable field for a plugin setting section.
+type PluginSettingField struct {
+	Key         string   `yaml:"key" json:"key"`
+	Label       string   `yaml:"label" json:"label"`
+	Type        string   `yaml:"type" json:"type"` // "text", "password", "number", "boolean", "select"
+	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Default     any      `yaml:"default,omitempty" json:"default,omitempty"`
+	Options     []string `yaml:"options,omitempty" json:"options,omitempty"` // For "select"
+	Placeholder string   `yaml:"placeholder,omitempty" json:"placeholder,omitempty"`
+}
+
+// PluginSettingSection defines a group of settings provided by a plugin.
+type PluginSettingSection struct {
+	ID          string               `yaml:"id" json:"id"`
+	Plugin      string               `yaml:"plugin,omitempty" json:"plugin,omitempty"`
+	Title       string               `yaml:"title" json:"title"`
+	Description string               `yaml:"description,omitempty" json:"description,omitempty"`
+	Icon        string               `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Fields      []PluginSettingField `yaml:"fields,omitempty" json:"fields,omitempty"`
+}
+
 // PluginSpec defines the execution model and capabilities for the plugin.
 type PluginSpec struct {
-	Command      string         `yaml:"command" json:"command"`
-	Args         []string       `yaml:"args,omitempty" json:"args,omitempty"`
-	ProcessName  string         `yaml:"process_name,omitempty" json:"process_name,omitempty"`
-	Capabilities []Capability   `yaml:"capabilities" json:"capabilities"`
-	PollInterval string         `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
-	UI           PluginUISpec   `yaml:"ui,omitempty" json:"ui,omitempty"`
-	Widgets      []PluginWidget `yaml:"widgets,omitempty" json:"widgets,omitempty"`
+	Command      string                 `yaml:"command" json:"command"`
+	Args         []string               `yaml:"args,omitempty" json:"args,omitempty"`
+	ProcessName  string                 `yaml:"process_name,omitempty" json:"process_name,omitempty"`
+	Capabilities []Capability           `yaml:"capabilities" json:"capabilities"`
+	PollInterval string                 `yaml:"poll_interval,omitempty" json:"poll_interval,omitempty"`
+	UI           PluginUISpec           `yaml:"ui,omitempty" json:"ui,omitempty"`
+	Widgets      []PluginWidget         `yaml:"widgets,omitempty" json:"widgets,omitempty"`
+	Settings     []PluginSettingSection `yaml:"settings,omitempty" json:"settings,omitempty"`
 }
 
 // PluginUISpec declares static web UI configuration in plugin.yaml.
@@ -136,11 +159,13 @@ type InitParams struct {
 
 // InitResult returned by Plugin in response to m3tal.init.
 type InitResult struct {
-	Name         string          `json:"name"`
-	Version      string          `json:"version"`
-	Capabilities []Capability    `json:"capabilities"`
-	Tabs         []PluginTabSpec `json:"tabs,omitempty"`
-	Actions      []ActionSpec    `json:"actions,omitempty"`
+	Name         string                 `json:"name"`
+	Version      string                 `json:"version"`
+	Capabilities []Capability           `json:"capabilities"`
+	Tabs         []PluginTabSpec        `json:"tabs,omitempty"`
+	Actions      []ActionSpec           `json:"actions,omitempty"`
+	Widgets      []PluginWidget         `json:"widgets,omitempty"`
+	Settings     []PluginSettingSection `json:"settings,omitempty"`
 }
 
 // PluginTabSpec defines a UI tab/viewport provided by a plugin.

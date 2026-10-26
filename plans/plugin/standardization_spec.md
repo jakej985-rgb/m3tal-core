@@ -91,6 +91,7 @@ spec:
     - actions                    # Exposes JSON-RPC / REST actions (e.g. restart container)
     - ui_view                    # Provides a full dedicated page in the Web GUI
     - ui_widget                  # Optional: Provides one or more modular dashboard grid widgets
+    - settings                   # Optional: Registers customizable configuration sections in Settings page
     - websocket_stream           # Emits streaming logs or live event feeds
 
   # 3. Dynamic Web GUI Mounting (if ui_view enabled)
@@ -110,6 +111,28 @@ spec:
       title: "Containers"
       size: [2, 1]               # [colSpan (1..4), rowSpan (1..3)] on 4-column responsive grid
       type: "card"               # "card" (data-driven/native) or "embed" (micro-frontend)
+
+  # 5. Dynamic Configuration Settings (Optional: if settings enabled)
+  settings:
+    - id: "docker_config"
+      title: "Docker Host Engine"
+      description: "Docker daemon socket path, polling cadence, and log viewing preferences"
+      fields:
+        - key: "docker_host"
+          label: "Docker Host Endpoint"
+          type: "text"
+          default: "unix:///var/run/docker.sock"
+          description: "UNIX domain socket or remote HTTP URL for Docker daemon communication"
+        - key: "log_tail"
+          label: "Default Log Tail Lines"
+          type: "number"
+          default: 100
+          description: "Number of log lines to query when inspecting container logs"
+        - key: "show_all"
+          label: "Show Stopped Containers"
+          type: "boolean"
+          default: true
+          description: "Include exited, created, and paused containers in fleet listings"
 
   # 5. IPC & Communication
   rpc:
@@ -169,9 +192,27 @@ Just as with sidebar pages, **dashboard widgets are strictly owned by their resp
    - When a plugin provides summary telemetry or fleet controls (such as `m3tal-docker` providing the `docker-fleet` container overview), it declares the `ui_widget` capability and its `widgets:` metadata in `plugin.yaml`.
    - **Some plugins will need a widget, but NOT all plugins will need one.** Headless utilities, background daemons, or single-purpose tools should omit `ui_widget` and `widgets:`.
 3. **Dynamic Dashboard Grid Mounting**:
-   - On load, M3TAL Core GUI dynamically mounts declared plugin widgets via `<PluginWidgetSlot />` into the 4-column responsive grid.
-   - Operators can freely move, customize, hide, or restore plugin widgets using the dashboard edit mode.
-   - If a plugin is uninstalled or disabled, its widget is removed cleanly from the dashboard with zero core leftovers.
+### 4.4. Dynamic Settings Registration Model
+M3TAL Core provides a dedicated, full-screen **Settings page** (`/settings`) accessible from the primary navigation:
+1. **Core Preferences**:
+   - **General & Appearance**: Node display name, telemetry polling interval (1–60s), UI theme, and factory dashboard grid reset.
+   - **Connection & Security**: Core API host, active API authentication token (with 1-click copy & visibility toggle), and live WebSocket gateway status.
+   - **Host Maintenance**: Host diagnostics (`runDoctor`), Docker image prune, host temp cleanup, and system reconciliation.
+2. **Plugin Settings Registration (`settings` capability)**:
+   - When a plugin requires user configuration (e.g. socket paths, log tail limits, API keys, feature toggles), it declares `capabilities: ["settings"]` and provides one or more settings sections in `plugin.yaml` under `spec.settings` or via `m3tal.init`.
+   - Each section defines:
+     - `id`: Unique section slug.
+     - `title`: Display title on the Settings page.
+     - `description`: Explanatory text for the configuration group.
+     - `fields`: Array of typed field definitions supporting:
+       - `text`: Plain text string input.
+       - `password`: Masked input with reveal eye toggle.
+       - `number`: Numeric input with min/max bounds.
+       - `boolean`: Accessible toggle switch.
+       - `select`: Dropdown selection with label/value options.
+3. **Storage & Live Dispatch**:
+   - Plugin configurations are persisted by Core under `~/.config/m3tal/plugins/<plugin>/config.json`.
+   - When settings are updated in the GUI, Core saves the configuration file and immediately dispatches an IPC action (`m3tal.action` with `action_id: "set_settings"`, `args: { config: {...} }`) to running plugin daemons so updates take effect live without restarting the process.
 
 ---
 
