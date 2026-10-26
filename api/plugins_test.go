@@ -201,8 +201,13 @@ func TestGetPluginCatalog(t *testing.T) {
 			if item.ProcessName != "m3tal-docker" {
 				t.Errorf("expected processName m3tal-docker, got %s", item.ProcessName)
 			}
-			if item.Version != "0.5.1" && item.Version != "0.2.2" && item.Version != "0.1.0" {
-				t.Errorf("expected version 0.5.1, 0.2.2, or 0.1.0, got %s", item.Version)
+			if item.Version != "0.6.0" && item.Version != "0.5.1" && item.Version != "0.2.2" && item.Version != "0.1.0" {
+				t.Errorf("expected version 0.6.0, 0.5.1, 0.2.2, or 0.1.0, got %s", item.Version)
+			}
+		}
+		if item.Name == "mesh" {
+			if len(item.Modes) != 3 {
+				t.Errorf("expected 3 modes for mesh, got %d", len(item.Modes))
 			}
 		}
 	}

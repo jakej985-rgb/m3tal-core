@@ -211,8 +211,10 @@ func (h *PluginHandlers) ListTabs(w http.ResponseWriter, r *http.Request) {
 type CatalogModeDTO struct {
 	ID          string `json:"id"`
 	Label       string `json:"label"`
+	SubLabel    string `json:"sub_label,omitempty"`
 	Description string `json:"description"`
 	PackageName string `json:"package_name"`
+	DebFilename string `json:"deb_filename,omitempty"`
 	AptCommand  string `json:"apt_command"`
 	ProcessName string `json:"process_name,omitempty"`
 }
@@ -256,10 +258,10 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Container Management",
 		Description:  "Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view", "ui_widget", "settings"},
-		Version:      "0.5.1",
+		Version:      "0.6.0",
 		Status:       "available",
 		HasDeb:       true,
-		DebFilename:  "m3tal-plugin-docker-monitor_0.5.1_amd64.deb",
+		DebFilename:  "m3tal-plugin-docker-monitor_0.6.0_amd64.deb",
 		AptCommand:   "sudo apt install -y m3tal-plugin-docker-monitor",
 	},
 	{
@@ -291,8 +293,18 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		AptCommand:   "sudo apt install -y m3tal-plugin-mesh-cluster",
 		Modes: []CatalogModeDTO{
 			{
+				ID:          "cluster",
+				Label:       "Cluster",
+				SubLabel:    "Full Peer",
+				Description: "Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.",
+				PackageName: "m3tal-plugin-mesh-cluster",
+				AptCommand:  "sudo apt install -y m3tal-plugin-mesh-cluster",
+				ProcessName: "m3tal-mesh",
+			},
+			{
 				ID:          "mesh",
-				Label:       "Viewer (Mesh)",
+				Label:       "Mesh",
+				SubLabel:    "Viewer",
 				Description: "Reader & dashboard UI. Scans LAN to view and monitor other connected M3TAL nodes from your desktop.",
 				PackageName: "m3tal-plugin-mesh",
 				AptCommand:  "sudo apt install -y m3tal-plugin-mesh",
@@ -300,19 +312,12 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 			},
 			{
 				ID:          "node",
-				Label:       "Node (Sender)",
+				Label:       "Node",
+				SubLabel:    "Sender",
 				Description: "Headless sender daemon. Broadcasts CPU, GPU, and disk metrics without running a GUI. Ideal for servers & NAS.",
 				PackageName: "m3tal-plugin-mesh-node",
 				AptCommand:  "sudo apt install -y m3tal-plugin-mesh-node",
 				ProcessName: "m3tal-mesh-node",
-			},
-			{
-				ID:          "cluster",
-				Label:       "Cluster (Full)",
-				Description: "Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.",
-				PackageName: "m3tal-plugin-mesh-cluster",
-				AptCommand:  "sudo apt install -y m3tal-plugin-mesh-cluster",
-				ProcessName: "m3tal-mesh",
 			},
 		},
 	},
@@ -613,6 +618,16 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 			entry.DownloadURL = fmt.Sprintf("/api/v2/plugins/%s/download", entry.Name)
 			if entry.Status != "installed" {
 				entry.Status = "available"
+			}
+		}
+
+		// Fall back to default modes if dynamic catalog entry omitted them
+		if len(entry.Modes) == 0 {
+			for _, def := range defaultCatalogEntries {
+				if (def.Name == entry.Name || def.ProcessName == entry.ProcessName) && len(def.Modes) > 0 {
+					entry.Modes = def.Modes
+					break
+				}
 			}
 		}
 

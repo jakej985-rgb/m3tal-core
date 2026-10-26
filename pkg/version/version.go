@@ -7,7 +7,7 @@ import (
 )
 
 // Current is the default embedded fallback version for M3TAL Core.
-var Current = "0.19.0"
+var Current = "0.19.1"
 
 // VersionInfo represents canonical version metadata.
 type VersionInfo struct {

@@ -4,6 +4,24 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.19.1] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.19.1 enhances the plugin management ecosystem and runtime lifecycle, introducing seamless 1-click plugin updates with graceful termination and automatic restarts, multi-mode plugin variant selection for `m3tal-mesh`, and catalog synchronization for `docker-monitor` at v0.6.0.
+
+### 🚀 Enhancements & Packaging
+- **Docker Monitor Catalog Sync**:
+  - Synchronized default catalog entry and fallback for `docker-monitor` to v0.6.0 (matching the active APT repository package release) ensuring accurate "Up to Date" status reporting.
+- **Mesh Multi-Mode Selection**:
+  - Added explicit mode selection (`cluster` for Full Peer, `mesh` for Viewer, `node` for Headless Sender) across API catalog and GUI with custom sub-labels, descriptions, and dynamic install/download routing.
+
+### 🐛 Bug Fixes & Stability
+- **fix(plugins): implement clean plugin update lifecycle with automatic restart and zero host downtime** (`23f62a1b`):
+  - *What Changed*: Gracefully stops plugin subprocess before dpkg extraction to prevent ETXTBSY binary lock and stale code execution; automatically restarts running plugins with the newly installed version after package installation and manifest re-discovery; ensures zero host downtime for host telemetry, WebSocket streams, and independent plugins during upgrades.
+  - *Why*: Eliminates binary lock errors during live package upgrades and ensures uninterrupted service.
+
+---
+
 ## [0.19.0] - 2026-10-26
 
 ### Overview & Release Highlights

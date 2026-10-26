@@ -46,10 +46,10 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Container Management',
     description: 'Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.',
     capabilities: ['collector', 'actions', 'ui_view', 'ui_widget', 'settings', 'websocket_stream'],
-    version: '0.5.1',
+    version: '0.6.0',
     status: 'available',
     has_deb: true,
-    deb_filename: 'm3tal-plugin-docker-monitor_0.5.1_amd64.deb',
+    deb_filename: 'm3tal-plugin-docker-monitor_0.6.0_amd64.deb',
     apt_command: 'sudo apt install -y m3tal-plugin-docker-monitor',
   },
   {
@@ -81,28 +81,34 @@ const FALLBACK_PLANNED_PLUGINS = [
     apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
     modes: [
       {
+        id: 'cluster',
+        label: 'Cluster',
+        subLabel: 'Full Peer',
+        description: 'Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.',
+        package_name: 'm3tal-plugin-mesh-cluster',
+        deb_filename: 'm3tal-plugin-mesh-cluster_0.1.0_amd64.deb',
+        apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
+        process_name: 'm3tal-mesh',
+      },
+      {
         id: 'mesh',
-        label: 'Viewer (Mesh)',
+        label: 'Mesh',
+        subLabel: 'Viewer',
         description: 'Reader & dashboard UI. Scans LAN to view and monitor other connected M3TAL nodes from your desktop.',
         package_name: 'm3tal-plugin-mesh',
+        deb_filename: 'm3tal-plugin-mesh_0.1.0_amd64.deb',
         apt_command: 'sudo apt install -y m3tal-plugin-mesh',
         process_name: 'm3tal-mesh',
       },
       {
         id: 'node',
-        label: 'Node (Sender)',
+        label: 'Node',
+        subLabel: 'Sender',
         description: 'Headless sender daemon. Broadcasts CPU, GPU, and disk metrics without running a GUI. Ideal for servers & NAS.',
         package_name: 'm3tal-plugin-mesh-node',
+        deb_filename: 'm3tal-plugin-mesh-node_0.1.0_amd64.deb',
         apt_command: 'sudo apt install -y m3tal-plugin-mesh-node',
         process_name: 'm3tal-mesh-node',
-      },
-      {
-        id: 'cluster',
-        label: 'Cluster (Full)',
-        description: 'Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.',
-        package_name: 'm3tal-plugin-mesh-cluster',
-        apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
-        process_name: 'm3tal-mesh',
       },
     ],
   },
@@ -738,14 +744,15 @@ export default function Plugins() {
                               <button
                                 key={m.id}
                                 onClick={() => setSelectedModes((prev) => ({ ...prev, [item.name]: m.id }))}
-                                className={`px-2 py-1.5 text-xs font-semibold rounded-md transition-all text-center truncate ${
+                                className={`px-2 py-2 text-xs font-bold rounded-lg transition-all text-center flex flex-col items-center justify-center ${
                                   isSelected
-                                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-950'
+                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/60 ring-1 ring-emerald-400'
                                     : 'text-slate-400 hover:text-white hover:bg-[#21262d]'
                                 }`}
                                 title={m.description}
                               >
-                                {m.label}
+                                <span className="text-xs">{m.label}</span>
+                                {m.subLabel && <span className="text-[10px] font-normal opacity-75">({m.subLabel})</span>}
                               </button>
                             );
                           })}
@@ -811,8 +818,8 @@ export default function Plugins() {
                       {/* Download Button */}
                       {hasDeb && (
                         <a
-                          href={downloadUrl}
-                          download={item.deb_filename || `m3tal-plugin-${item.name}.deb`}
+                          href={activeMode ? api.getPluginDownloadUrl(activeMode.id) : downloadUrl}
+                          download={activeMode?.deb_filename || item.deb_filename || `m3tal-plugin-${activeMode?.id || item.name}.deb`}
                           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-cyan-900/60 transition-colors flex items-center gap-1.5"
                           title="Download official Debian (.deb) package"
                         >
@@ -843,11 +850,16 @@ export default function Plugins() {
                         </div>
                       ) : hasDeb ? (
                         <button
-                          onClick={() => openInstallModal(item)}
+                          onClick={() => openInstallModal({
+                            ...item,
+                            name: activeMode?.id || item.name,
+                            title: activeMode ? `${item.title || item.name} (${activeMode.label})` : (item.title || item.name),
+                            deb_filename: activeMode?.deb_filename || item.deb_filename,
+                          })}
                           className="px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all flex items-center gap-1.5"
                         >
                           <IconDownload className="w-3.5 h-3.5 text-white" />
-                          <span>Install Plugin</span>
+                          <span>Install {activeMode?.label || 'Plugin'}</span>
                         </button>
                       ) : (
                         <span className="text-xs text-slate-500 italic">In Development</span>
