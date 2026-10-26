@@ -21,6 +21,7 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/system"
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
 	syspaths "github.com/jakej985-rgb/m3tal-core/pkg/system"
+	"github.com/jakej985-rgb/m3tal-core/pkg/version"
 )
 
 // Server handles API requests
@@ -46,6 +47,11 @@ func (s *Server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// GetVersion returns canonical M3TAL Core version metadata.
+func (s *Server) GetVersion(w http.ResponseWriter, r *http.Request) {
+	sendSuccess(w, http.StatusOK, version.GetInfo(), nil)
 }
 
 // GetHealth returns system health status

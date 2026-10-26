@@ -18,6 +18,7 @@ export default function App() {
   const [activeSubTabs, setActiveSubTabs] = useState({});
   const [tokenInput] = useState(getToken());
   const [pluginTabs, setPluginTabs] = useState([]);
+  const [coreVersion, setCoreVersion] = useState('v0.18.0');
 
   // Fetch dynamic tabs registered by running external plugins
   const fetchPluginTabs = async () => {
@@ -34,7 +35,19 @@ export default function App() {
     }
   };
 
+  const fetchCoreVersion = async () => {
+    try {
+      const res = await api.getVersion();
+      if (res?.status === 'success' && res.data) {
+        setCoreVersion(res.data.display || `v${res.data.version}`);
+      }
+    } catch {
+      // Fallback stays v0.18.0
+    }
+  };
+
   useEffect(() => {
+    fetchCoreVersion();
     fetchPluginTabs();
     const interval = setInterval(fetchPluginTabs, 15000);
     return () => clearInterval(interval);
@@ -165,8 +178,8 @@ export default function App() {
             <span className="text-xl font-extrabold tracking-wider bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
               M3TAL CORE
             </span>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-              v2.0
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700 font-mono">
+              {coreVersion}
             </span>
           </div>
 

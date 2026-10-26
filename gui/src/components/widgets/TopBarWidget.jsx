@@ -22,6 +22,7 @@ export default function TopBarWidget({
   error,
   isEditMode = false,
   onToggleEditMode,
+  coreVersion = 'v0.18.0',
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -206,9 +207,9 @@ export default function TopBarWidget({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">API Control Plane</span>
-                <span className="text-emerald-400 font-medium flex items-center gap-1.5">
+                <span className="text-emerald-400 font-medium flex items-center gap-1.5 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Online (v2.0)
+                  Online ({coreVersion})
                 </span>
               </div>
               <div>

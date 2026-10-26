@@ -46,10 +46,18 @@ contents:
   - src: ./gui/dist
     dst: /usr/share/m3tal/gui
 
-  # Configuration Templates
+  # Configuration Templates & Version Files
   - src: ./.env.example
     dst: /etc/m3tal/.env.example
     type: "config"
+
+  - src: ./VERSION
+    dst: /etc/m3tal/VERSION
+    type: "config"
+
+  - src: ./VERSION
+    dst: /usr/share/m3tal/VERSION
+    type: "file"
 
   # Systemd Services
   - src: ./packaging/m3tal-api.service

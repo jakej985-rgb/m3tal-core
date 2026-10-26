@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { IconSystemMonitor, IconRefresh } from '../components/Icons';
 
@@ -8,7 +8,6 @@ export default function SystemMonitor() {
   const [specs, setSpecs] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState('cpu_percent');
   const [sortAsc, setSortAsc] = useState(false);
@@ -54,7 +53,6 @@ export default function SystemMonitor() {
     } catch (err) {
       console.error('SystemMonitor fetch error:', err);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -123,11 +121,6 @@ export default function SystemMonitor() {
     return `${bytes} B`;
   };
 
-  const formatCap = (gb) => {
-    if (!gb && gb !== 0) return '0 GB';
-    if (gb >= 1000) return `${(gb / 1024).toFixed(1)} TB`;
-    return `${gb.toFixed(1)} GB`;
-  };
 
   const getUsageColor = (val) => {
     if (val >= 85) return 'bg-rose-500';

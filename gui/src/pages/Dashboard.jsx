@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
   const [pluginWidgets, setPluginWidgets] = useState([]);
+  const [coreVersion, setCoreVersion] = useState('v0.18.0');
 
   // Quick action and modal states
   const [isDoctorOpen, setIsDoctorOpen] = useState(false);
@@ -168,7 +169,17 @@ export default function Dashboard() {
       setHealth(resHealth.data);
     }
 
-    // 4. Fetch dynamic plugin widgets if available
+    // 4. Fetch core version
+    try {
+      const resVer = await api.getVersion();
+      if (resVer?.status === 'success' && resVer.data) {
+        setCoreVersion(resVer.data.display || `v${resVer.data.version}`);
+      }
+    } catch {
+      // Fallback stays v0.18.0
+    }
+
+    // 5. Fetch dynamic plugin widgets if available
     try {
       const resPlugins = await api.getPlugins();
       if (resPlugins?.status === 'success' && Array.isArray(resPlugins.data)) {
@@ -317,6 +328,7 @@ export default function Dashboard() {
         error={error}
         isEditMode={isEditMode}
         onToggleEditMode={() => setIsEditMode((prev) => !prev)}
+        coreVersion={coreVersion}
       />
 
       {/* Edit Mode Customization Banner */}

@@ -18,6 +18,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION_PATH = os.path.join(ROOT_DIR, "VERSION")
 CHANGELOG_PATH = os.path.join(ROOT_DIR, "CHANGELOG.md")
 GUI_PACKAGE_PATH = os.path.join(ROOT_DIR, "gui", "package.json")
+GO_VERSION_PATH = os.path.join(ROOT_DIR, "pkg", "version", "version.go")
 
 
 def run_git(args):
@@ -173,6 +174,21 @@ def update_gui_package_json(new_semver):
         return False
 
 
+def update_go_version(new_semver):
+    if not os.path.exists(GO_VERSION_PATH):
+        return False
+    try:
+        clean_v = new_semver.lstrip("v")
+        with open(GO_VERSION_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+        content = re.sub(r'(var|const)\s+Current\s*=\s*"[^"]+"', f'var Current = "{clean_v}"', content)
+        with open(GO_VERSION_PATH, "w", encoding="utf-8") as f:
+            f.write(content)
+        return True
+    except Exception:
+        return False
+
+
 def determine_bump_level(commits):
     has_breaking = False
     has_minor = False
@@ -303,6 +319,7 @@ def main():
         print(f"Updating VERSION to v{target_semver}...")
         update_version_file(target_semver)
         update_gui_package_json(target_semver)
+        update_go_version(target_semver)
         print(f"Successfully applied version {target_semver} across M3tal-core project files.")
 
     if args.output:

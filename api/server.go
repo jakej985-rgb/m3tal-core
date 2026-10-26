@@ -221,6 +221,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	})
 	r.Get("/plugins/{name}/*", servePluginUI)
 
+	// Public Core Version Endpoints
+	r.Get("/version", srv.GetVersion)
+	r.Get("/api/v2/version", srv.GetVersion)
+
 	// ─── v1 Legacy Endpoints (backward compatible) ───
 	r.Group(func(r chi.Router) {
 		r.Use(srv.chiAuthMiddleware)
@@ -327,6 +331,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Get("/system/processes", srv.GetProcesses)
 			r.Post("/system/processes/{pid}/kill", srv.KillProcess)
 			r.Get("/system/specs", srv.GetSystemSpecs)
+			r.Get("/version", srv.GetVersion)
 			r.Get("/tray/stats", srv.GetTrayStats)
 			r.Get("/tray/containers", srv.GetTrayContainers)
 			r.Get("/system/doctor", srv.GetDoctor)

@@ -4,6 +4,36 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.19.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.19.0 introduces the **Dynamic Core Version System** and the **Smart Versioning Engine** for M3TAL Core and the Plugin Manager. It eliminates all hardcoded version labels across the platform, exposes canonical version endpoints, powers intelligent SemVer evaluation for external plugins with capability diff inspection, and enables 1-click plugin upgrades directly from the GUI.
+
+### 🚀 New Features & Capabilities
+- **Dynamic Core Version System**:
+  - Implemented `pkg/version` package providing `GetVersion()` and `GetInfo()` with multi-tiered resolution: `/etc/m3tal/VERSION`, working directory paths, executable directory lookup, and fallback default.
+  - Added public `/version` and `/api/v2/version` REST endpoints returning structured version metadata (`version`, `display`, `api_version`, `codename`).
+  - Dynamic Web GUI integration in `gui/src/App.jsx`, `TopBarWidget.jsx`, and `Dashboard.jsx`, displaying live versioning (`v0.19.0`) and eliminating obsolete `v2.0` labels.
+  - CLI version resolution in `cli/main.go` hooked directly into `pkg/version`.
+- **Smart Versioning Engine for Plugins**:
+  - Added `CompareSemVer` in `api/plugins.go` and SemVer evaluation in `GetPluginCatalog` to calculate `update_status` (`up_to_date`, `update_available`, `dev_ahead`), `update_type` (`patch`, `minor`, `major`, `dev`), and `capabilities_diff`.
+  - Enriched Plugin Manager GUI (`gui/src/pages/Plugins.jsx`) with dynamic status badges, transition indicators (`vInstalled → vCatalog`), and capability diff tags highlighting new capabilities introduced in updated releases.
+  - Upgraded Plugin Install Modal to support 1-click plugin upgrades with version transition details and customized action styling.
+
+### 🏗️ Architecture & Core System Primitives
+- **Debian Packaging & Systemd Integration**:
+  - Staged `/etc/m3tal/VERSION` and `/usr/share/m3tal/VERSION` across Debian package generation (`scripts/build-deb.sh` and `packaging/nfpm.yaml`).
+  - Automated version bump synchronization across `VERSION`, `gui/package.json`, `pkg/version/version.go`, and `CHANGELOG.md`.
+
+### 🛡️ Governance & Agent Systems
+- Added `plugin-widget-builder` governance agent and updated `plugin-director` orchestration flow for dashboard widget micro-frontends.
+
+### 🧪 Tests & Quality Assurance
+- Added unit tests in `api/version_test.go` and `pkg/version/version_test.go`.
+- Added SemVer comparison tests in `api/plugins_test.go` (`TestCompareSemVer`).
+
+---
+
 ## [0.18.0] - 2026-10-26
 
 ### Overview & Release Highlights

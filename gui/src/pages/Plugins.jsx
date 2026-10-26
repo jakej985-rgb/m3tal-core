@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import {
   IconPlugins,
@@ -13,6 +13,30 @@ import {
   IconRefresh,
 } from '../components/Icons';
 
+function parseSemVer(v) {
+  if (!v) return [0, 0, 0];
+  const clean = String(v).replace(/^v/, '').split('-')[0].split('+')[0];
+  const parts = clean.split('.').map((p) => parseInt(p, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  return parts.slice(0, 3);
+}
+
+function compareSemVer(v1, v2) {
+  const [maj1, min1, pat1] = parseSemVer(v1);
+  const [maj2, min2, pat2] = parseSemVer(v2);
+
+  if (maj1 > maj2) return { cmp: 1, type: 'dev' };
+  if (maj1 < maj2) return { cmp: -1, type: 'major' };
+
+  if (min1 > min2) return { cmp: 1, type: 'dev' };
+  if (min1 < min2) return { cmp: -1, type: 'minor' };
+
+  if (pat1 > pat2) return { cmp: 1, type: 'dev' };
+  if (pat1 < pat2) return { cmp: -1, type: 'patch' };
+
+  return { cmp: 0, type: 'equal' };
+}
+
 const FALLBACK_PLANNED_PLUGINS = [
   {
     name: 'docker-monitor',
@@ -21,11 +45,11 @@ const FALLBACK_PLANNED_PLUGINS = [
     package_name: 'm3tal-plugin-docker-monitor',
     category: 'Container Management',
     description: 'Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.',
-    capabilities: ['collector', 'actions', 'ui_view', 'websocket_stream'],
-    version: '0.2.2',
+    capabilities: ['collector', 'actions', 'ui_view', 'ui_widget', 'settings', 'websocket_stream'],
+    version: '0.5.1',
     status: 'available',
     has_deb: true,
-    deb_filename: 'm3tal-plugin-docker-monitor_0.2.2_amd64.deb',
+    deb_filename: 'm3tal-plugin-docker-monitor_0.5.1_amd64.deb',
     apt_command: 'sudo apt install -y m3tal-plugin-docker-monitor',
   },
   {
@@ -35,11 +59,11 @@ const FALLBACK_PLANNED_PLUGINS = [
     package_name: 'm3tal-plugin-compose',
     category: 'Container Management',
     description: 'Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.',
-    capabilities: ['collector', 'actions', 'ui_view'],
-    version: '0.1.0',
+    capabilities: ['collector', 'actions', 'ui_view', 'ui_widget', 'settings'],
+    version: '0.3.0',
     status: 'available',
     has_deb: true,
-    deb_filename: 'm3tal-plugin-compose_0.1.0_amd64.deb',
+    deb_filename: 'm3tal-plugin-compose_0.3.0_amd64.deb',
     apt_command: 'sudo apt install -y m3tal-plugin-compose',
   },
   {
@@ -299,7 +323,9 @@ export default function Plugins() {
       });
 
       if (res?.status === 'success') {
-        setSuccess(`Plugin "${installTarget.title || installTarget.name}" installed successfully via ${installMethod}!`);
+        const actionVerb = installTarget.isUpdate ? 'updated' : 'installed';
+        const versionSuffix = installTarget.version ? ` to v${installTarget.version}` : '';
+        setSuccess(`Plugin "${installTarget.title || installTarget.name}" ${actionVerb} successfully${versionSuffix} via ${installMethod}!`);
         closeInstallModal();
         await reloadAll();
       } else {
@@ -472,13 +498,18 @@ export default function Plugins() {
                   const caps = p.capabilities || p.Capabilities || manifest.spec?.capabilities || [];
                   const procName = meta.name ? (meta.name.startsWith('m3tal-') ? meta.name : `m3tal-${meta.name}`) : 'm3tal-plugin';
 
-                  // Match catalog entry for changelog
+                  // Match catalog entry for changelog and updates
                   const catalogItem = catalog.find((c) => {
                     const cName = c.name || '';
                     const cleanC = cName.replace(/^m3tal-/, '');
                     const cleanP = name.replace(/^m3tal-/, '');
                     return cName === name || cleanC === cleanP;
                   });
+
+                  const semverComp = (catalogItem && catalogItem.version) ? compareSemVer(version, catalogItem.version) : null;
+                  const hasUpdate = semverComp && semverComp.cmp === -1;
+                  const isDevAhead = semverComp && semverComp.cmp === 1;
+                  const isUpToDate = semverComp && semverComp.cmp === 0;
 
                   return (
                     <div key={name} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#21262d]/40 transition-colors">
@@ -487,6 +518,22 @@ export default function Plugins() {
                           <span className="font-bold text-white text-base">{meta.title || name}</span>
                           <span className="text-xs text-slate-400 font-mono">v{version}</span>
                           {getStateBadge(state)}
+                          {hasUpdate && (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-950/80 text-amber-300 border border-amber-700/80 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                              Update available: v{catalogItem.version} ({semverComp.type})
+                            </span>
+                          )}
+                          {isUpToDate && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
+                              ✓ Up to date
+                            </span>
+                          )}
+                          {isDevAhead && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950/40 text-blue-400 border border-blue-800/60">
+                              Dev build (ahead of catalog)
+                            </span>
+                          )}
                           <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded">
                             proc: {procName}
                           </span>
@@ -507,6 +554,15 @@ export default function Plugins() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
+                        {hasUpdate && (
+                          <button
+                            onClick={() => openInstallModal({ ...catalogItem, isUpdate: true, installedVersion: version })}
+                            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition-all flex items-center gap-1.5"
+                          >
+                            <span>⚡ Update to v{catalogItem.version}</span>
+                          </button>
+                        )}
+
                         {catalogItem && (
                           <button
                             onClick={() => setSelectedChangelog(catalogItem)}
@@ -573,7 +629,7 @@ export default function Plugins() {
               const effectiveProcName = activeMode?.process_name || item.process_name || item.processName;
               const effectiveAptCommand = activeMode?.apt_command || item.apt_command;
 
-              const isInstalled = item.status === 'installed' || plugins.some((p) => {
+              const matchingPlugin = plugins.find((p) => {
                 const pName = p.manifest?.metadata?.name || p.name || '';
                 const cleanP = pName.replace(/^m3tal-/, '');
                 return (
@@ -584,6 +640,13 @@ export default function Plugins() {
                 );
               });
 
+              const isInstalled = item.status === 'installed' || Boolean(matchingPlugin);
+              const installedVersion = matchingPlugin?.manifest?.metadata?.version || matchingPlugin?.version || item.installed_version;
+
+              const semver = (isInstalled && installedVersion && item.version) ? compareSemVer(installedVersion, item.version) : null;
+              const hasUpdate = semver && semver.cmp === -1;
+              const isDevAhead = semver && semver.cmp === 1;
+
               const hasDeb = Boolean(item.has_deb || item.deb_filename || item.name === 'docker-monitor' || item.name === 'compose');
               const downloadUrl = api.getPluginDownloadUrl(item.name);
 
@@ -593,11 +656,23 @@ export default function Plugins() {
                     {/* Header */}
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-base font-bold text-white">{item.title || item.name}</h3>
-                          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                            v{item.version || '0.1.0'}
-                          </span>
+                          {isInstalled && hasUpdate ? (
+                            <span className="flex items-center gap-1.5 text-xs font-mono font-semibold px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-700/80">
+                              <span>v{installedVersion}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="text-emerald-400 font-bold">v{item.version}</span>
+                            </span>
+                          ) : isInstalled && isDevAhead ? (
+                            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-700">
+                              v{installedVersion} (dev)
+                            </span>
+                          ) : (
+                            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                              v{isInstalled ? (installedVersion || item.version) : (item.version || '0.1.0')}
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] font-mono text-cyan-400">proc: {effectiveProcName}</span>
                       </div>
@@ -607,10 +682,22 @@ export default function Plugins() {
                           {item.category}
                         </span>
                         {isInstalled ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            Installed
-                          </span>
+                          hasUpdate ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-300 bg-amber-950/70 border border-amber-600 px-2.5 py-0.5 rounded-full animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                              Update Available ({semver.type.toUpperCase()})
+                            </span>
+                          ) : isDevAhead ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-300 bg-blue-950/60 border border-blue-700 px-2.5 py-0.5 rounded-full">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                              Dev Build (Ahead)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-full">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                              v{installedVersion || item.version} • Up to Date
+                            </span>
+                          )
                         ) : hasDeb ? (
                           <span className="text-[11px] font-bold text-cyan-300 bg-cyan-950/60 border border-cyan-800 px-2.5 py-0.5 rounded-full">
                             Available in APT / DEB
@@ -625,6 +712,20 @@ export default function Plugins() {
 
                     {/* Description */}
                     <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
+
+                    {/* Update Capability Diff Notice */}
+                    {isInstalled && hasUpdate && (item.capabilities_diff?.length > 0) && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-950/30 border border-amber-800/40 text-xs text-amber-200">
+                        <span className="font-semibold text-amber-300">New in v{item.version}:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {item.capabilities_diff.map((c) => (
+                            <span key={c} className="px-1.5 py-0.5 rounded bg-amber-900/60 border border-amber-700/60 font-mono text-[10px] text-amber-100">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Mode Selector for Multi-Target Plugins (e.g. Mesh / Node / Cluster) */}
                     {item.modes && item.modes.length > 0 && (
@@ -725,6 +826,14 @@ export default function Plugins() {
                     <div>
                       {isInstalled ? (
                         <div className="flex items-center gap-2">
+                          {hasUpdate && (
+                            <button
+                              onClick={() => openInstallModal({ ...item, isUpdate: true, installedVersion })}
+                              className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition-all flex items-center gap-1.5"
+                            >
+                              <span>⚡ Update to v{item.version}</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => setActiveTab('installed')}
                             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-800 hover:bg-emerald-900 transition-colors"
@@ -762,9 +871,21 @@ export default function Plugins() {
                   <IconLock className="w-6 h-6 text-emerald-400" />
                 </span>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Confirm Plugin Installation</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {installTarget.isUpdate ? 'Confirm Plugin Update' : 'Confirm Plugin Installation'}
+                  </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Installing <span className="text-white font-semibold">{installTarget.title || installTarget.name}</span> (v{installTarget.version || '0.1.0'})
+                    {installTarget.isUpdate ? (
+                      <>
+                        Updating <span className="text-white font-semibold">{installTarget.title || installTarget.name}</span> from{' '}
+                        <span className="font-mono text-slate-300 font-semibold">v{installTarget.installedVersion || '0.1.0'}</span> to{' '}
+                        <span className="font-mono text-emerald-400 font-bold">v{installTarget.version}</span>
+                      </>
+                    ) : (
+                      <>
+                        Installing <span className="text-white font-semibold">{installTarget.title || installTarget.name}</span> (v{installTarget.version || '0.1.0'})
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -895,17 +1016,19 @@ export default function Plugins() {
                 className={`px-5 py-2 text-xs font-bold rounded-lg text-white shadow-md transition-all flex items-center gap-2 ${
                   installLoading || (installMethod === 'sudo' && !sudoPassword)
                     ? 'bg-slate-700 cursor-not-allowed opacity-60'
-                    : 'bg-emerald-600 hover:bg-emerald-500'
+                    : installTarget.isUpdate
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'
+                      : 'bg-emerald-600 hover:bg-emerald-500'
                 }`}
               >
                 {installLoading ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    <span>Installing Package...</span>
+                    <span>{installTarget.isUpdate ? 'Updating Package...' : 'Installing Package...'}</span>
                   </>
                 ) : (
                   <>
-                    <span>Confirm & Install</span>
+                    <span>{installTarget.isUpdate ? 'Confirm & Update' : 'Confirm & Install'}</span>
                   </>
                 )}
               </button>

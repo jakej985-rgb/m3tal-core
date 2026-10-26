@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -226,6 +227,9 @@ type CatalogPluginDTO struct {
 	Status           string               `json:"status"` // "available", "installed", "planned"
 	Version          string               `json:"version"`
 	InstalledVersion string               `json:"installed_version,omitempty"`
+	UpdateStatus     string               `json:"update_status,omitempty"`     // "up_to_date", "update_available", "dev_ahead", "not_installed"
+	UpdateType       string               `json:"update_type,omitempty"`       // "patch", "minor", "major", "dev", "equal"
+	CapabilitiesDiff []string             `json:"capabilities_diff,omitempty"` // newly added capabilities in catalog version
 	HasDeb           bool                 `json:"has_deb"`
 	DebFilename      string               `json:"deb_filename,omitempty"`
 	DownloadURL      string               `json:"download_url,omitempty"`
@@ -249,9 +253,11 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		PackageName:  "m3tal-plugin-docker-monitor",
 		Category:     "Container Management",
 		Description:  "Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.",
-		Capabilities: []plugins.Capability{"collector", "actions", "ui_view", "websocket_stream"},
-		Version:      "0.2.2",
+		Capabilities: []plugins.Capability{"collector", "actions", "ui_view", "ui_widget", "settings"},
+		Version:      "0.5.1",
 		Status:       "available",
+		HasDeb:       true,
+		DebFilename:  "m3tal-plugin-docker-monitor_0.5.1_amd64.deb",
 		AptCommand:   "sudo apt install -y m3tal-plugin-docker-monitor",
 	},
 	{
@@ -262,8 +268,10 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Container Management",
 		Description:  "Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view"},
-		Version:      "0.1.0",
+		Version:      "0.3.0",
 		Status:       "available",
+		HasDeb:       true,
+		DebFilename:  "m3tal-plugin-compose_0.3.0_amd64.deb",
 		AptCommand:   "sudo apt install -y m3tal-plugin-compose",
 	},
 	{
@@ -606,16 +614,44 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		var activeManifest *plugins.PluginManifest
 		clean := strings.TrimPrefix(entry.Name, "m3tal-")
 		if inst, found := installedMap[entry.Name]; found {
-			entry.Status = "installed"
-			entry.InstalledVersion = inst.Metadata.Version
+			activeManifest = &inst
 		} else if inst, found := installedMap[clean]; found {
-			entry.Status = "installed"
-			entry.InstalledVersion = inst.Metadata.Version
+			activeManifest = &inst
 		} else if inst, found := installedMap[entry.ProcessName]; found {
+			activeManifest = &inst
+		}
+
+		if activeManifest != nil {
 			entry.Status = "installed"
-			entry.InstalledVersion = inst.Metadata.Version
+			entry.InstalledVersion = activeManifest.Metadata.Version
+			cmp, diffType := CompareSemVer(entry.InstalledVersion, entry.Version)
+			if cmp == 0 {
+				entry.UpdateStatus = "up_to_date"
+				entry.UpdateType = "equal"
+			} else if cmp < 0 {
+				entry.UpdateStatus = "update_available"
+				entry.UpdateType = diffType
+			} else {
+				entry.UpdateStatus = "dev_ahead"
+				entry.UpdateType = "dev"
+			}
+
+			// Calculate capabilities diff (new capabilities in catalog version)
+			instCapsMap := make(map[string]bool)
+			for _, c := range activeManifest.Spec.Capabilities {
+				instCapsMap[string(c)] = true
+			}
+			for _, c := range entry.Capabilities {
+				if !instCapsMap[string(c)] {
+					entry.CapabilitiesDiff = append(entry.CapabilitiesDiff, string(c))
+				}
+			}
+		} else {
+			entry.UpdateStatus = "not_installed"
+			entry.UpdateType = ""
 		}
 
 		changelog := findPluginChangelog(entry.Name)
@@ -627,6 +663,56 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 	}
 
 	sendSuccess(w, http.StatusOK, results, nil)
+}
+
+// CompareSemVer compares two semantic version strings (v1 vs v2).
+// Returns:
+//
+//	 1 if v1 > v2
+//	-1 if v1 < v2
+//	 0 if v1 == v2
+//
+// And diff level: "major", "minor", "patch", or "equal".
+func CompareSemVer(v1, v2 string) (int, string) {
+	parse := func(s string) (int, int, int) {
+		s = strings.TrimPrefix(s, "v")
+		parts := strings.Split(s, ".")
+		var maj, min, pat int
+		if len(parts) > 0 {
+			maj, _ = strconv.Atoi(parts[0])
+		}
+		if len(parts) > 1 {
+			min, _ = strconv.Atoi(parts[1])
+		}
+		if len(parts) > 2 {
+			sub := strings.Split(parts[2], "-")[0]
+			pat, _ = strconv.Atoi(sub)
+		}
+		return maj, min, pat
+	}
+
+	maj1, min1, pat1 := parse(v1)
+	maj2, min2, pat2 := parse(v2)
+
+	if maj1 > maj2 {
+		return 1, "major"
+	} else if maj1 < maj2 {
+		return -1, "major"
+	}
+
+	if min1 > min2 {
+		return 1, "minor"
+	} else if min1 < min2 {
+		return -1, "minor"
+	}
+
+	if pat1 > pat2 {
+		return 1, "patch"
+	} else if pat1 < pat2 {
+		return -1, "patch"
+	}
+
+	return 0, "equal"
 }
 
 // GetPluginChangelog returns the changelog for a specific plugin.

@@ -52,6 +52,8 @@ elif command -v dpkg-deb >/dev/null 2>&1; then
 
     # Config & primary systemd service
     cp ./.env.example "$STAGE_DIR/etc/m3tal/.env.example"
+    cp ./VERSION "$STAGE_DIR/etc/m3tal/VERSION"
+    cp ./VERSION "$STAGE_DIR/usr/share/m3tal/VERSION"
     cp ./packaging/m3tal-api.service "$STAGE_DIR/lib/systemd/system/"
     cp ./packaging/m3tal.desktop "$STAGE_DIR/usr/share/applications/"
 

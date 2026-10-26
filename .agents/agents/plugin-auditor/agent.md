@@ -31,7 +31,7 @@ For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-na
 - [ ] `metadata` includes `name`, `version`, `title`, `description`, `author`, `license`, and `icon`.
 - [ ] `spec.command` is specified and points to a binary inside `bin/` or executable entrypoint.
 - [ ] `spec.process_name` is explicitly set to `m3tal-<process>` (e.g. `m3tal-docker`, `m3tal-ai`, `m3tal-smart`). Required for high-usage telemetry tracking.
-- [ ] `spec.capabilities` is a list containing only valid capabilities: `collector`, `actions`, `ui_view`, `ui_widget`, `websocket_stream`, `orchestrator`, `network_tunnel`, `alerts`.
+- [ ] `spec.capabilities` is a list containing only valid capabilities: `collector`, `actions`, `ui_view`, `ui_widget`, `websocket_stream`, `orchestrator`, `network_tunnel`, `alerts`, `settings`.
 - [ ] If `capabilities` contains `ui_widget`:
   - `spec.widgets` must be an array where each widget specifies `id`, `title`, `size: [colSpan, rowSpan]` (e.g. `[2, 1]`), and `type` (`card` or `embed`).
   - Confirm widgets are owned by this plugin (e.g. `docker-fleet` owned by `m3tal-docker`).
@@ -42,7 +42,7 @@ For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-na
 ### Gate 2: Directory Layout & Self-Containment
 - [ ] `CHANGELOG.md` exists documenting version history following Keep a Changelog & SemVer.
 - [ ] `bin/` contains the backend executable or compilation script.
-- [ ] `config/` contains `config.schema.json` defining valid plugin settings.
+- [ ] `config/` contains `config.schema.json` defining valid plugin settings (if configurable).
 - [ ] If `capabilities` contains `ui_view`:
   - `ui/dist/index.html` exists and is a valid static web entrypoint.
   - Assets in `ui/dist/` use relative paths (`./assets/...`) so they can be mounted under `/plugins/<name>/`.
@@ -52,7 +52,7 @@ For any target plugin directory (e.g. `/home/m3tal/apps/m3tal-plugins/<plugin-na
 The plugin backend must handle standard M3TAL JSON-RPC methods over `stdio` (or Unix socket):
 - [ ] `m3tal.init`: Handshake receiving `{ core_version, config }` and returning plugin metadata & status.
 - [ ] `m3tal.collect`: (If `collector` capability enabled) Responds with telemetry metrics dictionary.
-- [ ] `m3tal.action`: (If `actions` capability enabled) Dispatches requested action name with parameters.
+- [ ] `m3tal.action`: (If `actions` or `settings` capability enabled) Dispatches requested action name with parameters.
 - [ ] `m3tal.shutdown`: Handles graceful termination signal with clean resource release within 5 seconds.
 
 ### Gate 4: Security & Privilege Sandboxing
@@ -73,25 +73,26 @@ The plugin backend must handle standard M3TAL JSON-RPC methods over `stdio` (or 
 
 ## 2. Audit Execution Workflow
 
-When invoked on a target directory `$PLUGIN_DIR`:
+When invoked on a target plugin directory:
 
-1. **Locate & Read Manifest**:
+1. **Automated Auditor Execution**:
+   Run the dedicated M3TAL Plugin Auditor CLI tool:
    ```bash
-   cat "$PLUGIN_DIR/plugin.yaml"
+   ./scripts/audit-plugin.sh "$PLUGIN_DIR" --markdown
    ```
-2. **Inspect Filesystem Layout**:
+   Or for JSON analysis:
    ```bash
-   find "$PLUGIN_DIR" -maxdepth 3 -not -path '*/.*'
+   ./scripts/audit-plugin.sh "$PLUGIN_DIR" --json
    ```
-3. **Verify Process Name Convention**:
-   - Check `grep -i "process_name" "$PLUGIN_DIR/plugin.yaml"`.
-   - Ensure it matches the regex `^m3tal-[a-z0-9_-]+$`.
-4. **Inspect JSON-RPC Handlers**:
-   - Grep for `m3tal.init`, `m3tal.collect`, `m3tal.action`, `m3tal.shutdown` in the backend source code.
-5. **Verify UI Mounting Bundle**:
-   - If `ui_view` is declared, check `test -f "$PLUGIN_DIR/ui/dist/index.html"`.
-6. **Check for Embedded Maintainer Agent**:
-   - Check `test -f "$PLUGIN_DIR/.agents/agents/plugin-maintainer/agent.md"`.
+
+2. **Deeper Investigation**:
+   If the automated audit surfaces warnings, failures, or missing handlers:
+   - Inspect specific source files around reported lines.
+   - Check if `Makefile` builds clean binaries via `make build`.
+   - Inspect JSON-RPC dispatch loops in Go/Python/Shell sources.
+
+3. **Synthesize Final Audit Report**:
+   Produce the final markdown report incorporating automated scorecard findings and actionable remediation instructions.
 
 ---
 

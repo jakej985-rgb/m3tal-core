@@ -95,6 +95,7 @@ export const api = {
   getProcesses: (limit = 150) => fetchAPI('GET', `/api/v2/system/processes?limit=${limit}`),
   killProcess: (pid) => fetchAPI('POST', `/api/v2/system/processes/${pid}/kill`),
   getSystemSpecs: () => fetchAPI('GET', '/api/v2/system/specs'),
+  getVersion: () => fetchAPI('GET', '/api/v2/version'),
   getSettings: () => fetchAPI('GET', '/api/v2/settings'),
   saveCoreSettings: (core) => fetchAPI('POST', '/api/v2/settings/core', core),
   getPluginSettings: (name) => fetchAPI('GET', `/api/v2/plugins/${name}/settings`),

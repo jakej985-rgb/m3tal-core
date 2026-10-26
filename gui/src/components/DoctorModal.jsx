@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { IconDoctor, IconRefresh } from './Icons';
 
@@ -151,14 +151,13 @@ export default function DoctorModal({ isOpen, onClose }) {
             </div>
           ) : filteredResults.length === 0 ? (
             <div className="py-12 text-center text-slate-500 text-sm italic">
-              No diagnostic checks match filter "{activeFilter}".
+              No diagnostic checks match filter &quot;{activeFilter}&quot;.
             </div>
           ) : (
             filteredResults.map((r, i) => {
               const statusType = getStatusType(r.status);
               const isPass = statusType === 'pass';
               const isWarn = statusType === 'warn';
-              const isFail = statusType === 'fail';
 
               return (
                 <div

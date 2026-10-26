@@ -27,11 +27,20 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
 	"github.com/jakej985-rgb/m3tal-core/pkg/output"
 	"github.com/jakej985-rgb/m3tal-core/pkg/system"
+	"github.com/jakej985-rgb/m3tal-core/pkg/version"
 	"github.com/spf13/cobra"
 )
 
 // Version is injected during build via ldflags.
-var Version = "0.1.0"
+var Version = version.Current
+
+func init() {
+	if Version == "0.1.0" || Version == "" || Version == version.Current {
+		if v := version.GetVersion(); v != "" {
+			Version = v
+		}
+	}
+}
 
 //go:embed .env.example
 var envExample string

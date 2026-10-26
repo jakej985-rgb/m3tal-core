@@ -201,13 +201,37 @@ func TestGetPluginCatalog(t *testing.T) {
 			if item.ProcessName != "m3tal-docker" {
 				t.Errorf("expected processName m3tal-docker, got %s", item.ProcessName)
 			}
-			if item.Version != "0.2.2" && item.Version != "0.1.0" {
-				t.Errorf("expected version 0.2.2 or 0.1.0, got %s", item.Version)
+			if item.Version != "0.5.1" && item.Version != "0.2.2" && item.Version != "0.1.0" {
+				t.Errorf("expected version 0.5.1, 0.2.2, or 0.1.0, got %s", item.Version)
 			}
 		}
 	}
 	if !foundDocker {
 		t.Errorf("expected docker-monitor in catalog")
+	}
+}
+
+func TestCompareSemVer(t *testing.T) {
+	tests := []struct {
+		v1       string
+		v2       string
+		wantCmp  int
+		wantType string
+	}{
+		{"0.5.1", "0.5.1", 0, "equal"},
+		{"v0.5.1", "0.5.1", 0, "equal"},
+		{"0.4.2", "0.5.1", -1, "minor"},
+		{"0.5.0", "0.5.1", -1, "patch"},
+		{"1.0.0", "0.5.1", 1, "major"},
+		{"0.5.2", "0.5.1", 1, "patch"},
+	}
+
+	for _, tc := range tests {
+		cmp, diffType := CompareSemVer(tc.v1, tc.v2)
+		if cmp != tc.wantCmp || diffType != tc.wantType {
+			t.Errorf("CompareSemVer(%q, %q) = (%d, %q), want (%d, %q)",
+				tc.v1, tc.v2, cmp, diffType, tc.wantCmp, tc.wantType)
+		}
 	}
 }
 
