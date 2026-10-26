@@ -100,6 +100,10 @@ export const api = {
   saveCoreSettings: (core) => fetchAPI('POST', '/api/v2/settings/core', core),
   getPluginSettings: (name) => fetchAPI('GET', `/api/v2/plugins/${name}/settings`),
   savePluginSettings: (name, config) => fetchAPI('POST', `/api/v2/plugins/${name}/settings`, { config }),
+  getRepositories: () => fetchAPI('GET', '/api/v2/repositories'),
+  saveRepository: (repo) => fetchAPI('POST', '/api/v2/repositories', repo),
+  refreshRepositories: () => fetchAPI('POST', '/api/v2/repositories/refresh'),
+  deleteRepository: (id) => fetchAPI('DELETE', `/api/v2/repositories/${id}`),
 };
 
 export const subscribeWS = (path, onMessage, onError = null) => {

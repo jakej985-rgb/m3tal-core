@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import {
   IconPlugins,
@@ -46,10 +46,9 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Container Management',
     description: 'Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.',
     capabilities: ['collector', 'actions', 'ui_view', 'ui_widget', 'settings', 'websocket_stream'],
-    version: '0.6.0',
-    status: 'available',
-    has_deb: true,
-    deb_filename: 'm3tal-plugin-docker-monitor_0.6.0_amd64.deb',
+    version: '',
+    status: 'planned',
+    has_deb: false,
     apt_command: 'sudo apt install -y m3tal-plugin-docker-monitor',
   },
   {
@@ -60,10 +59,9 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Container Management',
     description: 'Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.',
     capabilities: ['collector', 'actions', 'ui_view', 'ui_widget', 'settings'],
-    version: '0.3.0',
-    status: 'available',
-    has_deb: true,
-    deb_filename: 'm3tal-plugin-compose_0.3.0_amd64.deb',
+    version: '',
+    status: 'planned',
+    has_deb: false,
     apt_command: 'sudo apt install -y m3tal-plugin-compose',
   },
   {
@@ -74,10 +72,9 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Networking & Fleet',
     description: 'Local network discovery, multi-node clustering, and telemetry federation across M3TAL workstations, servers, and NAS nodes.',
     capabilities: ['collector', 'actions', 'ui_view'],
-    version: '0.1.0',
-    status: 'available',
-    has_deb: true,
-    deb_filename: 'm3tal-plugin-mesh-cluster_0.1.0_amd64.deb',
+    version: '',
+    status: 'planned',
+    has_deb: false,
     apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
     modes: [
       {
@@ -86,7 +83,6 @@ const FALLBACK_PLANNED_PLUGINS = [
         subLabel: 'Full Peer',
         description: 'Full peer (Send + Receive). Broadcasts local machine metrics AND renders the multi-node fleet dashboard. Recommended for primary workstations.',
         package_name: 'm3tal-plugin-mesh-cluster',
-        deb_filename: 'm3tal-plugin-mesh-cluster_0.1.0_amd64.deb',
         apt_command: 'sudo apt install -y m3tal-plugin-mesh-cluster',
         process_name: 'm3tal-mesh',
       },
@@ -96,7 +92,6 @@ const FALLBACK_PLANNED_PLUGINS = [
         subLabel: 'Viewer',
         description: 'Reader & dashboard UI. Scans LAN to view and monitor other connected M3TAL nodes from your desktop.',
         package_name: 'm3tal-plugin-mesh',
-        deb_filename: 'm3tal-plugin-mesh_0.1.0_amd64.deb',
         apt_command: 'sudo apt install -y m3tal-plugin-mesh',
         process_name: 'm3tal-mesh',
       },
@@ -106,7 +101,6 @@ const FALLBACK_PLANNED_PLUGINS = [
         subLabel: 'Sender',
         description: 'Headless sender daemon. Broadcasts CPU, GPU, and disk metrics without running a GUI. Ideal for servers & NAS.',
         package_name: 'm3tal-plugin-mesh-node',
-        deb_filename: 'm3tal-plugin-mesh-node_0.1.0_amd64.deb',
         apt_command: 'sudo apt install -y m3tal-plugin-mesh-node',
         process_name: 'm3tal-mesh-node',
       },
@@ -120,7 +114,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Compose Stacks',
     description: 'Curated database of verified Docker Compose templates, argument presets, and 1-click community stacks.',
     capabilities: ['orchestrator', 'actions', 'ui_view'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-stacks',
   },
@@ -132,7 +126,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Local AI & LLM',
     description: 'Local LLM inference manager (Ollama, vLLM), GPU VRAM stats, asynchronous job queue, and model catalog.',
     capabilities: ['inference_runner', 'job_queue', 'ui_view'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-ai',
   },
@@ -144,7 +138,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Hardware Diagnostics',
     description: 'Drive health telemetry, NVMe wear life, S.M.A.R.T. self-tests, and temperature history.',
     capabilities: ['collector', 'ui_widget', 'alerts'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-smart',
   },
@@ -156,7 +150,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Networking & Proxy',
     description: 'Traefik v3 reverse proxy, automated Let\'s Encrypt SSL/TLS certificates, and dynamic routing.',
     capabilities: ['proxy_generator', 'route_provider'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-traefik',
   },
@@ -168,7 +162,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Network Privacy',
     description: 'WireGuard/OpenVPN tunnel connectivity with container egress routing and leak protection.',
     capabilities: ['network_tunnel', 'status_checker'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-vpn',
   },
@@ -180,7 +174,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'File Sharing',
     description: 'Graphical Samba/NFS share manager, guest permissions, user credentials, and active mounts.',
     capabilities: ['actions', 'ui_view', 'system_admin'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-samba',
   },
@@ -192,7 +186,7 @@ const FALLBACK_PLANNED_PLUGINS = [
     category: 'Diagnostics',
     description: 'One-click benchmarking for CPU multi-threading, GPU compute, and disk I/O throughput.',
     capabilities: ['benchmark_runner', 'ui_view'],
-    version: '0.1.0',
+    version: '',
     status: 'planned',
     apt_command: 'sudo apt install -y m3tal-plugin-bench',
   },
@@ -229,7 +223,7 @@ export default function Plugins() {
   const [installLoading, setInstallLoading] = useState(false);
   const [installError, setInstallError] = useState(null);
 
-  const fetchPlugins = async () => {
+  const fetchPlugins = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.getPlugins();
@@ -244,9 +238,9 @@ export default function Plugins() {
       setError(err.message || 'Failed to fetch plugins from supervisor');
     }
     setLoading(false);
-  };
+  }, []);
 
-  const fetchCatalog = async () => {
+  const fetchCatalog = useCallback(async () => {
     try {
       const res = await api.getPluginCatalog();
       if (res?.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
@@ -255,17 +249,32 @@ export default function Plugins() {
     } catch {
       // Use fallback
     }
-  };
+  }, []);
 
-  const reloadAll = async () => {
+  const reloadAll = useCallback(async () => {
     await Promise.all([fetchPlugins(), fetchCatalog()]);
+  }, [fetchPlugins, fetchCatalog]);
+
+  const handleRefreshApt = async () => {
+    setActionLoading('apt_refresh');
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.refreshRepositories();
+      await reloadAll();
+      setSuccess('APT repository index refreshed successfully. Candidate versions updated from keyring.');
+    } catch (err) {
+      setError(err.message || 'Failed to refresh APT repositories');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   useEffect(() => {
     reloadAll();
     const interval = setInterval(reloadAll, 12000);
     return () => clearInterval(interval);
-  }, []);
+  }, [reloadAll]);
 
   const handleStart = async (name) => {
     setActionLoading(name);
@@ -417,28 +426,40 @@ export default function Plugins() {
           </p>
         </div>
 
-        {/* View Tabs */}
-        <div className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] p-1 rounded-lg">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => setActiveTab('installed')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              activeTab === 'installed'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={handleRefreshApt}
+            disabled={actionLoading === 'apt_refresh'}
+            title="Poll APT keyring for latest plugin candidate versions"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#30363d] bg-[#161b22] hover:bg-[#21262d] text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1.5 shadow-sm"
           >
-            Discovered Plugins ({plugins.length})
+            <IconRefresh className={`w-3.5 h-3.5 ${actionLoading === 'apt_refresh' ? 'animate-spin' : ''}`} />
+            <span>{actionLoading === 'apt_refresh' ? 'Checking APT...' : 'Check for Updates'}</span>
           </button>
-          <button
-            onClick={() => setActiveTab('roadmap')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-              activeTab === 'roadmap'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Catalog & Roadmap
-          </button>
+
+          {/* View Tabs */}
+          <div className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab('installed')}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                activeTab === 'installed'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Discovered Plugins ({plugins.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('roadmap')}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                activeTab === 'roadmap'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Catalog & Roadmap
+            </button>
+          </div>
         </div>
       </div>
 

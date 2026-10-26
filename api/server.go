@@ -306,6 +306,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Post("/plugins/{name}/settings", pluginH.SavePluginSettings)
 			r.Get("/settings", pluginH.GetAllSettings)
 			r.Post("/settings/core", pluginH.SaveCoreSettings)
+			r.Get("/repositories", pluginH.GetRepositories)
+			r.Post("/repositories", pluginH.SaveRepository)
+			r.Post("/repositories/refresh", pluginH.RefreshRepositories)
+			r.Delete("/repositories/{id}", pluginH.DeleteRepository)
 
 			// Compose
 			r.Post("/compose/validate", composeH.ValidateCompose)
@@ -398,6 +402,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			r.Post("/plugins/{name}/settings", pluginH.SavePluginSettings)
 			r.Get("/settings", pluginH.GetAllSettings)
 			r.Post("/settings/core", pluginH.SaveCoreSettings)
+			r.Get("/repositories", pluginH.GetRepositories)
+			r.Post("/repositories", pluginH.SaveRepository)
+			r.Post("/repositories/refresh", pluginH.RefreshRepositories)
+			r.Delete("/repositories/{id}", pluginH.DeleteRepository)
 
 			// Proxy
 			r.Get("/proxy/discover", proxyH.DiscoverServices)

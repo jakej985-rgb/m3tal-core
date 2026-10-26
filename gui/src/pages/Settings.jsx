@@ -40,6 +40,23 @@ export default function Settings() {
   const [doctorResult, setDoctorResult] = useState(null);
   const [doctorRunning, setDoctorRunning] = useState(false);
 
+  // Plugin Repositories state
+  const [repositories, setRepositories] = useState({
+    official: null,
+    custom: [],
+    packages: [],
+    last_checked: null,
+  });
+  const [showAddRepoModal, setShowAddRepoModal] = useState(false);
+  const [newRepoForm, setNewRepoForm] = useState({
+    name: '',
+    url: '',
+    distribution: 'stable',
+    component: 'main',
+    key_url: '',
+  });
+  const [selectedChannel, setSelectedChannel] = useState('stable');
+
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => {
@@ -69,12 +86,97 @@ export default function Settings() {
       } else {
         showToast(res?.error || 'Failed to load settings payload', 'error');
       }
+
+      // Fetch APT Repositories
+      try {
+        const repoRes = await api.getRepositories();
+        if (repoRes?.status === 'success' && repoRes.data) {
+          setRepositories(repoRes.data);
+          if (repoRes.data.official?.channel) {
+            setSelectedChannel(repoRes.data.official.channel);
+          }
+        }
+      } catch (repoErr) {
+        console.error('Failed to load repositories', repoErr);
+      }
     } catch (err) {
       showToast(err.message || 'Error connecting to settings service', 'error');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleRefreshRepositories = async () => {
+    setSaving(true);
+    try {
+      const res = await api.refreshRepositories();
+      if (res?.status === 'success' && res.data) {
+        setRepositories((prev) => ({
+          ...prev,
+          packages: res.data.packages,
+          last_checked: res.data.last_checked,
+        }));
+        showToast('APT repository cache refreshed and candidate versions updated.', 'success');
+      } else {
+        showToast(res?.error || 'Failed to refresh APT repositories', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error refreshing APT repositories', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveCustomRepo = async (e) => {
+    if (e) e.preventDefault();
+    if (!newRepoForm.url) {
+      showToast('Repository URL is required', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.saveRepository({
+        ...newRepoForm,
+        enabled: true,
+      });
+      if (res?.status === 'success') {
+        showToast('Custom repository added successfully.', 'success');
+        setShowAddRepoModal(false);
+        setNewRepoForm({ name: '', url: '', distribution: 'stable', component: 'main', key_url: '' });
+        const repoRes = await api.getRepositories();
+        if (repoRes?.status === 'success' && repoRes.data) {
+          setRepositories(repoRes.data);
+        }
+      } else {
+        showToast(res?.error || 'Failed to save repository', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error saving custom repository', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCustomRepo = async (id) => {
+    if (!window.confirm('Are you sure you want to remove this repository?')) return;
+    setSaving(true);
+    try {
+      const res = await api.deleteRepository(id);
+      if (res?.status === 'success') {
+        showToast('Repository removed.', 'info');
+        const repoRes = await api.getRepositories();
+        if (repoRes?.status === 'success' && repoRes.data) {
+          setRepositories(repoRes.data);
+        }
+      } else {
+        showToast(res?.error || 'Failed to delete repository', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error deleting repository', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     loadAllSettings();
@@ -295,6 +397,18 @@ export default function Settings() {
               >
                 <IconDoctor className="w-4 h-4 flex-shrink-0 text-amber-400" />
                 <span>Host Maintenance</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSection('core_repositories')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2.5 transition-all ${
+                  activeSection === 'core_repositories'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-[#21262d] hover:text-white'
+                }`}
+              >
+                <IconPlugins className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                <span>Plugin Repositories</span>
               </button>
             </div>
           </div>
@@ -660,6 +774,202 @@ export default function Settings() {
             </div>
           )}
 
+          {/* SECTION 4: Plugin Repositories */}
+          {activeSection === 'core_repositories' && (
+            <div className="space-y-6 max-w-4xl">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <IconPlugins className="w-5 h-5 text-emerald-400" />
+                  <span>Plugin Repositories & APT Keyrings</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Manage APT distribution sources for external plugins, inspect candidate versions directly from keyrings, and poll for live updates.
+                </p>
+              </div>
+
+              {/* Official Repository Card */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white">Official M3TAL APT Keyring</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-950/70 text-emerald-400 border border-emerald-800">
+                        OFFICIAL
+                      </span>
+                      {repositories.official?.keyring_valid && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-cyan-950/70 text-cyan-400 border border-cyan-800 flex items-center gap-1">
+                          <IconCheck className="w-3 h-3" /> GPG SIGNED
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 font-mono">
+                      {repositories.official?.url || 'https://jakej985-rgb.github.io/m3tal-apt-key'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleRefreshRepositories}
+                    disabled={saving}
+                    className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <IconRefresh className={`w-3.5 h-3.5 ${saving ? 'animate-spin' : ''}`} />
+                    <span>{saving ? 'Checking APT...' : 'Check for Updates Now'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+                  <div className="bg-[#0d1117] border border-[#30363d] p-3 rounded-lg">
+                    <span className="text-slate-500 text-[11px] block font-medium">Release Channel</span>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedChannel('stable')}
+                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                          selectedChannel === 'stable'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-[#21262d] text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Stable
+                      </button>
+                      <button
+                        onClick={() => setSelectedChannel('beta')}
+                        className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
+                          selectedChannel === 'beta'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'bg-[#21262d] text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Beta / Testing
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0d1117] border border-[#30363d] p-3 rounded-lg">
+                    <span className="text-slate-500 text-[11px] block font-medium">Sources List Entry</span>
+                    <span className="mt-1 font-mono text-slate-300 block truncate" title={repositories.official?.sources_path || '/etc/apt/sources.list.d/m3tal.list'}>
+                      {repositories.official?.sources_path || '/etc/apt/sources.list.d/m3tal.list'}
+                    </span>
+                  </div>
+
+                  <div className="bg-[#0d1117] border border-[#30363d] p-3 rounded-lg">
+                    <span className="text-slate-500 text-[11px] block font-medium">GPG Keyring File</span>
+                    <span className="mt-1 font-mono text-slate-300 block truncate" title={repositories.official?.keyring_path || '/etc/apt/keyrings/m3tal-archive-keyring.gpg'}>
+                      {repositories.official?.keyring_path || '/etc/apt/keyrings/m3tal-archive-keyring.gpg'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Discovered Candidate Packages Table */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-[#30363d] flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Discovered Plugin Packages in APT Keyring</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Live candidate and installed versions reported by local APT cache
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#21262d] text-slate-400 border border-[#30363d]">
+                    {repositories.packages?.length || 0} packages
+                  </span>
+                </div>
+
+                {(!repositories.packages || repositories.packages.length === 0) ? (
+                  <div className="p-8 text-center text-xs text-slate-500">
+                    No plugin packages indexed yet. Click &quot;Check for Updates Now&quot; to query the APT cache.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#30363d] overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#0d1117] text-slate-400 uppercase text-[10px] tracking-wider font-semibold">
+                        <tr>
+                          <th className="p-3">Package Name</th>
+                          <th className="p-3">Candidate (Available)</th>
+                          <th className="p-3">Installed</th>
+                          <th className="p-3">Status</th>
+                          <th className="p-3">Source Repository</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#30363d]">
+                        {repositories.packages.map((pkg) => (
+                          <tr key={pkg.package_name} className="hover:bg-[#1f242c] transition-colors">
+                            <td className="p-3 font-mono font-medium text-slate-200">
+                              {pkg.package_name}
+                            </td>
+                            <td className="p-3 font-mono font-bold text-emerald-400">
+                              {pkg.candidate_version ? `v${pkg.candidate_version}` : '—'}
+                            </td>
+                            <td className="p-3 font-mono text-slate-300">
+                              {pkg.installed_version ? `v${pkg.installed_version}` : <span className="text-slate-500 italic">Not installed</span>}
+                            </td>
+                            <td className="p-3">
+                              {pkg.status === 'installed' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                  UP TO DATE
+                                </span>
+                              ) : pkg.candidate_version ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">
+                                  AVAILABLE
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                  PLANNED
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 font-mono text-slate-500 text-[11px] truncate max-w-xs">
+                              {pkg.repository_url || 'https://jakej985-rgb.github.io/m3tal-apt-key'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Repositories Card */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Custom & Community Repositories</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Add third-party or internal plugin repositories to discover additional plugins
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddRepoModal(true)}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#21262d] hover:bg-[#30363d] text-emerald-400 border border-[#30363d] transition-colors"
+                  >
+                    + Add Custom Repository
+                  </button>
+                </div>
+
+                {(!repositories.custom || repositories.custom.length === 0) ? (
+                  <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-[#30363d] rounded-lg">
+                    No custom repositories configured. M3TAL will discover plugins exclusively from the official keyring.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {repositories.custom.map((repo) => (
+                      <div key={repo.id} className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-white">{repo.name || repo.id}</div>
+                          <div className="text-[11px] font-mono text-slate-400 mt-0.5">{repo.url} ({repo.distribution} {repo.component})</div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCustomRepo(repo.id)}
+                          className="px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded border border-rose-900/50 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* DYNAMIC SECTION: Plugin Preferences */}
           {activeSection.startsWith('plugin_') && (() => {
             const sec = pluginSections.find((s) => `plugin_${s.plugin}_${s.id}` === activeSection);
@@ -820,6 +1130,100 @@ export default function Settings() {
           })()}
         </div>
       </div>
+
+      {/* Add Custom Repository Modal */}
+      {showAddRepoModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <IconPlugins className="w-4 h-4 text-emerald-400" />
+                <span>Add Custom APT Repository</span>
+              </h3>
+              <button
+                onClick={() => setShowAddRepoModal(false)}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomRepo} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Repository Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. My Lab Plugins"
+                  value={newRepoForm.name}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, name: e.target.value })}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Repository Base URL *</label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://example.com/m3tal-apt"
+                  value={newRepoForm.url}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, url: e.target.value })}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Distribution</label>
+                  <input
+                    type="text"
+                    value={newRepoForm.distribution}
+                    onChange={(e) => setNewRepoForm({ ...newRepoForm, distribution: e.target.value })}
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Component</label>
+                  <input
+                    type="text"
+                    value={newRepoForm.component}
+                    onChange={(e) => setNewRepoForm({ ...newRepoForm, component: e.target.value })}
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">GPG Public Key URL (Optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/m3tal-apt/key.gpg"
+                  value={newRepoForm.key_url}
+                  onChange={(e) => setNewRepoForm({ ...newRepoForm, key_url: e.target.value })}
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#30363d]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRepoModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#21262d] text-slate-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                >
+                  {saving ? 'Adding...' : 'Add Repository'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Floating Toast Notification */}
       {toast && (

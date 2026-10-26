@@ -258,10 +258,9 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Container Management",
 		Description:  "Docker container fleet monitor, log inspector, container lifecycle controls, and image pruning.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view", "ui_widget", "settings"},
-		Version:      "0.6.0",
-		Status:       "available",
-		HasDeb:       true,
-		DebFilename:  "m3tal-plugin-docker-monitor_0.6.0_amd64.deb",
+		Version:      "",
+		Status:       "planned",
+		HasDeb:       false,
 		AptCommand:   "sudo apt install -y m3tal-plugin-docker-monitor",
 	},
 	{
@@ -272,10 +271,9 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Container Management",
 		Description:  "Docker Compose visual editor, syntax validator, and multi-container stack lifecycle manager.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view"},
-		Version:      "0.3.0",
-		Status:       "available",
-		HasDeb:       true,
-		DebFilename:  "m3tal-plugin-compose_0.3.0_amd64.deb",
+		Version:      "",
+		Status:       "planned",
+		HasDeb:       false,
 		AptCommand:   "sudo apt install -y m3tal-plugin-compose",
 	},
 	{
@@ -286,10 +284,9 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Networking & Fleet",
 		Description:  "Local network discovery, multi-node clustering, and telemetry federation across M3TAL workstations, servers, and NAS nodes.",
 		Capabilities: []plugins.Capability{"collector", "actions", "ui_view"},
-		Version:      "0.1.0",
-		Status:       "available",
-		HasDeb:       true,
-		DebFilename:  "m3tal-plugin-mesh-cluster_0.1.0_amd64.deb",
+		Version:      "",
+		Status:       "planned",
+		HasDeb:       false,
 		AptCommand:   "sudo apt install -y m3tal-plugin-mesh-cluster",
 		Modes: []CatalogModeDTO{
 			{
@@ -329,7 +326,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Compose Stacks",
 		Description:  "Curated database of verified Docker Compose templates, argument presets, and 1-click community stacks.",
 		Capabilities: []plugins.Capability{"orchestrator", "actions", "ui_view"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-stacks",
 	},
@@ -341,7 +338,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Local AI & LLM",
 		Description:  "Local LLM inference manager (Ollama, vLLM), GPU VRAM stats, asynchronous job queue, and model catalog.",
 		Capabilities: []plugins.Capability{"inference_runner", "job_queue", "ui_view"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-ai",
 	},
@@ -353,7 +350,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Hardware Diagnostics",
 		Description:  "Drive health telemetry, NVMe wear life, S.M.A.R.T. self-tests, and temperature history.",
 		Capabilities: []plugins.Capability{"collector", "ui_widget", "alerts"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-smart",
 	},
@@ -365,7 +362,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Networking & Proxy",
 		Description:  "Traefik v3 reverse proxy, automated Let's Encrypt SSL/TLS certificates, and dynamic routing.",
 		Capabilities: []plugins.Capability{"proxy_generator", "route_provider"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-traefik",
 	},
@@ -377,7 +374,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Network Privacy",
 		Description:  "WireGuard/OpenVPN tunnel connectivity with container egress routing and leak protection.",
 		Capabilities: []plugins.Capability{"network_tunnel", "status_checker"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-vpn",
 	},
@@ -389,7 +386,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "File Sharing",
 		Description:  "Graphical Samba/NFS share manager, guest permissions, user credentials, and active mounts.",
 		Capabilities: []plugins.Capability{"actions", "ui_view", "system_admin"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-samba",
 	},
@@ -401,7 +398,7 @@ var defaultCatalogEntries = []CatalogPluginDTO{
 		Category:     "Diagnostics",
 		Description:  "One-click benchmarking for CPU multi-threading, GPU compute, and disk I/O throughput.",
 		Capabilities: []plugins.Capability{"benchmark_runner", "ui_view"},
-		Version:      "0.1.0",
+		Version:      "",
 		Status:       "planned",
 		AptCommand:   "sudo apt install -y m3tal-plugin-bench",
 	},
@@ -608,16 +605,50 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Collect all package names to query dynamically from APT keyring
+	var pkgsToQuery []string
+	for _, entry := range catalogEntries {
+		if entry.PackageName != "" {
+			pkgsToQuery = append(pkgsToQuery, entry.PackageName)
+		} else if entry.Name != "" {
+			pkgsToQuery = append(pkgsToQuery, "m3tal-plugin-"+entry.Name)
+		}
+		for _, m := range entry.Modes {
+			if m.PackageName != "" {
+				pkgsToQuery = append(pkgsToQuery, m.PackageName)
+			}
+		}
+	}
+
+	aptCandidates, _ := QueryAptCandidates(r.Context(), pkgsToQuery, false)
+
 	results := make([]CatalogPluginDTO, len(catalogEntries))
 	for i, item := range catalogEntries {
 		entry := item
-		debPath, debName := findPluginDeb(entry.Name)
-		if debPath != "" {
+
+		// Check APT candidate version
+		var aptCand *AptPackageCandidate
+		if cand, found := aptCandidates[entry.PackageName]; found && cand.CandidateVersion != "" {
+			aptCand = &cand
+		} else if cand, found := aptCandidates["m3tal-plugin-"+entry.Name]; found && cand.CandidateVersion != "" {
+			aptCand = &cand
+		}
+
+		if aptCand != nil {
+			entry.Version = aptCand.CandidateVersion
+			entry.Status = "available"
 			entry.HasDeb = true
-			entry.DebFilename = debName
+			entry.DebFilename = fmt.Sprintf("%s_%s_amd64.deb", entry.PackageName, entry.Version)
 			entry.DownloadURL = fmt.Sprintf("/api/v2/plugins/%s/download", entry.Name)
-			if entry.Status != "installed" {
-				entry.Status = "available"
+		} else {
+			debPath, debName := findPluginDeb(entry.Name)
+			if debPath != "" {
+				entry.HasDeb = true
+				entry.DebFilename = debName
+				entry.DownloadURL = fmt.Sprintf("/api/v2/plugins/%s/download", entry.Name)
+				if entry.Status != "installed" {
+					entry.Status = "available"
+				}
 			}
 		}
 
@@ -628,6 +659,13 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 					entry.Modes = def.Modes
 					break
 				}
+			}
+		}
+
+		// Update modes with live APT candidate versions
+		for mi, m := range entry.Modes {
+			if mCand, found := aptCandidates[m.PackageName]; found && mCand.CandidateVersion != "" {
+				entry.Modes[mi].DebFilename = fmt.Sprintf("%s_%s_amd64.deb", m.PackageName, mCand.CandidateVersion)
 			}
 		}
 
@@ -644,16 +682,23 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 		if activeManifest != nil {
 			entry.Status = "installed"
 			entry.InstalledVersion = activeManifest.Metadata.Version
-			cmp, diffType := CompareSemVer(entry.InstalledVersion, entry.Version)
-			if cmp == 0 {
-				entry.UpdateStatus = "up_to_date"
-				entry.UpdateType = "equal"
-			} else if cmp < 0 {
-				entry.UpdateStatus = "update_available"
-				entry.UpdateType = diffType
-			} else {
+
+			if entry.Version == "" {
+				// Installed locally without an active APT release
 				entry.UpdateStatus = "dev_ahead"
 				entry.UpdateType = "dev"
+			} else {
+				cmp, diffType := CompareSemVer(entry.InstalledVersion, entry.Version)
+				if cmp == 0 {
+					entry.UpdateStatus = "up_to_date"
+					entry.UpdateType = "equal"
+				} else if cmp < 0 {
+					entry.UpdateStatus = "update_available"
+					entry.UpdateType = diffType
+				} else {
+					entry.UpdateStatus = "dev_ahead"
+					entry.UpdateType = "dev"
+				}
 			}
 
 			// Calculate capabilities diff (new capabilities in catalog version)
@@ -667,6 +712,9 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 				}
 			}
 		} else {
+			if entry.Version == "" {
+				entry.Status = "planned"
+			}
 			entry.UpdateStatus = "not_installed"
 			entry.UpdateType = ""
 		}
