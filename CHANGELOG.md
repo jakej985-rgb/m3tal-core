@@ -4,6 +4,23 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.12.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.12.0 delivers updates across 2 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🚀 New Features & Capabilities
+- **feat(catalog): add m3tal-mesh cluster entry with segmented mode selector** (`87f686b`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 📦 Packaging & Debian Distribution
+- **refactor(packaging): purge legacy stack templates, /docker symlink, and duplicate service** (`b793b9e`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.11.0] - 2026-10-24
 
 ### Overview & Release Highlights
