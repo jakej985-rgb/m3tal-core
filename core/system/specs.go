@@ -58,48 +58,60 @@ func GetSystemSpecs() (*models.SystemSpecs, error) {
 	// GPU
 	_, _, _, _, gpuModel := getGPUStats()
 	specs.GPUModel = gpuModel
-
-	// Network interfaces & traffic
-	interfaces, err := net.Interfaces()
-	if err == nil {
-		ioCounters, _ := net.IOCounters(true)
-		ioMap := make(map[string]net.IOCountersStat)
-		for _, io := range ioCounters {
-			ioMap[io.Name] = io
-		}
-
-		ifList := make([]models.NetworkInterfaceInfo, 0, len(interfaces))
-		for _, iface := range interfaces {
-			// Skip inactive loopback or virtual down interfaces
-			isUp := false
-			for _, flag := range iface.Flags {
-				if strings.ToLower(flag) == "up" {
-					isUp = true
-					break
-				}
-			}
-
-			ips := make([]string, 0, len(iface.Addrs))
-			for _, addr := range iface.Addrs {
-				ips = append(ips, addr.Addr)
-			}
-
-			var bytesSent, bytesRecv uint64
-			if io, ok := ioMap[iface.Name]; ok {
-				bytesSent = io.BytesSent
-				bytesRecv = io.BytesRecv
-			}
-
-			ifList = append(ifList, models.NetworkInterfaceInfo{
-				Name:        iface.Name,
-				IPAddresses: ips,
-				BytesSent:   bytesSent,
-				BytesRecv:   bytesRecv,
-				IsUp:        isUp,
-			})
-		}
+	if ifList, err := GetNetworkInterfaces(); err == nil {
 		specs.NetworkInterfaces = ifList
 	}
 
 	return specs, nil
+}
+
+// GetNetworkInterfaces collects physical and virtual network interfaces and traffic counters.
+func GetNetworkInterfaces() ([]models.NetworkInterfaceInfo, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	ioCounters, _ := net.IOCounters(true)
+	ioMap := make(map[string]net.IOCountersStat)
+	for _, io := range ioCounters {
+		ioMap[io.Name] = io
+	}
+
+	ifList := make([]models.NetworkInterfaceInfo, 0, len(interfaces))
+	for _, iface := range interfaces {
+		// Ignore inactive loopback interface
+		if iface.Name == "lo" {
+			continue
+		}
+
+		isUp := false
+		for _, flag := range iface.Flags {
+			if strings.ToLower(flag) == "up" {
+				isUp = true
+				break
+			}
+		}
+
+		ips := make([]string, 0, len(iface.Addrs))
+		for _, addr := range iface.Addrs {
+			ips = append(ips, addr.Addr)
+		}
+
+		var bytesSent, bytesRecv uint64
+		if io, ok := ioMap[iface.Name]; ok {
+			bytesSent = io.BytesSent
+			bytesRecv = io.BytesRecv
+		}
+
+		ifList = append(ifList, models.NetworkInterfaceInfo{
+			Name:        iface.Name,
+			IPAddresses: ips,
+			BytesSent:   bytesSent,
+			BytesRecv:   bytesRecv,
+			IsUp:        isUp,
+		})
+	}
+
+	return ifList, nil
 }

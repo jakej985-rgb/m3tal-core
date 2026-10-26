@@ -106,6 +106,11 @@ func GetDetailedStats() (*models.DetailedStats, error) {
 	stats.GPUMemTotal = gpuMemTotal
 	stats.GPUModel = gpuModel
 
+	// Network Interfaces & Throughput
+	if ifList, err := GetNetworkInterfaces(); err == nil {
+		stats.NetworkInterfaces = ifList
+	}
+
 	return stats, nil
 }
 

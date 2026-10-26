@@ -89,6 +89,7 @@ export const api = {
   systemCleanup: () => fetchAPI('POST', '/api/v2/system/cleanup'),
   reconcileSystem: () => fetchAPI('POST', '/api/v2/system/reconcile'),
   unmountStorage: (mountpoint) => fetchAPI('POST', '/api/v2/system/storage/unmount', { mountpoint }),
+  getNetworkStats: () => fetchAPI('GET', '/api/v2/system/network'),
   getVPNStatus: () => fetchAPI('GET', '/api/v2/vpn/status'),
   getRoutes: () => fetchAPI('GET', '/api/v2/routes'),
   getProcesses: (limit = 150) => fetchAPI('GET', `/api/v2/system/processes?limit=${limit}`),

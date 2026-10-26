@@ -881,6 +881,17 @@ func (s *Server) UnmountStorage(w http.ResponseWriter, r *http.Request) {
 	}, nil)
 }
 
+// GetSystemNetwork returns host network interfaces, IP addresses, and I/O metrics.
+// GET /api/v2/system/network
+func (s *Server) GetSystemNetwork(w http.ResponseWriter, r *http.Request) {
+	ifaces, err := system.GetNetworkInterfaces()
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "NETWORK_ERROR", err.Error(), nil)
+		return
+	}
+	sendSuccess(w, http.StatusOK, ifaces, nil)
+}
+
 // GetCronJobs retrieves scheduled tasks from crontab and systemd timers.
 // GET /api/v2/system/cron
 func (s *Server) GetCronJobs(w http.ResponseWriter, r *http.Request) {

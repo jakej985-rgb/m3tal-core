@@ -8,23 +8,24 @@ type SystemInfo struct {
 
 // DetailedStats represents extended system metrics for dashboard/tray.
 type DetailedStats struct {
-	CPUUsage        float64         `json:"cpu_usage"`
-	CPUTemp         float64         `json:"cpu_temp"`
-	MemoryUsage     float64         `json:"memory_usage"`
-	MemoryUsed      float64         `json:"memory_used"`  // GB
-	MemoryTotal     float64         `json:"memory_total"` // GB
-	MemoryFrequency string          `json:"memory_frequency"`
-	DiskUsage       float64         `json:"disk_usage"`
-	DiskUsed        float64         `json:"disk_used"`  // GB
-	DiskTotal       float64         `json:"disk_total"` // GB
-	DiskPartitions  []DiskPartition `json:"disk_partitions"`
-	GPUUsage        float64         `json:"gpu_usage"`
-	GPUTemp         float64         `json:"gpu_temp"`
-	GPUMemUsed      float64         `json:"gpu_mem_used"`  // MB
-	GPUMemTotal     float64         `json:"gpu_mem_total"` // MB
-	GPUModel        string          `json:"gpu_model"`
-	Uptime          uint64          `json:"uptime"`
-	Hostname        string          `json:"hostname"`
+	CPUUsage          float64                `json:"cpu_usage"`
+	CPUTemp           float64                `json:"cpu_temp"`
+	MemoryUsage       float64                `json:"memory_usage"`
+	MemoryUsed        float64                `json:"memory_used"`  // GB
+	MemoryTotal       float64                `json:"memory_total"` // GB
+	MemoryFrequency   string                 `json:"memory_frequency"`
+	DiskUsage         float64                `json:"disk_usage"`
+	DiskUsed          float64                `json:"disk_used"`  // GB
+	DiskTotal         float64                `json:"disk_total"` // GB
+	DiskPartitions    []DiskPartition        `json:"disk_partitions"`
+	GPUUsage          float64                `json:"gpu_usage"`
+	GPUTemp           float64                `json:"gpu_temp"`
+	GPUMemUsed        float64                `json:"gpu_mem_used"`  // MB
+	GPUMemTotal       float64                `json:"gpu_mem_total"` // MB
+	GPUModel          string                 `json:"gpu_model"`
+	NetworkInterfaces []NetworkInterfaceInfo `json:"network_interfaces,omitempty"`
+	Uptime            uint64                 `json:"uptime"`
+	Hostname          string                 `json:"hostname"`
 }
 
 // ServiceStatus represents a systemd service status.

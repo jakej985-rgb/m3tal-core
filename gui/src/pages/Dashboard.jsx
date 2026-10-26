@@ -210,7 +210,7 @@ export default function Dashboard() {
           <FleetMiniOverview />
         </div>
         <div className="col-span-1 md:col-span-2 lg:col-span-2">
-          <NetworkSummary />
+          <NetworkSummary networkInterfaces={metrics?.network_interfaces} />
         </div>
 
         {/* 5. Dynamic External Plugin Widgets (optional) */}
