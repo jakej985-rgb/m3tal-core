@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.20.1] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.20.1 resolves mode and package resolution for plugin installation across the Web GUI and daemon API, ensuring accurate targeting for multi-variant plugin packages like `m3tal-plugin-mesh`.
+
+### 🐛 Bug Fixes & Improvements
+- **fix(plugins): resolve mode and explicit package name targeting during installation**:
+  - *What Changed*: Updated `gui/src/pages/Plugins.jsx` to pass `package` and `mode` from `getActiveMode(installTarget)` to `api.installPlugin`. Updated `api/plugins.go` `InstallPlugin` handler to parse `package` and `mode` payload fields and prioritize searching explicit package and mode target variations (`<package>`, `<mode>`, `<name>-<mode>`, `m3tal-<name>-<mode>`, `m3tal-plugin-<name>-<mode>`) when resolving the `.deb` archive.
+  - *Why*: Multi-variant plugins (such as Mesh, Mesh Node, and Mesh Cluster) require targeted package identification rather than relying solely on the base plugin name during installation and mode switching.
+
+---
+
 ## [0.20.0] - 2026-10-26
 
 ### Overview & Release Highlights
