@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.17.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.17.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(gui): implement uniform modular block grid with strict multi-span multiples** (`0fe79f1c`):
+  - *What Changed*: - Exact, uniform 1x1 base unit dimensions (H = 260px, W = 1 column in a 4-column responsive grid) - Pixel-identical 1x1 stat cards (CPU, RAM, GPU, Root Disk) with integrated VRAM badge and sparkline - Strict multi-span multiples: 1x1 (260px), 2x1 (260px), 4x2 (544px), and 4x3 (828px) - TopBarWidget and Edit Mode Banner hoisted above the modular grid as a full-width header - Grid container configured with auto-rows-[260px]
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.16.0] - 2026-10-26
 
 ### Overview & Release Highlights
