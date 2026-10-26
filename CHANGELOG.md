@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.16.0] - 2026-10-26
+
+### Overview & Release Highlights
+Release v0.16.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **feat(plugins): establish plugin widget ownership and decouple container fleet widget from core dashboard** (`5fdfa8a5`):
+  - *What Changed*: - Decouple container fleet widget from DEFAULT_LAYOUT in core host dashboard - Dynamically mount docker-fleet widget via PluginWidgetSlot when provided by m3tal-docker - Standardize ui_widget capability and schema in plans/plugin/standardization_spec.md - Update plugin governance agents (.agents/agents/plugin-*) to enforce widget ownership, 4-column grid constraints, and optionality
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.15.0] - 2026-10-26
 
 ### Overview & Release Highlights
