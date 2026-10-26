@@ -81,8 +81,9 @@ ps -o comm= -p $PID
 
 ---
 
-## 2. Test Suite: UI Asset Verification
+## 2. Test Suite: UI Asset & Widget Verification
 
+### Test 7: Full-Page View (`ui_view`)
 If the plugin declares `ui_view`:
 - Check entrypoint file: `test -f "$PLUGIN_DIR/ui/dist/index.html"`.
 - Check relative asset paths:
@@ -90,6 +91,14 @@ If the plugin declares `ui_view`:
   grep -E '(src|href)=["'"'"']/(assets|static)' "$PLUGIN_DIR/ui/dist/index.html"
   ```
   *(Absolute paths like `/assets/...` will break under `/plugins/<name>/`; paths must be relative like `./assets/...` or `assets/...`).*
+
+### Test 8: Dashboard Widgets (`ui_widget`)
+If the plugin declares `ui_widget`:
+- Verify `spec.widgets` is declared as a list in `plugin.yaml`.
+- Assert each widget has valid `id` (non-empty string), `title`, `size: [colSpan, rowSpan]` with `1 <= colSpan <= 4` and `1 <= rowSpan <= 3`.
+- If `type: "embed"`, assert `url` or `entry` resolves.
+- If `type: "card"`, assert collector returns required fields or data models.
+- NOTE: Widgets are optional; if the plugin has no widgets, this test is skipped.
 
 ---
 

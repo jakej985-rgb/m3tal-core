@@ -86,6 +86,8 @@ Every M3TAL plugin is distributed as an official Debian package:
    sha256: "{{SHA256_HASH}}"
    process_name: "m3tal-{{PLUGIN_NAME}}"
    capabilities: {{CAPABILITIES}}
+   # Optional: widgets provided by this plugin (if ui_widget declared)
+   widgets: {{WIDGETS}}
    ```
 
 ---

@@ -90,9 +90,10 @@ spec:
     - collector                  # Feeds live telemetry metrics into M3TAL Core
     - actions                    # Exposes JSON-RPC / REST actions (e.g. restart container)
     - ui_view                    # Provides a full dedicated page in the Web GUI
+    - ui_widget                  # Optional: Provides one or more modular dashboard grid widgets
     - websocket_stream           # Emits streaming logs or live event feeds
 
-  # 3. Dynamic Web GUI Mounting
+  # 3. Dynamic Web GUI Mounting (if ui_view enabled)
   ui:
     entry: "ui/dist/index.html"  # Path to static HTML entrypoint
     route: "/containers"         # Front-end navigation path
@@ -101,13 +102,22 @@ spec:
     order: 20                    # Visual sorting priority in the sidebar
     roles: ["admin", "viewer"]   # Access control permissions
 
-  # 4. IPC & Communication
+  # 4. Modular Dashboard Widgets (Optional: if ui_widget enabled)
+  # Widgets are owned by their plugin (e.g. container fleet overview is owned by m3tal-docker).
+  # Some plugins will need a widget, but NOT all plugins will need one.
+  widgets:
+    - id: "docker-fleet"
+      title: "Containers"
+      size: [2, 1]               # [colSpan (1..4), rowSpan (1..3)] on 4-column responsive grid
+      type: "card"               # "card" (data-driven/native) or "embed" (micro-frontend)
+
+  # 5. IPC & Communication
   rpc:
     protocol: "jsonrpc-2.0"
     transport: "stdio"           # "stdio" or "unix_socket"
     socket_path: "/run/m3tal/plugins/docker.sock"
 
-  # 5. Environment & System Requirements
+  # 6. Environment & System Requirements
   requirements:
     binaries: ["docker"]
     root: false                  # Whether root privileges are required
@@ -149,6 +159,19 @@ sequenceDiagram
     Plugin-->>API: Returns container list / telemetry
     API-->>GUI: Renders container dashboard inside plugin view
 ```
+
+### 4.3. Dynamic Dashboard Widget Mounting Model
+Just as with sidebar pages, **dashboard widgets are strictly owned by their respective plugins**:
+1. **Host-Only Core Dashboard**:
+   - The default M3TAL Core dashboard layout contains *only* native host hardware and system monitors: CPU, RAM, GPU, Root Disk, Detailed Storage (multi-drive / physical partitions), Host Network Statistics, and Live Event Log.
+   - Core dashboard does not hardcode third-party service or container widgets.
+2. **Plugin Widget Optionality**:
+   - When a plugin provides summary telemetry or fleet controls (such as `m3tal-docker` providing the `docker-fleet` container overview), it declares the `ui_widget` capability and its `widgets:` metadata in `plugin.yaml`.
+   - **Some plugins will need a widget, but NOT all plugins will need one.** Headless utilities, background daemons, or single-purpose tools should omit `ui_widget` and `widgets:`.
+3. **Dynamic Dashboard Grid Mounting**:
+   - On load, M3TAL Core GUI dynamically mounts declared plugin widgets via `<PluginWidgetSlot />` into the 4-column responsive grid.
+   - Operators can freely move, customize, hide, or restore plugin widgets using the dashboard edit mode.
+   - If a plugin is uninstalled or disabled, its widget is removed cleanly from the dashboard with zero core leftovers.
 
 ---
 

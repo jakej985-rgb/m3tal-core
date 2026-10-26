@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, subscribeWS } from '../api';
 import DoctorModal from '../components/DoctorModal';
-import FleetMiniOverview from '../components/FleetMiniOverview';
 import NetworkSummary from '../components/NetworkSummary';
 import TopBarWidget from '../components/widgets/TopBarWidget';
 import StatCardWidget from '../components/widgets/StatCardWidget';
@@ -9,13 +8,13 @@ import StorageDetailedWidget from '../components/widgets/StorageDetailedWidget';
 import EventLogWidget from '../components/widgets/EventLogWidget';
 import PluginWidgetSlot from '../components/widgets/PluginWidgetSlot';
 
+// Core Host Dashboard Default Layout (Plugins provide service widgets dynamically)
 const DEFAULT_LAYOUT = [
   'stat-cpu',
   'stat-ram',
   'stat-gpu',
   'stat-disk',
   'storage-detailed',
-  'fleet-containers',
   'network-stats',
   'event-log',
 ];
@@ -26,7 +25,6 @@ const WIDGET_TITLES = {
   'stat-gpu': 'GPU Metric Card',
   'stat-disk': 'Root Disk Card',
   'storage-detailed': 'Storage & Drives',
-  'fleet-containers': 'Container Fleet',
   'network-stats': 'Network Statistics',
   'event-log': 'Live Event Log',
 };
@@ -398,12 +396,17 @@ export default function Dashboard() {
                   {...moveProps}
                 />
               );
-            case 'fleet-containers':
+            case 'fleet-containers': {
+              const pw = pluginWidgets.find((w) => w.id === 'docker-fleet') || { id: 'docker-fleet', title: 'Containers' };
               return (
-                <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2">
-                  <FleetMiniOverview {...moveProps} />
-                </div>
+                <PluginWidgetSlot
+                  key={widgetId}
+                  widget={pw}
+                  onAction={handlePluginAction}
+                  {...moveProps}
+                />
               );
+            }
             case 'network-stats':
               return (
                 <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2">

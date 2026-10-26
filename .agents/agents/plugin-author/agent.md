@@ -75,6 +75,7 @@ spec:
     - collector
     - actions
     - ui_view
+    - ui_widget # Optional: only if plugin brings dashboard widget(s)
 
   ui:
     entry: "ui/dist/index.html"
@@ -83,6 +84,14 @@ spec:
     sidebar: true
     order: 50
     roles: ["admin", "viewer"]
+
+  # Optional: Modular Dashboard Widgets (if ui_widget declared)
+  # Widgets are owned by this plugin. Some plugins will need a widget, but NOT all plugins will need one.
+  widgets:
+    - id: "{{PLUGIN_NAME}}-overview"
+      title: "{{PLUGIN_TITLE}}"
+      size: [2, 1] # [colSpan (1..4), rowSpan (1..3)] in 4-column responsive grid
+      type: "card" # "card" or "embed"
 
   rpc:
     protocol: "jsonrpc-2.0"
@@ -132,7 +141,8 @@ You are the resident custodian for this plugin repository. Your duty is to imple
    - `m3tal.action`: Action dispatcher (must return `{ status: "ok" }` or `{ error: ... }`).
    - `m3tal.shutdown`: Graceful cleanup within 5 seconds.
 4. **UI Assets**: All static UI assets in `ui/dist/` must use relative links (`./assets/...`) so they render seamlessly when mounted under `/plugins/{{PLUGIN_NAME}}/`.
-5. **Changelog**: Maintain `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) format and SemVer for every feature, fix, and release.
+5. **Dashboard Widget Ownership**: If this plugin declares `ui_widget`, all dashboard widgets in `widgets:` belong strictly to this plugin (e.g. `docker-fleet` is owned by `m3tal-docker`). Keep widget sizing conforming to the 4-column grid (`[1, 1]`, `[2, 1]`, etc.). Remember: not all plugins need a widget; omit `ui_widget` and `widgets:` if this plugin is a background worker or dedicated full-page tool.
+6. **Changelog**: Maintain `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/) format and SemVer for every feature, fix, and release.
 
 ## Development Commands
 - **Build Backend**: `make build`
