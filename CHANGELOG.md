@@ -4,6 +4,26 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.20.3] - 2026-10-27
+
+### Overview & Release Highlights
+Release v0.20.3 delivers updates across 3 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🐛 Bug Fixes & Stability
+- **Merge pull request #135 from jakej985-rgb/codex/fix-core-workflows** (`e54906f`):
+  - *What Changed*: fix(ci): resolve release and catalog test failures
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(ci): resolve release and catalog test failures** (`62d8aa9`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 📚 Documentation & Specifications
+- **Update standardization_spec.md** (`4e1e2cc`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.2] - 2026-10-26
 
 ### Overview & Release Highlights
