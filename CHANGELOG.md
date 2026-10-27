@@ -4,6 +4,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [0.20.4] - 2026-10-27
+
+### Overview & Release Highlights
+Release v0.20.4 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 📦 Packaging & Debian Distribution
+- **docs: add Debian package CPU compatibility fix plan** (`a8621d0`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.3] - 2026-10-27
 
 ### Overview & Release Highlights
