@@ -64,6 +64,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'gui/package-lock.json'
+
+      - name: Build GUI assets for Go embed
+        run: |
+          cd gui
+          npm ci
+          npm run build
+
       - name: Verify dependencies and tests
         run: |
           go mod verify
@@ -83,13 +96,6 @@ jobs:
           sudo apt-get install -y apt-utils gnupg2 dpkg-dev python3-yaml
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.3
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
-      - name: Set up Node.js
-        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'gui/package-lock.json'
 
       - name: Build .deb package
         run: ./scripts/build-deb.sh

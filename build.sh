@@ -10,5 +10,5 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 go mod download
-./scripts/build-go.sh
-echo "Build complete. Binaries: ./m3tal, ./m3tal-api (Linux AMD64 v1, cgo disabled)"
+./scripts/build-go.sh native
+echo "Build complete. Binaries: ./m3tal, ./m3tal-api (native platform)"

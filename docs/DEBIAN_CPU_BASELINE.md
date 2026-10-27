@@ -5,8 +5,9 @@ including the Intel Core i5-750. The CLI and API are built through `scripts/buil
 with `CGO_ENABLED=0`; this prevents C compiler defaults from selecting instructions
 above the supported baseline. The module and CI use the Go version declared in `go.mod`.
 
-Use `./build.sh`, `make build`, or `./scripts/build-deb.sh` for local Linux builds.
-All of these use the shared binary build settings. The Debian package remains one
+Use `./build.sh` or `make build` for native development binaries. The Debian
+package build uses the explicit `debian` profile in `scripts/build-go.sh` to pin
+Linux AMD64 v1 with cgo disabled. The Debian package remains one
 `m3tal` package containing the CLI, API, GUI assets, configuration templates, and
 service files.
 
@@ -28,20 +29,19 @@ recovered from the artifact. Disabling cgo for this application build removes th
 compiler-dependent path. The package test runs the API under the AVX-less Nehalem
 model and checks its authenticated health endpoint.
 
-## Release checks
+## Checks by stage
 
-CI and the release workflow must pass these checks before publication:
+CI verifies dependencies, Go tests and formatting, installs GUI assets before Go
+tests, builds packages through both `nfpm` and `dpkg-deb`, and compares their
+contents and metadata. It also installs and upgrades the package in Debian and
+checks API startup under QEMU's AVX-less Nehalem CPU model.
 
-- `go mod verify`, Go tests, formatting, and clean package build.
-- Package metadata and contents for the `nfpm` and `dpkg-deb` paths.
-- Fresh Debian installation, executable and GUI asset checks, and configuration
-  preservation across a simulated package upgrade.
-- API startup and `/api/health` response under QEMU's AVX-less Nehalem CPU model.
-- Exact agreement between the package filename, Debian version, release tag, and
-  the SHA-256 checksum of the tested `.deb`.
-- Publication of the same tested `.deb`, followed by APT index, signature, and
-  checksum verification.
-- Upgrade and service verification on the affected Intel Core i5-750 server.
+The release workflow repeats Go verification, builds and tests the `nfpm`
+package, and checks that its filename, Debian version, tag, and SHA-256 agree
+before creating the GitHub release. After publishing, it waits for the signed
+APT index and downloaded package to match the tested package hash. Upgrading and
+checking the affected Intel Core i5-750 server remains a manual post-publish
+step.
 
 Do not republish a used package version in place. Use a new version and keep the
 package hash in the release assets and publication metadata.

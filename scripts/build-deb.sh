@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT_DIR"
 
-VERSION=${VERSION:-$(tr -d '[:space:]' < VERSION | sed 's/^v//')}
+VERSION=${VERSION:-$(cat VERSION)}
+VERSION=$(printf '%s' "$VERSION" | tr -d '[:space:]')
+VERSION=${VERSION#v}
 DEB_NAME="m3tal_${VERSION}_amd64.deb"
 DEB_TARGET=${DEB_TARGET:-$DEB_NAME}
 PACKAGER=${PACKAGER:-auto}
@@ -21,7 +23,7 @@ if [[ -d gui ]]; then
     (cd gui && npm ci && npm run build)
 fi
 
-VERSION="$VERSION" ./scripts/build-go.sh
+VERSION="$VERSION" ./scripts/build-go.sh debian
 
 if [[ "$PACKAGER" == "auto" ]]; then
     if command -v nfpm >/dev/null 2>&1; then
@@ -58,7 +60,6 @@ case "$PACKAGER" in
             cp -a gui/dist/. "$STAGE_DIR/usr/share/m3tal/gui/"
         fi
         install -m 644 .env.example "$STAGE_DIR/etc/m3tal/.env.example"
-        install -m 644 packaging/config.yaml "$STAGE_DIR/etc/m3tal/config.yaml"
         install -m 644 VERSION "$STAGE_DIR/etc/m3tal/VERSION"
         install -m 644 VERSION "$STAGE_DIR/usr/share/m3tal/VERSION"
         install -m 644 packaging/m3tal-api.service "$STAGE_DIR/lib/systemd/system/m3tal-api.service"
@@ -79,7 +80,6 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Jake Johnson <jake@m3tal.io>
-Depends: systemd
 Recommends: xdotool
 Description: M3TAL Core — DEB-first infrastructure orchestration platform.
  Includes the m3tal CLI and control-plane API.
@@ -87,7 +87,7 @@ Description: M3TAL Core — DEB-first infrastructure orchestration platform.
 EOF
         printf '%s\n' \
             /etc/m3tal/.env.example \
-            /etc/m3tal/config.yaml \
+            /etc/m3tal/VERSION \
             /lib/systemd/system/m3tal-api.service \
             > "$STAGE_DIR/DEBIAN/conffiles"
         install -m 755 scripts/postinstall.sh "$STAGE_DIR/DEBIAN/postinst"

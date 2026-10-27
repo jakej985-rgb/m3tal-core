@@ -35,7 +35,6 @@ docker run --rm \
             /usr/bin/m3tal-headless
             /usr/bin/m3tal-web
             /etc/m3tal/.env.example
-            /etc/m3tal/config.yaml
             /etc/m3tal/VERSION
             /usr/share/m3tal/VERSION
             /lib/systemd/system/m3tal-api.service

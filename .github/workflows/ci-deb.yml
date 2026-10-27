@@ -16,6 +16,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'gui/package-lock.json'
+    - name: Build GUI assets for Go embed
+      run: |
+        cd gui
+        npm ci
+        npm run build
     - name: Set up Go
       uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
       with:
@@ -32,12 +43,6 @@ jobs:
         fi
     - name: Run Go tests
       run: go test -v ./...
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: 'gui/package-lock.json'
     - name: Install nfpm
       run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.3
     - name: Build and test nfpm package
@@ -73,6 +78,5 @@ jobs:
         done
         test "$(dpkg-deb -f "$nfpm_package" Package)" = m3tal
         test "$(dpkg-deb -f "$nfpm_package" Architecture)" = amd64
-        test "$(dpkg-deb -f "$nfpm_package" Depends)" = systemd
         test "$(dpkg-deb -f "$nfpm_package" Recommends)" = xdotool
         test "$(dpkg-deb -f "$nfpm_package" Version)" = "$(cat VERSION | tr -d '[:space:]' | sed 's/^v//')"
