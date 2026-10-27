@@ -844,7 +844,7 @@ export default function Plugins() {
                       {/* Download Button */}
                       {hasDeb && (
                         <a
-                          href={activeMode ? api.getPluginDownloadUrl(activeMode.id) : downloadUrl}
+                          href={activeMode ? api.getPluginDownloadUrl(activeMode.package_name || activeMode.id) : downloadUrl}
                           download={activeMode?.deb_filename || item.deb_filename || `m3tal-plugin-${activeMode?.id || item.name}.deb`}
                           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-300 border border-cyan-900/60 transition-colors flex items-center gap-1.5"
                           title="Download official Debian (.deb) package"
