@@ -9,6 +9,32 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.20.5] - 2026-10-27
+
+### Overview & Release Highlights
+Release v0.20.5 delivers updates across 5 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **fix(build): include process lock on macOS** (`866e0e0`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(deb): build API for AMD64 v1 baseline** (`0da3fe4`):
+  - *What Changed*: Entire-Checkpoint: 01M5Y0TRXSKZWGDKBNRXZZ6HBR
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 📦 Packaging & Debian Distribution
+- **Merge pull request #136 from jakej985-rgb/codex/deb-cpu-compatibility** (`dbf023f`):
+  - *What Changed*: fix(deb): build API for AMD64 v1 baseline
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(release): reject reused Debian versions** (`648a4a4`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(deb): address compatibility trail findings** (`b443104`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.4] - 2026-10-27
 
 ### Overview & Release Highlights
