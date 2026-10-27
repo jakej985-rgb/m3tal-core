@@ -1,5 +1,6 @@
 # M3TAL Plugin Standardization Specification
 
+
 **Status**: Active Architecture Specification  
 **Design Principle**: *"All code for said plugin lives with the plugin."*  
 **Scope**: Core Platform Host, Process Supervisor, Dynamic UI Mounting, and Plugin Lifecycle
