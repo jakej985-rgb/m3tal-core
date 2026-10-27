@@ -13,8 +13,6 @@ jobs:
   build-and-deploy-deb:
     runs-on: ubuntu-latest
     env:
-      GOAMD64: v1
-      CGO_ENABLED: '0'
       VERSION: ""
       TAG: ""
       CLEAN_VERSION: ""
@@ -33,11 +31,15 @@ jobs:
           CLEAN_VERSION=$(echo "$RAW_VERSION" | sed 's/^v//')
           TAG="v${CLEAN_VERSION}"
 
-          # Check if tag already exists on a different commit
+          # Never rebuild or replace assets for an already-used release tag.
+          # A rerun for the same commit could produce different package bytes.
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             TAG_COMMIT=$(git rev-parse "$TAG^{commit}" 2>/dev/null || true)
             HEAD_COMMIT=$(git rev-parse HEAD)
-            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
+            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+              echo "::error::Release tag $TAG already points to this commit; refusing to rebuild or replace its assets. Bump VERSION to publish a new release."
+              exit 1
+            elif [ -n "$TAG_COMMIT" ]; then
               echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping semantic version..."
               ./scripts/bump-version.sh auto
               TAG=$(cat VERSION | tr -d '[:space:]')

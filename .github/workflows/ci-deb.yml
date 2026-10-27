@@ -8,8 +8,6 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GOAMD64: v1
-  CGO_ENABLED: '0'
 
 jobs:
   build-test-package:
