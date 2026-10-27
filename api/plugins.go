@@ -472,6 +472,13 @@ func findPluginDeb(name string) (string, string) {
 
 	for _, dir := range candidateDirs {
 		for _, v := range nameVariations {
+			// Catalog modes may pass the complete package name (for example,
+			// m3tal-plugin-mesh). Prefer that exact archive over older versioned
+			// builds that happen to match the package wildcard.
+			exactPackage := filepath.Join(dir, v+".deb")
+			if _, err := os.Stat(exactPackage); err == nil {
+				return exactPackage, filepath.Base(exactPackage)
+			}
 			// Pattern: m3tal-plugin-<v>_*.deb
 			matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s_*.deb", v)))
 			if err == nil && len(matches) > 0 {
