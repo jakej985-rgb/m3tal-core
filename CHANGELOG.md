@@ -4,6 +4,11 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
+
 ## [0.20.4] - 2026-10-27
 
 ### Overview & Release Highlights

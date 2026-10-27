@@ -3,6 +3,8 @@ Description=M3TAL API Backend
 Documentation=https://github.com/jakej985-rgb/m3tal-core
 After=network-online.target docker.service
 Wants=network-online.target docker.service m3tal.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple

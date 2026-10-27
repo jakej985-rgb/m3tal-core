@@ -67,7 +67,7 @@ Do not create a separate `m3tal-api` Debian package. Do not work around the cras
 1. Keep release artifacts versioned as a single `m3tal_<version>_amd64.deb`.
 2. Ensure the release workflow runs the same validated build/package steps as CI; do not rebuild a different artifact after tests and publish that untested output.
 3. Verify package filename, embedded Debian version, checksum, and release tag agree before creating the release and dispatching to `m3tal-apt-key`.
-4. Publish the corrected package as a new version (proposed `0.20.4`, only if that version is unused and the repository versioning policy permits it).
+4. Publish the corrected package as a new, unused version. `0.20.4` is already tagged and released; the next candidate is `0.20.5`, subject to the repository versioning policy at release time.
 5. Confirm the central APT repository accepted the new artifact and regenerated consistent index metadata and signatures.
 6. Fetch the published `.deb` and compare its checksum with the exact tested release artifact.
 7. Do not replace version `0.20.3` in place unless the repository's explicit policy supports replacement and the resulting APT metadata remains correct.

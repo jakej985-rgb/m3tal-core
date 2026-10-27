@@ -101,6 +101,7 @@ contents:
     dst: /usr/share/icons/hicolor/16x16/apps/m3tal.png
     type: "file"
 
+
   # Desktop Entry
   - src: ./packaging/m3tal.desktop
     dst: /usr/share/applications/m3tal.desktop

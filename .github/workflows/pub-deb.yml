@@ -31,11 +31,15 @@ jobs:
           CLEAN_VERSION=$(echo "$RAW_VERSION" | sed 's/^v//')
           TAG="v${CLEAN_VERSION}"
 
-          # Check if tag already exists on a different commit
+          # Never rebuild or replace assets for an already-used release tag.
+          # A rerun for the same commit could produce different package bytes.
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             TAG_COMMIT=$(git rev-parse "$TAG^{commit}" 2>/dev/null || true)
             HEAD_COMMIT=$(git rev-parse HEAD)
-            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
+            if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+              echo "::error::Release tag $TAG already points to this commit; refusing to rebuild or replace its assets. Bump VERSION to publish a new release."
+              exit 1
+            elif [ -n "$TAG_COMMIT" ]; then
               echo "⚠️ Tag $TAG already exists on commit $TAG_COMMIT (current HEAD is $HEAD_COMMIT)! Auto-bumping semantic version..."
               ./scripts/bump-version.sh auto
               TAG=$(cat VERSION | tr -d '[:space:]')
@@ -59,15 +63,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
         with:
-          go-version: '1.23'
+          go-version-file: go.mod
           cache: true
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apt-utils gnupg2 dpkg-dev python3-yaml
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Set up Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
@@ -76,12 +73,31 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'gui/package-lock.json'
 
-      - name: Build Web GUI
+      - name: Build GUI assets for Go embed
         run: |
           cd gui
           npm ci
           npm run build
-          cd ..
+
+      - name: Verify dependencies and tests
+        run: |
+          go mod verify
+          go test ./...
+
+      - name: Check Go formatting
+        run: |
+          files=$(gofmt -s -l $(git ls-files '*.go'))
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils gnupg2 dpkg-dev python3-yaml
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.3
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Build .deb package
         run: ./scripts/build-deb.sh
@@ -89,24 +105,30 @@ jobs:
       - name: Verify Built Deb Asset
         run: |
           DEB_FILE="m3tal_${CLEAN_VERSION}_amd64.deb"
-          if [ ! -f "$DEB_FILE" ]; then
-            # Check for any built deb
-            FOUND=$(ls m3tal_*.deb 2>/dev/null | head -n 1)
-            if [ -n "$FOUND" ]; then
-              echo "Package found: $FOUND"
-            else
-              echo "::error ::Debian package build artifact not found!"
-              exit 1
-            fi
-          else
-            echo "Successfully built $DEB_FILE ($(du -h "$DEB_FILE" | cut -f1))"
-          fi
+          test -s "$DEB_FILE"
+          echo "Successfully built $DEB_FILE ($(du -h "$DEB_FILE" | cut -f1))"
+          test "$(dpkg-deb -f "$DEB_FILE" Package)" = m3tal
+          test "$(dpkg-deb -f "$DEB_FILE" Version)" = "$CLEAN_VERSION"
+          test "$(dpkg-deb -f "$DEB_FILE" Architecture)" = amd64
+          test "$TAG" = "v$CLEAN_VERSION"
+
+      - name: Test Debian package and AVX-less API startup
+        run: ./scripts/test-pkg.sh "m3tal_${CLEAN_VERSION}_amd64.deb"
+
+      - name: Record tested package checksum
+        id: checksum
+        run: |
+          DEB_FILE="m3tal_${CLEAN_VERSION}_amd64.deb"
+          sha256sum "$DEB_FILE" > "$DEB_FILE.sha256"
+          echo "sha256=$(sha256sum "$DEB_FILE" | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
-          files: "*.deb"
+          files: |
+            m3tal_${{ env.CLEAN_VERSION }}_amd64.deb
+            m3tal_${{ env.CLEAN_VERSION }}_amd64.deb.sha256
           tag_name: ${{ env.TAG }}
           name: Release ${{ env.TAG }}
           generate_release_notes: true
@@ -126,7 +148,8 @@ jobs:
               "version": "${{ env.CLEAN_VERSION }}",
               "tag": "${{ env.TAG }}",
               "deb_url": "https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/m3tal_${{ env.CLEAN_VERSION }}_amd64.deb",
-              "allow_replace": true
+              "sha256": "${{ steps.checksum.outputs.sha256 }}",
+              "allow_replace": false
             }
 
       - name: Checkout M3tal-Hub
@@ -208,3 +231,44 @@ jobs:
             git push origin main
           fi
           cd ..
+
+      - name: Verify signed central APT index and published package
+        timeout-minutes: 20
+        env:
+          EXPECTED_SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          REPO_URL=https://jakej985-rgb.github.io/m3tal-apt-key
+          curl --fail --location "$REPO_URL/public.key" --output "$RUNNER_TEMP/m3tal-public.key"
+          fingerprint=$(gpg --show-keys --with-colons "$RUNNER_TEMP/m3tal-public.key" \
+            | awk -F: '$1 == "fpr" {print $10; exit}')
+          test "$fingerprint" = 5F84FE50A40111C981410E11775AD1473BF25102
+          gpg --batch --yes --dearmor \
+            --output "$RUNNER_TEMP/m3tal-archive-keyring.gpg" \
+            "$RUNNER_TEMP/m3tal-public.key"
+          sudo install -D -m 0644 "$RUNNER_TEMP/m3tal-archive-keyring.gpg" \
+            /etc/apt/keyrings/m3tal-archive-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/m3tal-archive-keyring.gpg] $REPO_URL stable main" \
+            | sudo tee /etc/apt/sources.list.d/m3tal.list >/dev/null
+
+          for attempt in $(seq 1 40); do
+            if sudo apt-get update -qq && \
+                apt-cache madison m3tal | awk '{print $3}' | grep -Fxq "$CLEAN_VERSION"; then
+              download_dir="$RUNNER_TEMP/m3tal-apt-download"
+              mkdir -p "$download_dir"
+              cd "$download_dir"
+              apt-get download "m3tal=$CLEAN_VERSION"
+              package="m3tal_${CLEAN_VERSION}_amd64.deb"
+              actual_sha256=$(sha256sum "$package" | cut -d ' ' -f1)
+              if [ "$actual_sha256" != "$EXPECTED_SHA256" ]; then
+                echo "::error ::APT package SHA-256 $actual_sha256 does not match tested artifact $EXPECTED_SHA256."
+                exit 1
+              fi
+              echo "Signed APT metadata advertises $CLEAN_VERSION and its package matches the tested SHA-256."
+              exit 0
+            fi
+            echo "APT repository has not published $CLEAN_VERSION yet (attempt $attempt/40)."
+            sleep 15
+          done
+          echo "::error ::Timed out waiting for the signed APT index to publish $CLEAN_VERSION."
+          exit 1

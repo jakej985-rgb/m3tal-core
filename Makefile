@@ -20,10 +20,8 @@ help:
 build:
 	@echo "🎨 Building Web GUI..."
 	cd gui && npm run build
-	@echo "🚀 Building M3TAL Desktop App..."
-	go build -ldflags "-X main.Version=$(VERSION)" -o m3tal ./cli
-	@echo "🚀 Building M3TAL API..."
-	go build -ldflags "-X main.Version=$(VERSION)" -o m3tal-api ./api/cmd
+	@echo "🚀 Building M3TAL CLI and API for the native platform..."
+	VERSION=$(VERSION) ./scripts/build-go.sh native
 	@echo "✅ Build complete."
 
 deb:
