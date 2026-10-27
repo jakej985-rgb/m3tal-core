@@ -1,79 +1,78 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 1. Build Web GUI
-echo "🎨 Building Web GUI..."
-if [ -d "gui" ]; then
-    (cd gui && npm run build)
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT_DIR"
+
+VERSION=${VERSION:-$(tr -d '[:space:]' < VERSION | sed 's/^v//')}
+DEB_NAME="m3tal_${VERSION}_amd64.deb"
+DEB_TARGET=${DEB_TARGET:-$DEB_NAME}
+PACKAGER=${PACKAGER:-auto}
+
+if [[ -z "$VERSION" ]]; then
+    echo "VERSION is empty" >&2
+    exit 1
 fi
 
-# 2. Get version
-VERSION=$(cat VERSION 2>/dev/null | sed 's/^v//' || echo "0.1.0")
-export VERSION
+# Remove outputs first so a failed compile can never package stale binaries.
+rm -f m3tal m3tal-api "$DEB_TARGET"
 
-# 3. Compile binaries
-echo "🚀 Building M3TAL binaries (v${VERSION})..."
-go build -ldflags "-X main.Version=${VERSION}" -o m3tal ./cli
-go build -ldflags "-X main.Version=${VERSION}" -o m3tal-api ./api/cmd
+if [[ -d gui ]]; then
+    (cd gui && npm ci && npm run build)
+fi
 
-# 4. Package into .deb
-DEB_NAME="m3tal_${VERSION}_amd64.deb"
+VERSION="$VERSION" ./scripts/build-go.sh
 
-if command -v nfpm >/dev/null 2>&1; then
-    echo "📦 Packaging with nfpm..."
-    nfpm pkg --packager deb --target "$DEB_NAME" -f packaging/nfpm.yaml
-elif command -v dpkg-deb >/dev/null 2>&1; then
-    echo "📦 Packaging with dpkg-deb..."
-    STAGE_DIR=$(mktemp -d /tmp/m3tal-deb-stage.XXXXXX)
-    trap 'rm -rf "$STAGE_DIR"' EXIT
-
-    mkdir -p "$STAGE_DIR/DEBIAN"
-    mkdir -p "$STAGE_DIR/usr/bin"
-    mkdir -p "$STAGE_DIR/usr/share/m3tal/gui"
-    mkdir -p "$STAGE_DIR/etc/m3tal"
-    mkdir -p "$STAGE_DIR/lib/systemd/system"
-    mkdir -p "$STAGE_DIR/usr/share/applications"
-    mkdir -p "$STAGE_DIR/usr/share/pixmaps"
-    mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
-
-    # Copy binaries & create core CLI aliases
-    cp ./m3tal "$STAGE_DIR/usr/bin/"
-    cp ./m3tal-api "$STAGE_DIR/usr/bin/"
-    chmod 755 "$STAGE_DIR/usr/bin/m3tal" "$STAGE_DIR/usr/bin/m3tal-api"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-core"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-gui"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-headless"
-    ln -sf m3tal "$STAGE_DIR/usr/bin/m3tal-web"
-
-    # Copy GUI static assets
-    if [ -d "gui/dist" ]; then
-        cp -r gui/dist/* "$STAGE_DIR/usr/share/m3tal/gui/"
+if [[ "$PACKAGER" == "auto" ]]; then
+    if command -v nfpm >/dev/null 2>&1; then
+        PACKAGER=nfpm
+    else
+        PACKAGER=dpkg-deb
     fi
+fi
 
-    # Config & primary systemd service
-    cp ./.env.example "$STAGE_DIR/etc/m3tal/.env.example"
-    cp ./VERSION "$STAGE_DIR/etc/m3tal/VERSION"
-    cp ./VERSION "$STAGE_DIR/usr/share/m3tal/VERSION"
-    cp ./packaging/m3tal-api.service "$STAGE_DIR/lib/systemd/system/"
-    cp ./packaging/m3tal.desktop "$STAGE_DIR/usr/share/applications/"
+case "$PACKAGER" in
+    nfpm)
+        command -v nfpm >/dev/null 2>&1 || { echo "nfpm is required for PACKAGER=nfpm" >&2; exit 1; }
+        VERSION="$VERSION" nfpm pkg --packager deb --target "$DEB_TARGET" -f packaging/nfpm.yaml
+        ;;
+    dpkg-deb)
+        command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb is required for PACKAGER=dpkg-deb" >&2; exit 1; }
+        STAGE_DIR=$(mktemp -d)
+        trap 'rm -rf "$STAGE_DIR"' EXIT
+        install -d "$STAGE_DIR/DEBIAN" \
+            "$STAGE_DIR/usr/bin" \
+            "$STAGE_DIR/usr/share/m3tal/gui" \
+            "$STAGE_DIR/etc/m3tal" \
+            "$STAGE_DIR/lib/systemd/system" \
+            "$STAGE_DIR/usr/share/applications" \
+            "$STAGE_DIR/usr/share/pixmaps" \
+            "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 
-    # Icons
-    if [ -f "docs/goback_logo.svg" ]; then
-        cp docs/goback_logo.svg "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/m3tal.svg"
-        cp docs/goback_logo.svg "$STAGE_DIR/usr/share/pixmaps/m3tal.svg"
-    fi
-    if [ -d "cli/m3tal_icon_pack" ]; then
+        install -m 755 m3tal m3tal-api "$STAGE_DIR/usr/bin/"
+        for alias in m3tal-core m3tal-gui m3tal-headless m3tal-web; do
+            ln -s /usr/bin/m3tal "$STAGE_DIR/usr/bin/$alias"
+        done
+
+        if [[ -d gui/dist ]]; then
+            cp -a gui/dist/. "$STAGE_DIR/usr/share/m3tal/gui/"
+        fi
+        install -m 644 .env.example "$STAGE_DIR/etc/m3tal/.env.example"
+        install -m 644 packaging/config.yaml "$STAGE_DIR/etc/m3tal/config.yaml"
+        install -m 644 VERSION "$STAGE_DIR/etc/m3tal/VERSION"
+        install -m 644 VERSION "$STAGE_DIR/usr/share/m3tal/VERSION"
+        install -m 644 packaging/m3tal-api.service "$STAGE_DIR/lib/systemd/system/m3tal-api.service"
+        install -m 644 packaging/m3tal.desktop "$STAGE_DIR/usr/share/applications/m3tal.desktop"
+        install -m 644 docs/goback_logo.svg "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/m3tal.svg"
+        install -m 644 docs/goback_logo.svg "$STAGE_DIR/usr/share/pixmaps/m3tal.svg"
         for size in 16 24 32 48 64 128 256; do
-            icon_file="cli/m3tal_icon_pack/m3tal_icon_${size}x${size}.png"
-            if [ -f "$icon_file" ]; then
-                mkdir -p "$STAGE_DIR/usr/share/icons/hicolor/${size}x${size}/apps"
-                cp "$icon_file" "$STAGE_DIR/usr/share/icons/hicolor/${size}x${size}/apps/m3tal.png"
+            icon="cli/m3tal_icon_pack/m3tal_icon_${size}x${size}.png"
+            if [[ -f "$icon" ]]; then
+                install -D -m 644 "$icon" "$STAGE_DIR/usr/share/icons/hicolor/${size}x${size}/apps/m3tal.png"
             fi
         done
-    fi
 
-    # Control file
-    cat > "$STAGE_DIR/DEBIAN/control" <<EOF
+        cat > "$STAGE_DIR/DEBIAN/control" <<EOF
 Package: m3tal
 Version: ${VERSION}
 Section: utils
@@ -83,20 +82,23 @@ Maintainer: Jake Johnson <jake@m3tal.io>
 Depends: systemd
 Recommends: xdotool
 Description: M3TAL Core — DEB-first infrastructure orchestration platform.
- Includes the m3tal CLI and control-plane API with embedded Web GUI.
- Optimized for home servers and homelab automation.
+ Includes the m3tal CLI and control-plane API.
+ Optimized for Traefik ecosystems and home lab automation.
 EOF
+        printf '%s\n' \
+            /etc/m3tal/.env.example \
+            /etc/m3tal/config.yaml \
+            /lib/systemd/system/m3tal-api.service \
+            > "$STAGE_DIR/DEBIAN/conffiles"
+        install -m 755 scripts/postinstall.sh "$STAGE_DIR/DEBIAN/postinst"
+        install -m 755 scripts/postremove.sh "$STAGE_DIR/DEBIAN/postrm"
+        dpkg-deb --build --root-owner-group "$STAGE_DIR" "$DEB_TARGET"
+        ;;
+    *)
+        echo "Unknown PACKAGER '$PACKAGER'; use auto, nfpm, or dpkg-deb" >&2
+        exit 2
+        ;;
+esac
 
-    # Maintainer scripts
-    cp ./scripts/postinstall.sh "$STAGE_DIR/DEBIAN/postinst"
-    chmod 755 "$STAGE_DIR/DEBIAN/postinst"
-    cp ./scripts/postremove.sh "$STAGE_DIR/DEBIAN/postrm"
-    chmod 755 "$STAGE_DIR/DEBIAN/postrm"
-
-    dpkg-deb --build --root-owner-group "$STAGE_DIR" "$DEB_NAME"
-else
-    echo "❌ Neither nfpm nor dpkg-deb was found."
-    exit 1
-fi
-
-echo "✅ Package built: $DEB_NAME"
+test -s "$DEB_TARGET"
+echo "Package built: $DEB_TARGET"

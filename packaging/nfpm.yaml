@@ -16,6 +16,9 @@ license: MIT
 recommends:
   - xdotool
 
+depends:
+  - systemd
+
 contents:
   # Binaries
   - src: ./m3tal
@@ -51,9 +54,13 @@ contents:
     dst: /etc/m3tal/.env.example
     type: "config"
 
+  - src: ./packaging/config.yaml
+    dst: /etc/m3tal/config.yaml
+    type: "config"
+
   - src: ./VERSION
     dst: /etc/m3tal/VERSION
-    type: "config"
+    type: "file"
 
   - src: ./VERSION
     dst: /usr/share/m3tal/VERSION
@@ -100,6 +107,7 @@ contents:
   - src: ./cli/m3tal_icon_pack/m3tal_icon_16x16.png
     dst: /usr/share/icons/hicolor/16x16/apps/m3tal.png
     type: "file"
+
 
   # Desktop Entry
   - src: ./packaging/m3tal.desktop

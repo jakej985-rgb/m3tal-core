@@ -22,6 +22,10 @@
 
 ## 📥 Installation
 
+The Linux AMD64 Debian package targets the Go `GOAMD64=v1` baseline, including older
+x86-64 CPUs such as the Intel Core i5-750. Both packaged Go binaries are built with
+cgo disabled. See [the Debian CPU baseline and release checklist](docs/DEBIAN_CPU_BASELINE.md).
+
 ### Debian / Ubuntu / Linux Mint (.deb)
 
 Download and install the official Debian package:
