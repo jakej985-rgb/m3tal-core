@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -324,5 +325,109 @@ func TestGetPluginChangelog(t *testing.T) {
 		if len(resp.Data.Changelog) == 0 {
 			t.Errorf("expected non-empty changelog for %s", p)
 		}
+	}
+}
+
+func TestExecuteAction_PreservesCustomPayloadFields(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "m3tal-action-payload-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	pluginDir := filepath.Join(tempDir, "mock-action")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	scriptPath := filepath.Join(pluginDir, "run.sh")
+	script := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"m3tal.init"'*)
+      echo '{"jsonrpc":"2.0","id":1,"result":{"name":"mock-action","version":"1.0.0","capabilities":["actions"]}}'
+      ;;
+    *'"method":"m3tal.action"'*)
+      echo '{"jsonrpc":"2.0","id":2,"result":{"success":true,"message":"Settings loaded","has_pairing_token":true,"listen_port":9321}}'
+      ;;
+    *)
+      echo '{"jsonrpc":"2.0","id":99,"result":{}}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write mock plugin: %v", err)
+	}
+
+	manifest := fmt.Sprintf(`
+apiVersion: m3tal.io/v1alpha1
+kind: Plugin
+metadata:
+  name: mock-action
+  version: 1.0.0
+spec:
+  command: %s
+  capabilities:
+    - actions
+`, scriptPath)
+
+	if err := os.WriteFile(filepath.Join(pluginDir, "plugin.yaml"), []byte(manifest), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	mgr := plugins.NewManager("v0.2.0", tempDir)
+	if _, err := mgr.Discover(); err != nil {
+		t.Fatalf("plugin discovery failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := mgr.StartPlugin(ctx, "mock-action"); err != nil {
+		t.Fatalf("failed to start mock plugin: %v", err)
+	}
+	defer mgr.StopAll()
+
+	h := NewPluginHandlers(mgr)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v2/plugins/mock-action/action",
+		strings.NewReader(`{"action":"get_settings"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "mock-action")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	w := httptest.NewRecorder()
+	h.ExecuteAction(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Status string `json:"status"`
+		Data   struct {
+			Success bool           `json:"success"`
+			Message string         `json:"message"`
+			Payload map[string]any `json:"payload"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Status != "success" {
+		t.Fatalf("expected API status success, got %q", resp.Status)
+	}
+	if !resp.Data.Success {
+		t.Fatal("expected action success to be true")
+	}
+	if resp.Data.Payload["has_pairing_token"] != true {
+		t.Errorf("expected has_pairing_token=true, got %v", resp.Data.Payload["has_pairing_token"])
+	}
+	if resp.Data.Payload["listen_port"] != float64(9321) {
+		t.Errorf("expected listen_port=9321, got %v", resp.Data.Payload["listen_port"])
 	}
 }
