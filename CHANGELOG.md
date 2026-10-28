@@ -9,6 +9,29 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.20.6] - 2026-10-28
+
+### Overview & Release Highlights
+Release v0.20.6 delivers updates across 4 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🚀 New Features & Capabilities
+- **Merge pull request #137 from jakej985-rgb/codex/mesh-pairing-download** (`d55fd6a`):
+  - *What Changed*: fix(plugins): download the selected mode package
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 📦 Packaging & Debian Distribution
+- **fix(plugins): prefer versioned package archives** (`7a79d58`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(plugins): find exact package archives** (`934a721`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(plugins): download the selected mode package** (`b26d1bc`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.5] - 2026-10-27
 
 ### Overview & Release Highlights
