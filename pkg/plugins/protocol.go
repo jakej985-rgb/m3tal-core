@@ -242,9 +242,59 @@ type ActionParams struct {
 	Args     map[string]any `json:"args,omitempty"`
 }
 
-// ActionResult returns outcome of an action.
+// ActionResult returns the outcome of an action while preserving
+// plugin-specific fields in Payload.
 type ActionResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
+	Success bool           `json:"success"`
+	Message string         `json:"message"`
+	Error   string         `json:"error,omitempty"`
+	Data    any            `json:"data,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
+}
+
+// UnmarshalJSON preserves action-specific fields returned by plugins.
+func (r *ActionResult) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+
+	type actionResultAlias ActionResult
+	var standard actionResultAlias
+	if err := json.Unmarshal(data, &standard); err != nil {
+		return err
+	}
+
+	r.Success = standard.Success
+	r.Message = standard.Message
+	r.Error = standard.Error
+	r.Data = standard.Data
+	r.Payload = make(map[string]any)
+
+	if rawPayload, ok := fields["payload"]; ok {
+		if err := json.Unmarshal(rawPayload, &r.Payload); err != nil {
+			return err
+		}
+	}
+	if r.Payload == nil {
+		r.Payload = make(map[string]any)
+	}
+
+	for key, raw := range fields {
+		switch key {
+		case "success", "message", "error", "data", "payload":
+			continue
+		}
+
+		var value any
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return err
+		}
+		r.Payload[key] = value
+	}
+
+	if len(r.Payload) == 0 {
+		r.Payload = nil
+	}
+	return nil
 }

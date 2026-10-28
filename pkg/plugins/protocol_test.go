@@ -154,3 +154,63 @@ func TestCollectResult(t *testing.T) {
 		t.Errorf("Table data mismatch: %+v", parsed.Tables)
 	}
 }
+
+func TestActionResultPreservesCustomFields(t *testing.T) {
+	raw := []byte(`{
+		"success": true,
+		"message": "Settings loaded",
+		"has_pairing_token": true,
+		"listen_port": 9321
+	}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatal("expected success to be true")
+	}
+	if result.Payload["has_pairing_token"] != true {
+		t.Errorf("expected has_pairing_token=true, got %v", result.Payload["has_pairing_token"])
+	}
+	if result.Payload["listen_port"] != float64(9321) {
+		t.Errorf("expected listen_port=9321, got %v", result.Payload["listen_port"])
+	}
+}
+
+func TestActionResultMergesNestedPayload(t *testing.T) {
+	raw := []byte(`{
+		"success": true,
+		"payload": {"has_pairing_token": true},
+		"listen_port": 9321
+	}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.Payload["has_pairing_token"] != true {
+		t.Errorf("expected nested payload field to be preserved, got %v", result.Payload)
+	}
+	if result.Payload["listen_port"] != float64(9321) {
+		t.Errorf("expected top-level custom field to be preserved, got %v", result.Payload)
+	}
+}
+
+func TestActionResultStandardResponse(t *testing.T) {
+	raw := []byte(`{"success":true,"message":"OK"}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if !result.Success || result.Message != "OK" {
+		t.Errorf("unexpected standard fields: %+v", result)
+	}
+	if len(result.Payload) != 0 {
+		t.Errorf("expected no payload for a standard response, got %v", result.Payload)
+	}
+}
