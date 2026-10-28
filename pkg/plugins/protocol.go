@@ -244,8 +244,61 @@ type ActionParams struct {
 
 // ActionResult returns outcome of an action.
 type ActionResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Error   string `json:"error,omitempty"`
-	Data    any    `json:"data,omitempty"`
+	Success bool           `json:"success"`
+	Message string         `json:"message"`
+	Error   string         `json:"error,omitempty"`
+	Data    any            `json:"data,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
+}
+
+// UnmarshalJSON preserves action-specific fields in Payload.
+func (r *ActionResult) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+
+	type actionResultAlias ActionResult
+	var standard actionResultAlias
+	if err := json.Unmarshal(data, &standard); err != nil {
+		return err
+	}
+
+	r.Success = standard.Success
+	r.Message = standard.Message
+	r.Error = standard.Error
+	r.Data = standard.Data
+	r.Payload = make(map[string]any)
+
+	// Preserve fields from an existing nested payload first.
+	if rawPayload, ok := fields["payload"]; ok {
+		if err := json.Unmarshal(rawPayload, &r.Payload); err != nil {
+			return err
+		}
+	}
+
+	// JSON null produces a nil map; initialize it before merging.
+	if r.Payload == nil {
+		r.Payload = make(map[string]any)
+	}
+
+	// Preserve unknown top-level fields. These override nested payload keys.
+	for key, value := range fields {
+		switch key {
+		case "success", "message", "error", "data", "payload":
+			continue
+		}
+
+		var decoded any
+		if err := json.Unmarshal(value, &decoded); err != nil {
+			return err
+		}
+		r.Payload[key] = decoded
+	}
+
+	if len(r.Payload) == 0 {
+		r.Payload = nil
+	}
+
+	return nil
 }

@@ -1,0 +1,26 @@
+
+# Selected text:
+
+## Selection 1
+The API no longer uses cgo in the new build, and QEMU successfully launched it with an AVX-less Nehalem model. I also downloaded the released 0.20.3 package and confirmed x_cgo_getstackbound contains vmovq, vpinsrq, and vmovdqu AVX instructions. I’m checking the central APT ingestion path now so the release sends a checksum that the repository independently verifies.
+
+## My request:
+is this ok to do or is it smart sense older hardware and uses this and uses better for newer  
+
+
+---
+
+explain the differenice then
+
+
+---
+
+
+# Response annotations:
+Each item contains text selected from an earlier Codex response and may include a user comment. Treat items as Annotation 1, Annotation 2, and so on in array order. Use every selection as context and address every comment. For every annotation you address, include its inline directive `:codex-annotation{index="N"}`, where N is its one-based array position (for example, `:codex-annotation{index="1"}`). Do not use unstructured annotation labels.
+<response-annotations>
+[{"text":"AVX-specific speedups in ordinary Go code.","source":{"messageId":"msg_031c9df28311adda016ae042870cbc819b8c14a8eb7db13712","startOffset":971,"endOffset":1013}}]
+</response-annotations>
+
+## My request:
+explain this more

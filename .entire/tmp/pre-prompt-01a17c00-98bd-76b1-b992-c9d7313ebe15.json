@@ -1,0 +1,29 @@
+{
+  "session_id": "01a17c00-98bd-76b1-b992-c9d7313ebe15",
+  "timestamp": "2026-10-27T06:21:11Z",
+  "untracked_files": [
+    ".tmp-bin/nfpm",
+    "docs/DEBIAN_CPU_BASELINE.md",
+    "scripts/build-go.sh"
+  ],
+  "untracked_file_stats": {
+    ".tmp-bin/nfpm": {
+      "size": 19480728,
+      "mod_time_ns": 1793081069278804085,
+      "ino": 21630070,
+      "ctime_ns": 1793081069278804085
+    },
+    "docs/DEBIAN_CPU_BASELINE.md": {
+      "size": 2521,
+      "mod_time_ns": 1793081686467405408,
+      "ino": 21629935,
+      "ctime_ns": 1793081686467405408
+    },
+    "scripts/build-go.sh": {
+      "size": 1095,
+      "mod_time_ns": 1793081819850733800,
+      "ino": 21629934,
+      "ctime_ns": 1793081819850733800
+    }
+  }
+}

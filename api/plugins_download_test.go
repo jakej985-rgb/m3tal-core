@@ -42,3 +42,35 @@ func TestFindPluginDebPrefersVersionedArchive(t *testing.T) {
 		t.Fatalf("findPluginDeb() = (%q, %q), want versioned archive (%q)", path, name, versioned)
 	}
 }
+
+func TestFindPluginDebKeepsExactMeshOverClusterAlias(t *testing.T) {
+	dir := t.TempDir()
+	pluginDebSearchDirs = []string{dir}
+	t.Cleanup(func() { pluginDebSearchDirs = nil })
+
+	mesh := filepath.Join(dir, "m3tal-plugin-mesh.deb")
+	if err := os.WriteFile(mesh, []byte("mesh"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cluster := filepath.Join(dir, "m3tal-plugin-mesh-cluster_0.2.0_amd64.deb")
+	if err := os.WriteFile(cluster, []byte("cluster"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	path, name := findPluginDeb("mesh")
+	if path != mesh || name != filepath.Base(mesh) {
+		t.Fatalf("findPluginDeb(mesh) = (%q, %q), want exact mesh archive (%q)", path, name, mesh)
+	}
+
+	path, name = findPluginDeb("m3tal-plugin-mesh-cluster")
+	if path != cluster || name != filepath.Base(cluster) {
+		t.Fatalf("findPluginDeb(cluster package) = (%q, %q), want (%q)", path, name, cluster)
+	}
+}
+
+func TestPluginInstallSearchTargetsPrefersExplicitPackage(t *testing.T) {
+	got := pluginInstallSearchTargets("mesh", "m3tal-plugin-mesh", "mesh")
+	if len(got) == 0 || got[0] != "m3tal-plugin-mesh" {
+		t.Fatalf("pluginInstallSearchTargets() = %v, want explicit package first", got)
+	}
+}

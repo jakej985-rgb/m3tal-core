@@ -1,0 +1,21 @@
+plan-deb-cpu-*.md
+
+
+---
+
+try again forgot to pull
+
+
+---
+
+ok let completee that plan
+
+
+---
+
+continue
+
+
+---
+
+open pr

@@ -443,51 +443,97 @@ var pluginMetadataMap = map[string]pluginMeta{
 	"m3tal-bench":        {ProcessName: "m3tal-bench", PackageName: "m3tal-plugin-bench", FolderName: "m3tal-bench"},
 }
 
-// findPluginDeb searches candidate locations for a built .deb package.
-func findPluginDeb(name string) (string, string) {
+// pluginDebSearchDirs overrides package search paths in tests.
+var pluginDebSearchDirs []string
+
+func pluginDebCandidateDirs() []string {
+	if len(pluginDebSearchDirs) > 0 {
+		return pluginDebSearchDirs
+	}
 	home, _ := os.UserHomeDir()
-	candidateDirs := []string{
+	return []string{
 		"/home/m3tal/apps/m3tal-plugins",
 		filepath.Join(home, "apps", "m3tal-plugins"),
 		"/home/m3tal/apps/m3tal-plugins/dist/packages",
 		"/var/lib/m3tal/packages",
 		"./plugins",
 	}
+}
 
+func uniqueNonEmpty(values ...string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func pluginNameVariations(name string) []string {
 	clean := strings.TrimPrefix(name, "m3tal-")
-	nameVariations := []string{
+	return uniqueNonEmpty(
 		name,
 		clean,
-		"m3tal-" + clean,
-		"m3tal-plugin-" + name,
-		"m3tal-plugin-" + clean,
-	}
+		"m3tal-"+clean,
+		"m3tal-plugin-"+name,
+		"m3tal-plugin-"+clean,
+	)
+}
 
-	if meta, ok := pluginMetadataMap[name]; ok {
-		nameVariations = append(nameVariations, meta.FolderName, meta.ProcessName, meta.PackageName, strings.TrimPrefix(meta.PackageName, "m3tal-plugin-"), strings.TrimPrefix(meta.FolderName, "m3tal-"))
+func pluginAliasVariations(name string) []string {
+	clean := strings.TrimPrefix(name, "m3tal-")
+	requested := make(map[string]struct{})
+	for _, v := range pluginNameVariations(name) {
+		requested[v] = struct{}{}
 	}
-	if meta, ok := pluginMetadataMap[clean]; ok {
-		nameVariations = append(nameVariations, meta.FolderName, meta.ProcessName, meta.PackageName, strings.TrimPrefix(meta.PackageName, "m3tal-plugin-"), strings.TrimPrefix(meta.FolderName, "m3tal-"))
-	}
-
-	for _, dir := range candidateDirs {
-		for _, v := range nameVariations {
-			// Pattern: m3tal-plugin-<v>_*.deb
-			matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s_*.deb", v)))
-			if err == nil && len(matches) > 0 {
-				return matches[0], filepath.Base(matches[0])
+	var aliases []string
+	appendMeta := func(key string) {
+		meta, ok := pluginMetadataMap[key]
+		if !ok {
+			return
+		}
+		for _, v := range []string{
+			meta.FolderName,
+			meta.ProcessName,
+			meta.PackageName,
+			strings.TrimPrefix(meta.PackageName, "m3tal-plugin-"),
+			strings.TrimPrefix(meta.FolderName, "m3tal-"),
+		} {
+			if v == "" {
+				continue
 			}
-			matchesDirect, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%s_*.deb", v)))
-			if err == nil && len(matchesDirect) > 0 {
-				return matchesDirect[0], filepath.Base(matchesDirect[0])
+			if _, isRequested := requested[v]; isRequested {
+				continue
 			}
+			aliases = append(aliases, v)
 		}
 	}
-	// Check unversioned archives only after every versioned candidate. This
-	// supports exact catalog package names without letting stale .deb files
-	// shadow a newer versioned build.
-	for _, dir := range candidateDirs {
-		for _, v := range nameVariations {
+	appendMeta(name)
+	appendMeta(clean)
+	return uniqueNonEmpty(aliases...)
+}
+
+func lookupPluginDeb(dirs, variations []string, versioned bool) (string, string) {
+	for _, dir := range dirs {
+		for _, v := range variations {
+			if versioned {
+				matches, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s_*.deb", v)))
+				if err == nil && len(matches) > 0 {
+					return matches[0], filepath.Base(matches[0])
+				}
+				matchesDirect, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%s_*.deb", v)))
+				if err == nil && len(matchesDirect) > 0 {
+					return matchesDirect[0], filepath.Base(matchesDirect[0])
+				}
+				continue
+			}
 			for _, exact := range []string{
 				filepath.Join(dir, fmt.Sprintf("m3tal-plugin-%s.deb", v)),
 				filepath.Join(dir, v+".deb"),
@@ -499,6 +545,44 @@ func findPluginDeb(name string) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+// findPluginDeb searches candidate locations for a built .deb package.
+func findPluginDeb(name string) (string, string) {
+	dirs := pluginDebCandidateDirs()
+	requested := pluginNameVariations(name)
+	aliases := pluginAliasVariations(name)
+
+	// Prefer versioned builds of the requested package, then its exact
+	// unversioned archive. Role aliases (mesh -> cluster) are only a fallback
+	// so another package cannot outrank the selected archive.
+	if path, base := lookupPluginDeb(dirs, requested, true); path != "" {
+		return path, base
+	}
+	if path, base := lookupPluginDeb(dirs, requested, false); path != "" {
+		return path, base
+	}
+	if path, base := lookupPluginDeb(dirs, aliases, true); path != "" {
+		return path, base
+	}
+	return lookupPluginDeb(dirs, aliases, false)
+}
+
+func pluginInstallSearchTargets(name, pkg, mode string) []string {
+	targets := []string{name}
+	if mode != "" {
+		targets = uniqueNonEmpty(
+			mode,
+			name+"-"+mode,
+			"m3tal-"+name+"-"+mode,
+			"m3tal-plugin-"+name+"-"+mode,
+			name,
+		)
+	}
+	if pkg != "" {
+		targets = uniqueNonEmpty(append([]string{pkg}, targets...)...)
+	}
+	return uniqueNonEmpty(targets...)
 }
 
 // findPluginChangelog finds changelog or roadmap documentation for a plugin.
@@ -854,18 +938,7 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		req.Method = "sudo"
 	}
 
-	searchTargets := []string{name}
-	if req.Package != "" {
-		searchTargets = append([]string{req.Package}, searchTargets...)
-	}
-	if req.Mode != "" {
-		searchTargets = append([]string{
-			req.Mode,
-			name + "-" + req.Mode,
-			"m3tal-" + name + "-" + req.Mode,
-			"m3tal-plugin-" + name + "-" + req.Mode,
-		}, searchTargets...)
-	}
+	searchTargets := pluginInstallSearchTargets(name, req.Package, req.Mode)
 
 	var debPath, debName string
 	for _, target := range searchTargets {

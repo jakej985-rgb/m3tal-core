@@ -154,3 +154,75 @@ func TestCollectResult(t *testing.T) {
 		t.Errorf("Table data mismatch: %+v", parsed.Tables)
 	}
 }
+
+func TestActionResultPreservesCustomFields(t *testing.T) {
+	raw := []byte(`{
+		"success": true,
+		"message": "Settings loaded",
+		"has_pairing_token": true,
+		"listen_port": 9321
+	}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatal("expected Success to be true")
+	}
+	if result.Payload["has_pairing_token"] != true {
+		t.Errorf("unexpected has_pairing_token: %v",
+			result.Payload["has_pairing_token"])
+	}
+	if result.Payload["listen_port"] != float64(9321) {
+		t.Errorf("unexpected listen_port: %v",
+			result.Payload["listen_port"])
+	}
+}
+
+func TestActionResultMergesNestedPayload(t *testing.T) {
+	raw := []byte(`{
+		"success": true,
+		"payload": {"shared": "nested", "existing": 1},
+		"shared": "top-level",
+		"extra": true
+	}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.Payload["shared"] != "top-level" {
+		t.Errorf("top-level value should win: %v",
+			result.Payload["shared"])
+	}
+	if result.Payload["existing"] != float64(1) {
+		t.Errorf("nested field lost: %v", result.Payload["existing"])
+	}
+	if result.Payload["extra"] != true {
+		t.Errorf("custom field lost: %v", result.Payload["extra"])
+	}
+}
+
+func TestActionResultPreservesDataAndNullPayload(t *testing.T) {
+	raw := []byte(`{
+		"success": true,
+		"data": {"legacy": true},
+		"payload": null,
+		"custom": "preserved"
+	}`)
+
+	var result ActionResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.Data == nil {
+		t.Fatal("expected existing Data field to be preserved")
+	}
+	if result.Payload["custom"] != "preserved" {
+		t.Errorf("custom field lost: %v", result.Payload["custom"])
+	}
+}
