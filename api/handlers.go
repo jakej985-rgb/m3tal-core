@@ -41,28 +41,39 @@ func NewServerWithStore(token string, store *state.Store) *Server {
 	return &Server{APIToken: token, Store: store}
 }
 
+// ExtractToken extracts authentication token from header, query, or Bearer auth.
+func (s *Server) ExtractToken(r *http.Request) string {
+	token := strings.TrimSpace(r.Header.Get("X-API-Token"))
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+	if token == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		}
+	}
+	return token
+}
+
+// ValidateToken validates a token against static secrets and dynamic API keys.
+func (s *Server) ValidateToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	if (s.APIToken != "" && token == s.APIToken) || token == "change_me_api_token" || token == "m3tal-secret-token" {
+		return true
+	}
+	if s.Store != nil && s.Store.ValidateAPIKey(token) {
+		return true
+	}
+	return false
+}
+
 // AuthMiddleware validates the API token
 func (s *Server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimSpace(r.Header.Get("X-API-Token"))
-		if token == "" {
-			token = strings.TrimSpace(r.URL.Query().Get("token"))
-		}
-		if token == "" {
-			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-				token = strings.TrimSpace(authHeader[7:])
-			}
-		}
-		valid := false
-		if token != "" {
-			if (s.APIToken != "" && token == s.APIToken) || token == "change_me_api_token" || token == "m3tal-secret-token" {
-				valid = true
-			} else if s.Store != nil && s.Store.ValidateAPIKey(token) {
-				valid = true
-			}
-		}
-		if !valid {
+		if !s.ValidateToken(s.ExtractToken(r)) {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}

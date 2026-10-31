@@ -578,10 +578,10 @@ func (s *Store) SyncAPIKeysToFile() error {
 	}
 	filePath := filepath.Join(targetDir, "api_keys.json")
 	payload := map[string]any{
-		"primary_token": "",
+		"primary_token": s.GetPrimaryAPIKey(),
 		"keys":          keys,
 	}
-	if len(keys) > 0 {
+	if payload["primary_token"] == "" && len(keys) > 0 {
 		payload["primary_token"] = keys[0].Token
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
