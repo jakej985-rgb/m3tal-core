@@ -9,6 +9,40 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.21.0] - 2026-10-31
+
+### Overview & Release Highlights
+Release v0.21.0 delivers updates across 7 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **Merge pull request #138 from jakej985-rgb/feat/plugin-dpkg-triggers** (`d67a6cc`):
+  - *What Changed*: feat(packaging): add dpkg trigger support for plugins
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **feat(plugins): handle SIGHUP for immediate plugin rediscovery on dpkg triggers** (`2174c7d`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 📦 Packaging & Debian Distribution
+- **fix(plugins): register SIGHUP handler in RunServer instead of package init** (`0c59b2b`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(plugins): register SIGHUP early and target systemd unit safely** (`35f93e8`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **fix(packaging): prevent trigger restart cgroup termination and clean packaging files** (`8f7fd82`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **feat(packaging): add dpkg trigger support for plugins** (`86604de`):
+  - *What Changed*: Register interest-noawait on /usr/lib/m3tal/plugins in packaging/nfpm.yaml and packaging/deb/DEBIAN/triggers. Add trigger handler in postinst scripts to restart m3tal services on plugin changes.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🐛 Bug Fixes & Stability
+- **fix(plugins): initialize SIGHUP in init and reuse shared GlobalPluginManager** (`6ad17ec`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.20.7] - 2026-10-29
 
 ### Overview & Release Highlights
