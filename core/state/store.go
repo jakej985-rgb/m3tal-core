@@ -1,11 +1,14 @@
 package state
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -14,6 +17,15 @@ import (
 // Store wraps a SQLite database for M3TAL state persistence.
 type Store struct {
 	db *sql.DB
+}
+
+// APIKeyRecord is a stored API authorization key.
+type APIKeyRecord struct {
+	ID         int64   `json:"id"`
+	Name       string  `json:"name"`
+	Token      string  `json:"token"`
+	CreatedAt  string  `json:"created_at"`
+	LastUsedAt *string `json:"last_used_at,omitempty"`
 }
 
 // RouteRecord is a stored route with its database ID.
@@ -122,6 +134,13 @@ func (s *Store) Migrate() error {
 			installed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			config TEXT DEFAULT '{}'
 		)`,
+		`CREATE TABLE IF NOT EXISTS api_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			token TEXT NOT NULL UNIQUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME
+		)`,
 	}
 
 	for _, m := range migrations {
@@ -133,6 +152,12 @@ func (s *Store) Migrate() error {
 	// Schema migrations for v2 proxy (SSL and Middlewares support)
 	_, _ = s.db.Exec("ALTER TABLE routes ADD COLUMN ssl INTEGER DEFAULT 0")
 	_, _ = s.db.Exec("ALTER TABLE routes ADD COLUMN middlewares TEXT DEFAULT ''")
+
+	// Ensure at least one primary API key exists if empty
+	var keyCount int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM api_keys").Scan(&keyCount); err == nil && keyCount == 0 {
+		_, _ = s.CreateAPIKey("Default Key")
+	}
 
 	return nil
 }
@@ -399,4 +424,149 @@ func GetStatePath() string {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// --- API Keys (Jellyfin-style server generated tokens) ---
+
+// ListAPIKeys returns all stored API keys.
+func (s *Store) ListAPIKeys() ([]APIKeyRecord, error) {
+	rows, err := s.db.Query(`SELECT id, name, token, created_at, last_used_at FROM api_keys ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("cannot list API keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []APIKeyRecord
+	for rows.Next() {
+		var rec APIKeyRecord
+		var lastUsed sql.NullString
+		if err := rows.Scan(&rec.ID, &rec.Name, &rec.Token, &rec.CreatedAt, &lastUsed); err != nil {
+			return nil, err
+		}
+		if lastUsed.Valid {
+			rec.LastUsedAt = &lastUsed.String
+		}
+		keys = append(keys, rec)
+	}
+	if keys == nil {
+		keys = []APIKeyRecord{}
+	}
+	return keys, rows.Err()
+}
+
+// CreateAPIKey generates a cryptographically secure random token (like Jellyfin) and stores it with the specified name.
+// Custom key entries are prohibited: the token is strictly server-generated.
+func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return nil, fmt.Errorf("API key name cannot be empty")
+	}
+
+	// 16 bytes = 32 hex characters cryptographically secure token
+	tokenBytes := make([]byte, 16)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random token: %w", err)
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	result, err := s.db.Exec(`INSERT INTO api_keys (name, token, created_at) VALUES (?, ?, ?)`, trimmedName, token, now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store API key: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	rec := &APIKeyRecord{
+		ID:        id,
+		Name:      trimmedName,
+		Token:     token,
+		CreatedAt: now,
+	}
+
+	_ = s.SyncAPIKeysToFile()
+	return rec, nil
+}
+
+// DeleteAPIKey removes an API key by its database ID.
+func (s *Store) DeleteAPIKey(id int64) error {
+	res, err := s.db.Exec(`DELETE FROM api_keys WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("cannot delete API key: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("API key with ID %d not found", id)
+	}
+	_ = s.SyncAPIKeysToFile()
+	return nil
+}
+
+// ValidateAPIKey checks if a token exists in the store and records its last usage.
+func (s *Store) ValidateAPIKey(token string) bool {
+	if token == "" {
+		return false
+	}
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM api_keys WHERE token = ?`, token).Scan(&id)
+	if err != nil {
+		return false
+	}
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	_, _ = s.db.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, id)
+	return true
+}
+
+// GetPrimaryAPIKey returns the first or most recently used API key token.
+// If no keys exist, it automatically provisions an initial "Default Key".
+func (s *Store) GetPrimaryAPIKey() string {
+	keys, err := s.ListAPIKeys()
+	if err == nil && len(keys) > 0 {
+		return keys[0].Token
+	}
+	rec, err := s.CreateAPIKey("Default Key")
+	if err == nil && rec != nil {
+		return rec.Token
+	}
+	return ""
+}
+
+// SyncAPIKeysToFile writes active API keys to ~/.config/m3tal/api_keys.json for easy plugin/daemon discovery.
+func (s *Store) SyncAPIKeysToFile() error {
+	keys, err := s.ListAPIKeys()
+	if err != nil {
+		return err
+	}
+	home, err := os.UserHomeDir()
+	var targetDir string
+	if err == nil && home != "" {
+		targetDir = filepath.Join(home, ".config", "m3tal")
+	} else {
+		targetDir = "/etc/m3tal"
+	}
+	if err := os.MkdirAll(targetDir, 0700); err != nil {
+		return err
+	}
+	filePath := filepath.Join(targetDir, "api_keys.json")
+	payload := map[string]any{
+		"primary_token": "",
+		"keys":          keys,
+	}
+	if len(keys) > 0 {
+		payload["primary_token"] = keys[0].Token
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := filePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filePath)
 }

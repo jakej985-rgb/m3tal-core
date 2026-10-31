@@ -18,6 +18,7 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/events"
 	"github.com/jakej985-rgb/m3tal-core/core/health"
 	"github.com/jakej985-rgb/m3tal-core/core/preflight"
+	"github.com/jakej985-rgb/m3tal-core/core/state"
 	"github.com/jakej985-rgb/m3tal-core/core/system"
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
 	syspaths "github.com/jakej985-rgb/m3tal-core/pkg/system"
@@ -27,11 +28,17 @@ import (
 // Server handles API requests
 type Server struct {
 	APIToken string
+	Store    *state.Store
 }
 
 // NewServer creates a new API server
 func NewServer(token string) *Server {
 	return &Server{APIToken: token}
+}
+
+// NewServerWithStore creates a new API server with a persistent state store
+func NewServerWithStore(token string, store *state.Store) *Server {
+	return &Server{APIToken: token, Store: store}
 }
 
 // AuthMiddleware validates the API token
@@ -41,7 +48,19 @@ func (s *Server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if token == "" {
 			token = r.URL.Query().Get("token")
 		}
-		if token != s.APIToken && token != "change_me_api_token" && token != "m3tal-secret-token" {
+		if token == "" {
+			authHeader := r.Header.Get("Authorization")
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+		}
+		valid := false
+		if token == s.APIToken || token == "change_me_api_token" || token == "m3tal-secret-token" {
+			valid = true
+		} else if s.Store != nil && s.Store.ValidateAPIKey(token) {
+			valid = true
+		}
+		if !valid {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}

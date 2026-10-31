@@ -170,3 +170,65 @@ func TestGetStatePath(t *testing.T) {
 		t.Errorf("expected /tmp/test-state.db, got %s", p)
 	}
 }
+
+func TestAPIKeysCRUD(t *testing.T) {
+	db := tempDB(t)
+
+	// List initial provisioned key
+	keys, err := db.ListAPIKeys()
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("expected 1 initial key, got %d", len(keys))
+	}
+	if keys[0].Name != "Default Key" || len(keys[0].Token) != 32 {
+		t.Fatalf("unexpected initial key: %+v", keys[0])
+	}
+
+	// Create new key for mesh
+	newKey, err := db.CreateAPIKey("Mesh Fleet")
+	if err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+	if newKey.Name != "Mesh Fleet" {
+		t.Errorf("expected name 'Mesh Fleet', got %s", newKey.Name)
+	}
+	if len(newKey.Token) != 32 {
+		t.Errorf("expected 32 hex chars token, got len=%d", len(newKey.Token))
+	}
+
+	// Empty name rejected
+	if _, err := db.CreateAPIKey("   "); err == nil {
+		t.Error("expected error creating API key with empty name")
+	}
+
+	// Validation
+	if !db.ValidateAPIKey(newKey.Token) {
+		t.Errorf("expected ValidateAPIKey(%s) to be true", newKey.Token)
+	}
+	if db.ValidateAPIKey("non-existent-token") {
+		t.Error("expected ValidateAPIKey for non-existent token to be false")
+	}
+
+	// Verify last_used_at updated
+	keys, _ = db.ListAPIKeys()
+	found := false
+	for _, k := range keys {
+		if k.ID == newKey.ID && k.LastUsedAt != nil {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected last_used_at to be populated after validation")
+	}
+
+	// Delete key
+	if err := db.DeleteAPIKey(newKey.ID); err != nil {
+		t.Fatalf("DeleteAPIKey: %v", err)
+	}
+	if db.ValidateAPIKey(newKey.Token) {
+		t.Error("deleted key should not validate")
+	}
+}

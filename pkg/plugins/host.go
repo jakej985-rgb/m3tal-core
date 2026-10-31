@@ -287,10 +287,13 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 
 	cmd := exec.CommandContext(pCtx, cmdPath, p.Manifest.Spec.Args...)
 	cmd.Dir = p.Manifest.Dir
+	coreKey := resolveCoreAPIKey()
 	cmd.Env = append(os.Environ(),
 		"M3TAL_CORE_VERSION="+coreVersion,
 		"M3TAL_PLUGIN_DIR="+p.Manifest.Dir,
 		"M3TAL_PROCESS_NAME="+procName,
+		"M3TAL_API_KEY="+coreKey,
+		"M3TAL_API_TOKEN="+coreKey,
 	)
 
 	stdin, err := cmd.StdinPipe()
@@ -738,3 +741,29 @@ func (m *Manager) StopPlugin(name string) error {
 	p.ExplicitlyStopped = true
 	return p.Stop()
 }
+
+func resolveCoreAPIKey() string {
+	if k := os.Getenv("M3TAL_API_KEY"); k != "" {
+		return k
+	}
+	if k := os.Getenv("M3TAL_API_TOKEN"); k != "" {
+		return k
+	}
+	if k := os.Getenv("API_TOKEN"); k != "" {
+		return k
+	}
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		keyFile := filepath.Join(home, ".config", "m3tal", "api_keys.json")
+		if data, err := os.ReadFile(keyFile); err == nil {
+			var parsed struct {
+				PrimaryToken string `json:"primary_token"`
+			}
+			if err := json.Unmarshal(data, &parsed); err == nil && parsed.PrimaryToken != "" {
+				return parsed.PrimaryToken
+			}
+		}
+	}
+	return ""
+}
+

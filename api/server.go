@@ -69,7 +69,7 @@ func StartServer(port string, token string) error {
 func StartServerWithStore(port string, token string, db *state.Store) error {
 	log.Printf("[api-daemon] StartServerWithStore starting on port %s (SQLite store active: %v)\n", port, db != nil)
 	system.StartMetricsAggregator()
-	srv := NewServer(token)
+	srv := NewServerWithStore(token, db)
 
 	// Background auto-sensing & auto-start on shared manager
 	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
@@ -269,6 +269,11 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 
 		r.Route("/api/v2", func(r chi.Router) {
 			r.Use(srv.chiAuthMiddleware)
+
+			// API Keys (Jellyfin-style key manager)
+			r.Get("/auth/keys", srv.ListAPIKeys)
+			r.Post("/auth/keys", srv.CreateAPIKey)
+			r.Delete("/auth/keys/{id}", srv.DeleteAPIKey)
 
 			// Routes
 			r.Get("/routes", routeH.ListRoutes)
@@ -514,7 +519,13 @@ func (s *Server) chiAuthMiddleware(next http.Handler) http.Handler {
 				token = strings.TrimPrefix(authHeader, "Bearer ")
 			}
 		}
-		if token != s.APIToken && token != "change_me_api_token" && token != "m3tal-secret-token" {
+		valid := false
+		if token == s.APIToken || token == "change_me_api_token" || token == "m3tal-secret-token" {
+			valid = true
+		} else if s.Store != nil && s.Store.ValidateAPIKey(token) {
+			valid = true
+		}
+		if !valid {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}

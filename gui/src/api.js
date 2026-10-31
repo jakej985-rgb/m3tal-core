@@ -104,6 +104,9 @@ export const api = {
   saveRepository: (repo) => fetchAPI('POST', '/api/v2/repositories', repo),
   refreshRepositories: () => fetchAPI('POST', '/api/v2/repositories/refresh'),
   deleteRepository: (id) => fetchAPI('DELETE', `/api/v2/repositories/${id}`),
+  getApiKeys: () => fetchAPI('GET', '/api/v2/auth/keys'),
+  createApiKey: (name) => fetchAPI('POST', '/api/v2/auth/keys', { name }),
+  deleteApiKey: (id) => fetchAPI('DELETE', `/api/v2/auth/keys/${id}`),
 };
 
 export const subscribeWS = (path, onMessage, onError = null) => {
