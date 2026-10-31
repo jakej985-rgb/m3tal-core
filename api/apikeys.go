@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -91,7 +92,11 @@ func (s *Server) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Store.DeleteAPIKey(id); err != nil {
-		sendError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		if errors.Is(err, state.ErrAPIKeyNotFound) || strings.Contains(err.Error(), "not found") {
+			sendError(w, http.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		} else {
+			sendError(w, http.StatusInternalServerError, "DATABASE_ERROR", err.Error(), nil)
+		}
 		return
 	}
 

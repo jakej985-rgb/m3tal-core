@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -163,7 +164,11 @@ func (s *Store) Migrate() error {
 	// Ensure at least one primary API key exists if empty
 	var keyCount int
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM api_keys").Scan(&keyCount); err == nil && keyCount == 0 {
-		_, _ = s.CreateAPIKey("Default Key")
+		token, err := GenerateRandomAPIKeyToken()
+		if err == nil {
+			now := time.Now().UTC().Format(time.RFC3339)
+			_, _ = s.db.Exec(`INSERT INTO api_keys (name, token, created_at) VALUES (?, ?, ?)`, "Default Key", token, now)
+		}
 	}
 
 	return nil
@@ -461,6 +466,15 @@ func (s *Store) ListAPIKeys() ([]APIKeyRecord, error) {
 	return keys, rows.Err()
 }
 
+// GenerateRandomAPIKeyToken generates a 32 hex characters cryptographically secure token (like Jellyfin).
+func GenerateRandomAPIKeyToken() (string, error) {
+	tokenBytes := make([]byte, 16)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("failed to generate random token: %w", err)
+	}
+	return hex.EncodeToString(tokenBytes), nil
+}
+
 // CreateAPIKey generates a cryptographically secure random token (like Jellyfin) and stores it with the specified name.
 // Custom key entries are prohibited: the token is strictly server-generated.
 func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
@@ -469,12 +483,10 @@ func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
 		return nil, fmt.Errorf("API key name cannot be empty")
 	}
 
-	// 16 bytes = 32 hex characters cryptographically secure token
-	tokenBytes := make([]byte, 16)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate random token: %w", err)
+	token, err := GenerateRandomAPIKeyToken()
+	if err != nil {
+		return nil, err
 	}
-	token := hex.EncodeToString(tokenBytes)
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	result, err := s.db.Exec(`INSERT INTO api_keys (name, token, created_at) VALUES (?, ?, ?)`, trimmedName, token, now)
@@ -497,6 +509,9 @@ func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
 	return rec, nil
 }
 
+// ErrAPIKeyNotFound is returned when attempting to operate on an API key that does not exist.
+var ErrAPIKeyNotFound = errors.New("API key not found")
+
 // DeleteAPIKey removes an API key by its database ID.
 func (s *Store) DeleteAPIKey(id int64) error {
 	res, err := s.db.Exec(`DELETE FROM api_keys WHERE id = ?`, id)
@@ -508,7 +523,7 @@ func (s *Store) DeleteAPIKey(id int64) error {
 		return err
 	}
 	if rows == 0 {
-		return fmt.Errorf("API key with ID %d not found", id)
+		return ErrAPIKeyNotFound
 	}
 	_ = s.SyncAPIKeysToFile()
 	return nil
@@ -608,5 +623,9 @@ func (s *Store) SyncAPIKeysToFile() error {
 		return err
 	}
 	_ = os.Chmod(tmpPath, 0600)
-	return os.Rename(tmpPath, filePath)
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
