@@ -110,3 +110,9 @@ contents:
 scripts:
   postinstall: ./scripts/postinstall.sh
   postremove: ./scripts/postremove.sh
+
+deb:
+  triggers:
+    interest_noawait:
+      - /usr/lib/m3tal/plugins
+
