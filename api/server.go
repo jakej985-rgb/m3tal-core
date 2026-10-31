@@ -7,9 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -61,6 +63,18 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	GlobalPluginManager = plugins.NewManager("v0.2.0")
 	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
 	defer GlobalPluginManager.StopAll()
+
+	// Listen for SIGHUP to trigger immediate plugin re-discovery without service restart
+	sigHupCh := make(chan os.Signal, 1)
+	signal.Notify(sigHupCh, syscall.SIGHUP)
+	go func() {
+		for range sigHupCh {
+			log.Println("🔄 Received SIGHUP: refreshing plugins...")
+			if GlobalPluginManager != nil {
+				_, _ = GlobalPluginManager.DiscoverAndAutoStart(context.Background())
+			}
+		}
+	}()
 
 	// Start background Docker events forwarder
 	go func() {

@@ -3,6 +3,9 @@ set -e
 
 if [ "$1" = "triggered" ]; then
     echo "[m3tal] Trigger received for plugins ($2)..."
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -HUP -f m3tal-api >/dev/null 2>&1 || true
+    fi
     exit 0
 fi
 
