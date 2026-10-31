@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "review": {
+    "parallel_agents": true,
+    "max_remediation_iterations": 3,
+    "max_duration_seconds": 900,
+    "require_judge": true,
+    "require_diff_attribution": true,
+    "block_on_medium": true
+  },
+  "agents": {
+    "syntax": true,
+    "slop": true,
+    "security": true,
+    "logic": true,
+    "architecture": true,
+    "tests": true
+  },
+  "permissions": {
+    "modify_source": false,
+    "install_dependencies": false,
+    "execute_builds": false,
+    "execute_tests": false,
+    "execute_static_analysis": false
+  },
+  "remediation": {
+    "enabled": true,
+    "coding_agent_required": true,
+    "automatic_retry": true
+  },
+  "history": {
+    "enabled": true,
+    "immutable_iterations": true,
+    "save_agent_reports": true,
+    "save_rejected_findings": true
+  }
+}

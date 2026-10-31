@@ -17,6 +17,8 @@ This repository uses a strict validation gate for pushes.
   5. `go build -v -o /tmp/m3tal-test ./cli && go build -v -o /tmp/m3tal-api-test ./api/cmd && rm -f /tmp/m3tal-test /tmp/m3tal-api-test`
   6. `./scripts/build-deb.sh` -> packages `m3tal_${VERSION}_amd64.deb`
   7. `./scripts/test-pkg.sh` -> validates package installation & configuration preservation
+  8. `python3 /home/m3tal/apps/M3tal-core/scripts/review/engine.py --repo . --head HEAD --action verify-push` -> validates that the local Multi-Agent Review Engine (`.agents/agents/review-orchestrator/agent.md`) audited HEAD and achieved `PASSED` status with 0 blocking defects.
+- **Mandatory Multi-Agent Code Review**: Before any push, the local Review Orchestrator (`/home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md`) must be executed and achieve `PASSED` status with 0 blocking defects.
 - **Only the Push Gatekeeper is authorized to execute `git push`**.
 - Validation results are tied to the exact working-tree/commit state that was tested.
 - Any code, packaging script, UI, dependency, or workflow change after validation invalidates the previous result.

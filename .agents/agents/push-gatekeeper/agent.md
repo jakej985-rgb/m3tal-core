@@ -14,6 +14,7 @@ model: pro
 commandExecutionPolicy: eager
 agents:
   - .agents/agents/release-changelog/agent.md
+  - .agents/agents/review-orchestrator/agent.md
 ---
 
 # System Prompt
@@ -78,6 +79,14 @@ Never push until every required gate is green.
      ./scripts/build-deb.sh
      dpkg-deb -I m3tal_*.deb
      ```
+   - **Gate G (Multi-Agent Code Review & Remediation)**:
+     ```bash
+     python3 /home/m3tal/apps/M3tal-core/scripts/review/engine.py --repo . --head HEAD --action verify-push
+     ```
+     If code review verification fails or has not yet run for HEAD:
+     - Invoke `/home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md` to run the multi-agent code review.
+     - Remediate all blocking defects.
+     - Ensure review status is `PASSED` with 0 blocking defects.
 
 4. **Collect Structured PASS/FAIL Results**:
    - If anything fails, DO NOT simply halt and say "PUSH BLOCKED". You MUST find the root cause and repair it in the working tree.

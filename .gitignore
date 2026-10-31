@@ -66,3 +66,6 @@ coverage/
 .eslintcache
 plugins/*/*-plugin
 plugins/**/docker-plugin
+
+# Review Engine Audit Trails
+.m3tal-review/
