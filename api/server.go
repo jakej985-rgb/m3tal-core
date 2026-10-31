@@ -31,7 +31,7 @@ import (
 // GlobalPluginManager manages the external plugin supervisor.
 var GlobalPluginManager = plugins.NewManager("v0.2.0")
 
-func init() {
+func setupSighupHandler() {
 	sigHupCh := make(chan os.Signal, 1)
 	signal.Notify(sigHupCh, syscall.SIGHUP)
 	go func() {
@@ -44,6 +44,7 @@ func init() {
 
 // RunServer automatically initializes the state store and starts the API daemon.
 func RunServer(port string, token string) error {
+	setupSighupHandler()
 	dbPath := state.GetStatePath()
 	db, err := state.Open(dbPath)
 	if err != nil {
