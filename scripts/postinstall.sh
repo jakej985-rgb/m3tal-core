@@ -3,10 +3,6 @@ set -e
 
 if [ "$1" = "triggered" ]; then
     echo "[m3tal] Trigger received for plugins ($2)..."
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl try-restart m3tal.service >/dev/null 2>&1 || true
-        systemctl try-restart m3tal-api.service >/dev/null 2>&1 || true
-    fi
     exit 0
 fi
 
