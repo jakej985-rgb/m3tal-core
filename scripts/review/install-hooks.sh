@@ -35,20 +35,30 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         continue
     fi
 
-    if [ -f "$ENGINE_SCRIPT" ]; then
-        python3 "$ENGINE_SCRIPT" --repo . --head "$local_sha" --action verify-push
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -ne 0 ]; then
-            echo ""
-            echo "================================================================================"
-            echo ">>> M3TAL Review Gate: PUSH BLOCKED!"
-            echo ">>> To review and approve changes with the Multi-Agent Review Engine, run:"
-            echo "    /home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md"
-            echo ">>> (Use '\''git push --no-verify'\'' only for emergency human-authorized bypass)"
-            echo "================================================================================"
-            exit $EXIT_CODE
-        fi
-    fi
+    # Strictly protect main branch pushes. Feature branches (feat/*, fix/*) are
+    # allowed to push iteratively during the worker agent review & repair loop.
+    case "$remote_ref" in
+        refs/heads/main|main)
+            if [ -f "$ENGINE_SCRIPT" ]; then
+                python3 "$ENGINE_SCRIPT" --repo . --head "$local_sha" --action verify-push
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne 0 ]; then
+                    echo ""
+                    echo "================================================================================"
+                    echo ">>> M3TAL Review Gate: PUSH TO MAIN BLOCKED!"
+                    echo ">>> Direct pushes or merges to main require passing code review and release gates."
+                    echo ">>> Work in a feature branch with the review worker agent:"
+                    echo "    /home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md"
+                    echo ">>> (Use '\''git push --no-verify'\'' only for emergency human-authorized bypass)"
+                    echo "================================================================================"
+                    exit $EXIT_CODE
+                fi
+            fi
+            ;;
+        *)
+            # Feature/worker branch - allow push for iteration & PR testing
+            ;;
+    esac
 done
 
 # Entire CLI hooks (if installed)
@@ -79,20 +89,30 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         continue
     fi
 
-    if [ -f "$ENGINE_SCRIPT" ]; then
-        python3 "$ENGINE_SCRIPT" --repo . --head "$local_sha" --action verify-push
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -ne 0 ]; then
-            echo ""
-            echo "================================================================================"
-            echo ">>> M3TAL Review Gate: PUSH BLOCKED!"
-            echo ">>> To review and approve changes with the Multi-Agent Review Engine, run:"
-            echo "    /home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md"
-            echo ">>> (Use 'git push --no-verify' only for emergency human-authorized bypass)"
-            echo "================================================================================"
-            exit $EXIT_CODE
-        fi
-    fi
+    # Strictly protect main branch pushes. Feature branches (feat/*, fix/*) are
+    # allowed to push iteratively during the worker agent review & repair loop.
+    case "$remote_ref" in
+        refs/heads/main|main)
+            if [ -f "$ENGINE_SCRIPT" ]; then
+                python3 "$ENGINE_SCRIPT" --repo . --head "$local_sha" --action verify-push
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -ne 0 ]; then
+                    echo ""
+                    echo "================================================================================"
+                    echo ">>> M3TAL Review Gate: PUSH TO MAIN BLOCKED!"
+                    echo ">>> Direct pushes or merges to main require passing code review and release gates."
+                    echo ">>> Work in a feature branch with the review worker agent:"
+                    echo "    /home/m3tal/apps/M3tal-core/.agents/agents/review-orchestrator/agent.md"
+                    echo ">>> (Use 'git push --no-verify' only for emergency human-authorized bypass)"
+                    echo "================================================================================"
+                    exit $EXIT_CODE
+                fi
+            fi
+            ;;
+        *)
+            # Feature/worker branch - allow push for iteration & PR testing
+            ;;
+    esac
 done
 
 # Entire CLI hooks (if installed)
