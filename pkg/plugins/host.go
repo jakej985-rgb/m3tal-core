@@ -752,17 +752,28 @@ func resolveCoreAPIKey() string {
 	if k := os.Getenv("API_TOKEN"); k != "" {
 		return k
 	}
+	// Check user config directory
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {
 		keyFile := filepath.Join(home, ".config", "m3tal", "api_keys.json")
-		if data, err := os.ReadFile(keyFile); err == nil {
-			var parsed struct {
-				PrimaryToken string `json:"primary_token"`
-			}
-			if err := json.Unmarshal(data, &parsed); err == nil && parsed.PrimaryToken != "" {
-				return parsed.PrimaryToken
-			}
+		if token := readPrimaryTokenFromFile(keyFile); token != "" {
+			return token
 		}
+	}
+	// Fallback to system daemon directory /etc/m3tal/api_keys.json
+	return readPrimaryTokenFromFile("/etc/m3tal/api_keys.json")
+}
+
+func readPrimaryTokenFromFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var parsed struct {
+		PrimaryToken string `json:"primary_token"`
+	}
+	if err := json.Unmarshal(data, &parsed); err == nil && parsed.PrimaryToken != "" {
+		return parsed.PrimaryToken
 	}
 	return ""
 }

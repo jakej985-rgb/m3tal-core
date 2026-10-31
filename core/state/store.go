@@ -16,7 +16,8 @@ import (
 
 // Store wraps a SQLite database for M3TAL state persistence.
 type Store struct {
-	db *sql.DB
+	db        *sql.DB
+	ConfigDir string // Optional directory for api_keys.json export (defaults to ~/.config/m3tal or /etc/m3tal)
 }
 
 // APIKeyRecord is a stored API authorization key.
@@ -81,6 +82,12 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("cannot enable foreign keys: %w", err)
+	}
+
+	// Set busy timeout for concurrent access
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("cannot set busy timeout: %w", err)
 	}
 
 	s := &Store{db: db}
@@ -513,21 +520,34 @@ func (s *Store) ValidateAPIKey(token string) bool {
 		return false
 	}
 	var id int64
-	err := s.db.QueryRow(`SELECT id FROM api_keys WHERE token = ?`, token).Scan(&id)
+	var lastUsed sql.NullString
+	err := s.db.QueryRow(`SELECT id, last_used_at FROM api_keys WHERE token = ?`, token).Scan(&id, &lastUsed)
 	if err != nil {
 		return false
 	}
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, _ = s.db.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, id)
+	// Throttle last_used_at updates to once every 60 seconds to avoid SQLite lock contention
+	shouldUpdate := true
+	if lastUsed.Valid && lastUsed.String != "" {
+		if t, err := time.Parse("2006-01-02 15:04:05", lastUsed.String); err == nil {
+			if time.Since(t) < 60*time.Second {
+				shouldUpdate = false
+			}
+		}
+	}
+	if shouldUpdate {
+		now := time.Now().UTC().Format("2006-01-02 15:04:05")
+		_, _ = s.db.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, id)
+	}
 	return true
 }
 
-// GetPrimaryAPIKey returns the first or most recently used API key token.
+// GetPrimaryAPIKey returns the most recently used or primary API key token.
 // If no keys exist, it automatically provisions an initial "Default Key".
 func (s *Store) GetPrimaryAPIKey() string {
-	keys, err := s.ListAPIKeys()
-	if err == nil && len(keys) > 0 {
-		return keys[0].Token
+	var token string
+	err := s.db.QueryRow(`SELECT token FROM api_keys ORDER BY last_used_at DESC, id ASC LIMIT 1`).Scan(&token)
+	if err == nil && token != "" {
+		return token
 	}
 	rec, err := s.CreateAPIKey("Default Key")
 	if err == nil && rec != nil {
@@ -536,18 +556,22 @@ func (s *Store) GetPrimaryAPIKey() string {
 	return ""
 }
 
-// SyncAPIKeysToFile writes active API keys to ~/.config/m3tal/api_keys.json for easy plugin/daemon discovery.
+// SyncAPIKeysToFile writes active API keys to ~/.config/m3tal/api_keys.json (or ConfigDir) for easy plugin/daemon discovery.
 func (s *Store) SyncAPIKeysToFile() error {
 	keys, err := s.ListAPIKeys()
 	if err != nil {
 		return err
 	}
-	home, err := os.UserHomeDir()
 	var targetDir string
-	if err == nil && home != "" {
-		targetDir = filepath.Join(home, ".config", "m3tal")
+	if s.ConfigDir != "" {
+		targetDir = s.ConfigDir
 	} else {
-		targetDir = "/etc/m3tal"
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			targetDir = filepath.Join(home, ".config", "m3tal")
+		} else {
+			targetDir = "/etc/m3tal"
+		}
 	}
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return err
@@ -564,9 +588,25 @@ func (s *Store) SyncAPIKeysToFile() error {
 	if err != nil {
 		return err
 	}
-	tmp := filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
+	tmpFile, err := os.CreateTemp(targetDir, "api_keys-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, filePath)
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	_ = os.Chmod(tmpPath, 0600)
+	return os.Rename(tmpPath, filePath)
 }

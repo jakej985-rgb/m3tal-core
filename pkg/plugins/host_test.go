@@ -385,3 +385,66 @@ spec:
 		t.Fatalf("expected state running after explicit start, got %s", p.State)
 	}
 }
+
+func TestResolveCoreAPIKey(t *testing.T) {
+	origKey := os.Getenv("M3TAL_API_KEY")
+	origToken := os.Getenv("M3TAL_API_TOKEN")
+	origApiToken := os.Getenv("API_TOKEN")
+	defer func() {
+		if origKey != "" {
+			os.Setenv("M3TAL_API_KEY", origKey)
+		} else {
+			os.Unsetenv("M3TAL_API_KEY")
+		}
+		if origToken != "" {
+			os.Setenv("M3TAL_API_TOKEN", origToken)
+		} else {
+			os.Unsetenv("M3TAL_API_TOKEN")
+		}
+		if origApiToken != "" {
+			os.Setenv("API_TOKEN", origApiToken)
+		} else {
+			os.Unsetenv("API_TOKEN")
+		}
+	}()
+
+	// 1. M3TAL_API_KEY takes top precedence
+	os.Setenv("M3TAL_API_KEY", "key-from-m3tal-api-key")
+	os.Setenv("M3TAL_API_TOKEN", "key-from-m3tal-api-token")
+	os.Setenv("API_TOKEN", "key-from-api-token")
+	if k := resolveCoreAPIKey(); k != "key-from-m3tal-api-key" {
+		t.Errorf("expected key-from-m3tal-api-key, got %s", k)
+	}
+
+	// 2. M3TAL_API_TOKEN precedence when M3TAL_API_KEY is empty
+	os.Unsetenv("M3TAL_API_KEY")
+	if k := resolveCoreAPIKey(); k != "key-from-m3tal-api-token" {
+		t.Errorf("expected key-from-m3tal-api-token, got %s", k)
+	}
+
+	// 3. API_TOKEN precedence when M3TAL_* are empty
+	os.Unsetenv("M3TAL_API_TOKEN")
+	if k := resolveCoreAPIKey(); k != "key-from-api-token" {
+		t.Errorf("expected key-from-api-token, got %s", k)
+	}
+
+	// 4. File fallback
+	os.Unsetenv("API_TOKEN")
+	tempHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", origHome)
+
+	configDir := filepath.Join(tempHome, ".config", "m3tal")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	cfgFile := filepath.Join(configDir, "api_keys.json")
+	if err := os.WriteFile(cfgFile, []byte(`{"primary_token": "file-token-12345"}`), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if k := resolveCoreAPIKey(); k != "file-token-12345" {
+		t.Errorf("expected file-token-12345, got %s", k)
+	}
+}

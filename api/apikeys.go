@@ -61,6 +61,10 @@ func (s *Server) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusBadRequest, "NAME_REQUIRED", "App name is required", nil)
 		return
 	}
+	if len(trimmedName) > 255 {
+		sendError(w, http.StatusBadRequest, "NAME_TOO_LONG", "API key name cannot exceed 255 characters", nil)
+		return
+	}
 
 	rec, err := s.Store.CreateAPIKey(trimmedName)
 	if err != nil {

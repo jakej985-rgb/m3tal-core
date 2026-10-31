@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +22,7 @@ func setupTestServerWithStore(t *testing.T) (*Server, *chi.Mux, *state.Store) {
 	if err != nil {
 		t.Fatalf("state.Open failed: %v", err)
 	}
+	db.ConfigDir = dir
 	t.Cleanup(func() { db.Close() })
 
 	srv := NewServerWithStore("primary-token", db)
@@ -50,7 +53,7 @@ func TestAPIKeysEndpoints(t *testing.T) {
 	}
 
 	var listResp struct {
-		Status string             `json:"status"`
+		Status string               `json:"status"`
 		Data   []state.APIKeyRecord `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &listResp); err != nil {
@@ -74,7 +77,26 @@ func TestAPIKeysEndpoints(t *testing.T) {
 		t.Fatalf("expected 400 for custom key entry attempt, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// 3. Create server-generated API key
+	// 3. Reject empty name and oversized name
+	emptyBody, _ := json.Marshal(map[string]string{"name": "   "})
+	req = httptest.NewRequest("POST", "/api/v2/auth/keys", bytes.NewReader(emptyBody))
+	req.Header.Set("X-API-Token", "primary-token")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name, got %d", w.Code)
+	}
+
+	longBody, _ := json.Marshal(map[string]string{"name": strings.Repeat("a", 300)})
+	req = httptest.NewRequest("POST", "/api/v2/auth/keys", bytes.NewReader(longBody))
+	req.Header.Set("X-API-Token", "primary-token")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized name, got %d", w.Code)
+	}
+
+	// 4. Create server-generated API key
 	validBody, _ := json.Marshal(map[string]string{
 		"name": "Mesh Fleet",
 	})
@@ -88,7 +110,7 @@ func TestAPIKeysEndpoints(t *testing.T) {
 	}
 
 	var createResp struct {
-		Status string            `json:"status"`
+		Status string             `json:"status"`
 		Data   state.APIKeyRecord `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &createResp); err != nil {
@@ -102,9 +124,9 @@ func TestAPIKeysEndpoints(t *testing.T) {
 		t.Errorf("expected 32 hex chars generated token, got len=%d", len(createdKey.Token))
 	}
 
-	// 4. Authenticate using the newly generated API key
+	// 5. Authenticate using the newly generated API key (with padding / lowercase bearer)
 	req = httptest.NewRequest("GET", "/api/v2/version", nil)
-	req.Header.Set("Authorization", "Bearer "+createdKey.Token)
+	req.Header.Set("Authorization", "bearer   "+createdKey.Token+"  ")
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -112,8 +134,26 @@ func TestAPIKeysEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 using generated API key, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// 5. Delete the API key
-	delURL := "/api/v2/auth/keys/" + strconvFormat(createdKey.ID)
+	// 6. Delete invalid ID string -> 400
+	req = httptest.NewRequest("DELETE", "/api/v2/auth/keys/abc", nil)
+	req.Header.Set("X-API-Token", "primary-token")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid ID string, got %d", w.Code)
+	}
+
+	// 7. Delete non-existent ID -> 404
+	req = httptest.NewRequest("DELETE", "/api/v2/auth/keys/99999", nil)
+	req.Header.Set("X-API-Token", "primary-token")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on non-existent ID, got %d", w.Code)
+	}
+
+	// 8. Delete the valid API key
+	delURL := "/api/v2/auth/keys/" + strconv.FormatInt(createdKey.ID, 10)
 	req = httptest.NewRequest("DELETE", delURL, nil)
 	req.Header.Set("X-API-Token", "primary-token")
 	w = httptest.NewRecorder()
@@ -123,7 +163,7 @@ func TestAPIKeysEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 on delete, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// 6. Deleted key no longer authenticates
+	// 9. Deleted key no longer authenticates
 	req = httptest.NewRequest("GET", "/api/v2/version", nil)
 	req.Header.Set("Authorization", "Bearer "+createdKey.Token)
 	w = httptest.NewRecorder()
@@ -134,24 +174,37 @@ func TestAPIKeysEndpoints(t *testing.T) {
 	}
 }
 
-func strconvFormat(id int64) string {
-	var buf [20]byte
-	i := len(buf)
-	neg := false
-	if id < 0 {
-		neg = true
-		id = -id
+func TestAuthMiddlewareEmptyTokenProtection(t *testing.T) {
+	dir := t.TempDir()
+	db, err := state.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("state.Open failed: %v", err)
 	}
-	for id >= 10 {
-		i--
-		buf[i] = byte('0' + id%10)
-		id /= 10
+	db.ConfigDir = dir
+	t.Cleanup(func() { db.Close() })
+
+	// Server initialized with empty static token
+	srv := NewServerWithStore("", db)
+	r := chi.NewRouter()
+	r.Route("/api/v2", func(r chi.Router) {
+		r.Use(srv.chiAuthMiddleware)
+		r.Get("/version", srv.GetVersion)
+	})
+
+	// Request with empty token MUST be rejected with 401
+	req := httptest.NewRequest("GET", "/api/v2/version", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated request when APIToken is empty, got %d", w.Code)
 	}
-	i--
-	buf[i] = byte('0' + id)
-	if neg {
-		i--
-		buf[i] = '-'
+
+	// Request with whitespace token MUST be rejected with 401
+	req = httptest.NewRequest("GET", "/api/v2/version", nil)
+	req.Header.Set("X-API-Token", "   ")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for whitespace token, got %d", w.Code)
 	}
-	return string(buf[i:])
 }

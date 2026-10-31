@@ -14,6 +14,7 @@ func tempDB(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("Open(%s): %v", path, err)
 	}
+	db.ConfigDir = dir
 	t.Cleanup(func() { db.Close() })
 	return db
 }
@@ -212,7 +213,10 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 
 	// Verify last_used_at updated
-	keys, _ = db.ListAPIKeys()
+	keys, err = db.ListAPIKeys()
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
 	found := false
 	for _, k := range keys {
 		if k.ID == newKey.ID && k.LastUsedAt != nil {
@@ -230,5 +234,52 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 	if db.ValidateAPIKey(newKey.Token) {
 		t.Error("deleted key should not validate")
+	}
+
+	// Delete non-existent key returns error
+	if err := db.DeleteAPIKey(99999); err == nil {
+		t.Error("expected error deleting non-existent API key ID")
+	}
+}
+
+func TestGetPrimaryAPIKey(t *testing.T) {
+	db := tempDB(t)
+
+	// Primary key should be initial default key
+	pk := db.GetPrimaryAPIKey()
+	if len(pk) != 32 {
+		t.Fatalf("expected 32-char primary token, got %q", pk)
+	}
+
+	// Create a new key and validate it to update last_used_at
+	meshKey, err := db.CreateAPIKey("Mesh Fleet")
+	if err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+	if !db.ValidateAPIKey(meshKey.Token) {
+		t.Fatal("ValidateAPIKey failed")
+	}
+
+	// GetPrimaryAPIKey should now return meshKey
+	newPk := db.GetPrimaryAPIKey()
+	if newPk != meshKey.Token {
+		t.Errorf("expected primary key %s, got %s", meshKey.Token, newPk)
+	}
+
+	// Delete all keys
+	keys, err := db.ListAPIKeys()
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	for _, k := range keys {
+		if err := db.DeleteAPIKey(k.ID); err != nil {
+			t.Fatalf("DeleteAPIKey(%d): %v", k.ID, err)
+		}
+	}
+
+	// When empty, GetPrimaryAPIKey auto-provisions a new Default Key
+	autoPk := db.GetPrimaryAPIKey()
+	if len(autoPk) != 32 {
+		t.Fatalf("expected auto-provisioned primary key token, got %q", autoPk)
 	}
 }

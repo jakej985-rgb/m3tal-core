@@ -509,21 +509,23 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 // chiAuthMiddleware is a chi-compatible version of AuthMiddleware.
 func (s *Server) chiAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("X-API-Token")
+		token := strings.TrimSpace(r.Header.Get("X-API-Token"))
 		if token == "" {
-			token = r.URL.Query().Get("token")
+			token = strings.TrimSpace(r.URL.Query().Get("token"))
 		}
 		if token == "" {
 			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				token = strings.TrimPrefix(authHeader, "Bearer ")
+			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+				token = strings.TrimSpace(authHeader[7:])
 			}
 		}
 		valid := false
-		if token == s.APIToken || token == "change_me_api_token" || token == "m3tal-secret-token" {
-			valid = true
-		} else if s.Store != nil && s.Store.ValidateAPIKey(token) {
-			valid = true
+		if token != "" {
+			if (s.APIToken != "" && token == s.APIToken) || token == "change_me_api_token" || token == "m3tal-secret-token" {
+				valid = true
+			} else if s.Store != nil && s.Store.ValidateAPIKey(token) {
+				valid = true
+			}
 		}
 		if !valid {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
