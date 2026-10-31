@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,10 +30,27 @@ import (
 )
 
 // GlobalPluginManager manages the external plugin supervisor.
-var GlobalPluginManager *plugins.Manager
+var (
+	GlobalPluginManager = plugins.NewManager("v0.2.0")
+	sigHupOnce          sync.Once
+)
+
+func initSighupHandler() {
+	sigHupOnce.Do(func() {
+		sigHupCh := make(chan os.Signal, 1)
+		signal.Notify(sigHupCh, syscall.SIGHUP)
+		go func() {
+			for range sigHupCh {
+				log.Println("🔄 Received SIGHUP: refreshing plugins...")
+				_, _ = GlobalPluginManager.DiscoverAndAutoStart(context.Background())
+			}
+		}()
+	})
+}
 
 // RunServer automatically initializes the state store and starts the API daemon.
 func RunServer(port string, token string) error {
+	initSighupHandler()
 	dbPath := state.GetStatePath()
 	db, err := state.Open(dbPath)
 	if err != nil {
@@ -49,12 +67,14 @@ func RunServer(port string, token string) error {
 // StartServer starts the API server on the specified port.
 // This is the legacy entrypoint that creates an in-memory server without a state.
 func StartServer(port string, token string) error {
+	initSighupHandler()
 	return StartServerWithStore(port, token, nil)
 }
 
 // StartServerWithStore starts the API server with an optional SQLite store
 // for the v2 engine endpoints.
 func StartServerWithStore(port string, token string, db *state.Store) error {
+	initSighupHandler()
 	log.Printf("[api-daemon] StartServerWithStore starting on port %s (SQLite store active: %v)\n", port, db != nil)
 	system.StartMetricsAggregator()
 	srv := NewServer(token)
@@ -63,18 +83,6 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	GlobalPluginManager = plugins.NewManager("v0.2.0")
 	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
 	defer GlobalPluginManager.StopAll()
-
-	// Listen for SIGHUP to trigger immediate plugin re-discovery without service restart
-	sigHupCh := make(chan os.Signal, 1)
-	signal.Notify(sigHupCh, syscall.SIGHUP)
-	go func() {
-		for range sigHupCh {
-			log.Println("🔄 Received SIGHUP: refreshing plugins...")
-			if GlobalPluginManager != nil {
-				_, _ = GlobalPluginManager.DiscoverAndAutoStart(context.Background())
-			}
-		}
-	}()
 
 	// Start background Docker events forwarder
 	go func() {
