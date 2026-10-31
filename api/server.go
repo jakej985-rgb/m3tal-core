@@ -7,9 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -27,10 +29,22 @@ import (
 )
 
 // GlobalPluginManager manages the external plugin supervisor.
-var GlobalPluginManager *plugins.Manager
+var GlobalPluginManager = plugins.NewManager("v0.2.0")
+
+func setupSighupHandler() {
+	sigHupCh := make(chan os.Signal, 1)
+	signal.Notify(sigHupCh, syscall.SIGHUP)
+	go func() {
+		for range sigHupCh {
+			log.Println("🔄 Received SIGHUP: refreshing plugins...")
+			_, _ = GlobalPluginManager.DiscoverAndAutoStart(context.Background())
+		}
+	}()
+}
 
 // RunServer automatically initializes the state store and starts the API daemon.
 func RunServer(port string, token string) error {
+	setupSighupHandler()
 	dbPath := state.GetStatePath()
 	db, err := state.Open(dbPath)
 	if err != nil {
@@ -57,8 +71,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	system.StartMetricsAggregator()
 	srv := NewServer(token)
 
-	// Initialize global plugin manager with background auto-sensing & auto-start
-	GlobalPluginManager = plugins.NewManager("v0.2.0")
+	// Background auto-sensing & auto-start on shared manager
 	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
 	defer GlobalPluginManager.StopAll()
 

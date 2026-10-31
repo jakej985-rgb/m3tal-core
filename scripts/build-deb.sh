@@ -90,6 +90,7 @@ EOF
             /etc/m3tal/VERSION \
             /lib/systemd/system/m3tal-api.service \
             > "$STAGE_DIR/DEBIAN/conffiles"
+        install -m 644 packaging/deb/DEBIAN/triggers "$STAGE_DIR/DEBIAN/triggers"
         install -m 755 scripts/postinstall.sh "$STAGE_DIR/DEBIAN/postinst"
         install -m 755 scripts/postremove.sh "$STAGE_DIR/DEBIAN/postrm"
         dpkg-deb --build --root-owner-group "$STAGE_DIR" "$DEB_TARGET"
