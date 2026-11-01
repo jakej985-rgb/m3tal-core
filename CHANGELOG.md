@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.0] - 2026-11-01
+
+### Overview & Release Highlights
+Release v0.24.0 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **feat(auth): Jellyfin-style API key manager and plugin sync (#139)** (`e3bf1d5`):
+  - *What Changed*: * feat(auth): add Jellyfin-style API key manager with server generation and plugin inheritance  * fix(review): remediate auth validation, atomic file sync, test isolation, and key resolution  * fix(review): deduplicate auth token validation and unify primary key sync  * fix(review): isolate migrations, return ErrAPIKeyNotFound, and clean temp files  * style(plugins): format pkg/plugins/host.go with gofmt
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.23.0] - 2026-10-31
 
 ### Overview & Release Highlights
