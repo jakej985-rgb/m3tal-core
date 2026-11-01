@@ -777,4 +777,3 @@ func readPrimaryTokenFromFile(path string) string {
 	}
 	return ""
 }
-
