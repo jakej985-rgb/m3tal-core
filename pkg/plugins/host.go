@@ -287,10 +287,13 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 
 	cmd := exec.CommandContext(pCtx, cmdPath, p.Manifest.Spec.Args...)
 	cmd.Dir = p.Manifest.Dir
+	coreKey := resolveCoreAPIKey()
 	cmd.Env = append(os.Environ(),
 		"M3TAL_CORE_VERSION="+coreVersion,
 		"M3TAL_PLUGIN_DIR="+p.Manifest.Dir,
 		"M3TAL_PROCESS_NAME="+procName,
+		"M3TAL_API_KEY="+coreKey,
+		"M3TAL_API_TOKEN="+coreKey,
 	)
 
 	stdin, err := cmd.StdinPipe()
@@ -737,4 +740,40 @@ func (m *Manager) StopPlugin(name string) error {
 	}
 	p.ExplicitlyStopped = true
 	return p.Stop()
+}
+
+func resolveCoreAPIKey() string {
+	if k := os.Getenv("M3TAL_API_KEY"); k != "" {
+		return k
+	}
+	if k := os.Getenv("M3TAL_API_TOKEN"); k != "" {
+		return k
+	}
+	if k := os.Getenv("API_TOKEN"); k != "" {
+		return k
+	}
+	// Check user config directory
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		keyFile := filepath.Join(home, ".config", "m3tal", "api_keys.json")
+		if token := readPrimaryTokenFromFile(keyFile); token != "" {
+			return token
+		}
+	}
+	// Fallback to system daemon directory /etc/m3tal/api_keys.json
+	return readPrimaryTokenFromFile("/etc/m3tal/api_keys.json")
+}
+
+func readPrimaryTokenFromFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var parsed struct {
+		PrimaryToken string `json:"primary_token"`
+	}
+	if err := json.Unmarshal(data, &parsed); err == nil && parsed.PrimaryToken != "" {
+		return parsed.PrimaryToken
+	}
+	return ""
 }

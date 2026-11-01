@@ -18,6 +18,7 @@ import (
 	"github.com/jakej985-rgb/m3tal-core/core/events"
 	"github.com/jakej985-rgb/m3tal-core/core/health"
 	"github.com/jakej985-rgb/m3tal-core/core/preflight"
+	"github.com/jakej985-rgb/m3tal-core/core/state"
 	"github.com/jakej985-rgb/m3tal-core/core/system"
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
 	syspaths "github.com/jakej985-rgb/m3tal-core/pkg/system"
@@ -27,6 +28,7 @@ import (
 // Server handles API requests
 type Server struct {
 	APIToken string
+	Store    *state.Store
 }
 
 // NewServer creates a new API server
@@ -34,14 +36,44 @@ func NewServer(token string) *Server {
 	return &Server{APIToken: token}
 }
 
+// NewServerWithStore creates a new API server with a persistent state store
+func NewServerWithStore(token string, store *state.Store) *Server {
+	return &Server{APIToken: token, Store: store}
+}
+
+// ExtractToken extracts authentication token from header, query, or Bearer auth.
+func (s *Server) ExtractToken(r *http.Request) string {
+	token := strings.TrimSpace(r.Header.Get("X-API-Token"))
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+	if token == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		}
+	}
+	return token
+}
+
+// ValidateToken validates a token against static secrets and dynamic API keys.
+func (s *Server) ValidateToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	if (s.APIToken != "" && token == s.APIToken) || token == "change_me_api_token" || token == "m3tal-secret-token" {
+		return true
+	}
+	if s.Store != nil && s.Store.ValidateAPIKey(token) {
+		return true
+	}
+	return false
+}
+
 // AuthMiddleware validates the API token
 func (s *Server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("X-API-Token")
-		if token == "" {
-			token = r.URL.Query().Get("token")
-		}
-		if token != s.APIToken && token != "change_me_api_token" && token != "m3tal-secret-token" {
+		if !s.ValidateToken(s.ExtractToken(r)) {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}

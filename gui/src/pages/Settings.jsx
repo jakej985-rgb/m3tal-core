@@ -11,6 +11,8 @@ import {
   IconCheck,
   IconCopy,
   IconPlugins,
+  IconKey,
+  IconTrash,
 } from '../components/Icons';
 
 export default function Settings() {
@@ -57,11 +59,83 @@ export default function Settings() {
   });
   const [selectedChannel, setSelectedChannel] = useState('stable');
 
+  // API Keys manager state
+  const [apiKeys, setApiKeys] = useState([]);
+  const [showAddKeyModal, setShowAddKeyModal] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [createdKeyAlert, setCreatedKeyAlert] = useState(null);
+  const [showKeyMap, setShowKeyMap] = useState({});
+  const [copiedKeyMap, setCopiedKeyMap] = useState({});
+
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
     }, 4000);
+  };
+
+  const copyKeyToClipboard = (token, id) => {
+    navigator.clipboard.writeText(token);
+    setCopiedKeyMap((prev) => ({ ...prev, [id]: true }));
+    showToast('API Key copied to clipboard', 'success');
+    setTimeout(() => {
+      setCopiedKeyMap((prev) => ({ ...prev, [id]: false }));
+    }, 2000);
+  };
+
+  const loadApiKeys = useCallback(async () => {
+    try {
+      const res = await api.getApiKeys();
+      if (res?.status === 'success' && Array.isArray(res.data)) {
+        setApiKeys(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load API keys:', err);
+    }
+  }, []);
+
+  const handleCreateApiKey = async (e) => {
+    if (e) e.preventDefault();
+    if (!newKeyName.trim()) {
+      showToast('Application name is required', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.createApiKey(newKeyName.trim());
+      if (res?.status === 'success' && res.data) {
+        showToast(`API Key for "${res.data.name}" generated successfully.`, 'success');
+        setCreatedKeyAlert(res.data);
+        setNewKeyName('');
+        setShowAddKeyModal(false);
+        loadApiKeys();
+      } else {
+        showToast(res?.error || 'Failed to generate API key', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error generating API key', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteApiKey = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to revoke the API key for "${name}"? Applications using this key will immediately lose access.`)) return;
+    setSaving(true);
+    try {
+      const res = await api.deleteApiKey(id);
+      if (res?.status === 'success') {
+        showToast(`API key for "${name}" revoked.`, 'info');
+        if (createdKeyAlert?.id === id) setCreatedKeyAlert(null);
+        loadApiKeys();
+      } else {
+        showToast(res?.error || 'Failed to revoke API key', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error revoking API key', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const loadAllSettings = useCallback(async () => {
@@ -99,12 +173,15 @@ export default function Settings() {
       } catch (repoErr) {
         console.error('Failed to load repositories', repoErr);
       }
+
+      // Fetch API Keys
+      await loadApiKeys();
     } catch (err) {
       showToast(err.message || 'Error connecting to settings service', 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadApiKeys]);
 
   const handleRefreshRepositories = async () => {
     setSaving(true);
@@ -388,6 +465,25 @@ export default function Settings() {
               </button>
 
               <button
+                onClick={() => setActiveSection('core_apikeys')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between gap-2.5 transition-all ${
+                  activeSection === 'core_apikeys'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-[#21262d] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <IconKey className="w-4 h-4 flex-shrink-0 text-amber-300" />
+                  <span>API Key Manager</span>
+                </div>
+                {apiKeys.length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1117] text-slate-300 border border-[#30363d]">
+                    {apiKeys.length}
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setActiveSection('core_maintenance')}
                 className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2.5 transition-all ${
                   activeSection === 'core_maintenance'
@@ -651,6 +747,157 @@ export default function Settings() {
                   {saving ? <IconRefresh className="w-3.5 h-3.5 animate-spin" /> : <IconCheck className="w-3.5 h-3.5" />}
                   <span>Save Connection Settings</span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: Core API Keys Manager */}
+          {activeSection === 'core_apikeys' && (
+            <div className="space-y-6 max-w-3xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <IconKey className="w-5 h-5 text-amber-300" />
+                    API Key Manager
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Manage external application API keys for M3TAL Core and connected services (including Mesh Fleet).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddKeyModal(true)}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-md shadow-emerald-900/30 flex items-center gap-2 self-start sm:self-auto"
+                >
+                  <IconKey className="w-4 h-4" />
+                  <span>Generate New API Key</span>
+                </button>
+              </div>
+
+              {/* Informational banner about Jellyfin-style automatic key generation */}
+              <div className="p-4 bg-[#161b22] border border-[#30363d] rounded-xl flex items-start gap-3">
+                <IconLock className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  <span className="font-semibold text-white">Jellyfin-Style Server Generation: </span>
+                  API keys are generated automatically using cryptographically secure random entropy. Custom key strings cannot be entered manually to protect against weak or predictable authentication tokens.
+                </div>
+              </div>
+
+              {/* Newly Created Key Flash Alert */}
+              {createdKeyAlert && (
+                <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-2">
+                      <IconCheck className="w-4 h-4 text-emerald-400" />
+                      New API Key Generated: {createdKeyAlert.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCreatedKeyAlert(null)}
+                      className="text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={createdKeyAlert.token}
+                      className="w-full bg-[#0d1117] border border-emerald-500/40 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyKeyToClipboard(createdKeyAlert.token, 'alert')}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 flex-shrink-0"
+                    >
+                      {copiedKeyMap['alert'] ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
+                      <span>{copiedKeyMap['alert'] ? 'Copied' : 'Copy Key'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Make sure to copy your API key now. For your security, this key cannot be recovered if lost.
+                  </p>
+                </div>
+              )}
+
+              {/* Keys List */}
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#30363d] flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Active API Keys ({apiKeys.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={loadApiKeys}
+                    className="p-1 rounded text-slate-400 hover:text-slate-200 text-xs transition-colors"
+                    title="Refresh keys"
+                  >
+                    <IconRefresh className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {apiKeys.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-xs">
+                    No API keys found. Click &quot;Generate New API Key&quot; above to create one.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#30363d]">
+                    {apiKeys.map((key) => {
+                      const isRevealed = !!showKeyMap[key.id];
+                      const isCopied = !!copiedKeyMap[key.id];
+                      return (
+                        <div key={key.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#1c2128] transition-colors">
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-white truncate">{key.name}</span>
+                              {key.name === 'Default Key' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-semibold">
+                                  System Default
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-slate-300 bg-[#0d1117] border border-[#30363d] px-2 py-1 rounded select-all">
+                                {isRevealed ? key.token : '••••••••••••••••••••••••••••••••'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowKeyMap((prev) => ({ ...prev, [key.id]: !isRevealed }))}
+                                className="text-[11px] text-slate-400 hover:text-slate-200 px-1 py-0.5"
+                              >
+                                {isRevealed ? 'Hide' : 'Reveal'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyKeyToClipboard(key.token, key.id)}
+                                className="p-1 text-slate-400 hover:text-white"
+                                title="Copy API key"
+                              >
+                                {isCopied ? <IconCheck className="w-3.5 h-3.5 text-emerald-400" /> : <IconCopy className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                              <span>Created: {key.created_at || 'Recently'}</span>
+                              {key.last_used_at && <span>Last used: {key.last_used_at}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteApiKey(key.id, key.name)}
+                              disabled={saving}
+                              className="p-2 rounded-lg border border-rose-900/40 bg-rose-950/20 hover:bg-rose-900/40 text-rose-400 text-xs transition-colors"
+                              title="Revoke API Key"
+                            >
+                              <IconTrash className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1218,6 +1465,75 @@ export default function Settings() {
                   className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
                 >
                   {saving ? 'Adding...' : 'Add Repository'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Generate API Key (Jellyfin style, app name only, no custom key) */}
+      {showAddKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl relative space-y-5">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <IconKey className="w-5 h-5 text-amber-300" />
+                Generate New API Key
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddKeyModal(false)}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateApiKey} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Application / Client Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="e.g. Mesh Fleet, Home Assistant, Backup Daemon"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  A descriptive identifier for the connecting service or external application.
+                </p>
+              </div>
+
+              <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-slate-400 space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                  <IconLock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Automatic Key Generation</span>
+                </div>
+                <div>
+                  The API key will be securely generated by the server upon creation. Manual custom key entries are prohibited.
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#30363d]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddKeyModal(false)}
+                  className="px-4 py-2 rounded-lg border border-[#30363d] hover:bg-[#21262d] text-slate-300 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !newKeyName.trim()}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 flex items-center gap-1.5"
+                >
+                  {saving ? <IconRefresh className="w-3.5 h-3.5 animate-spin" /> : <IconKey className="w-3.5 h-3.5" />}
+                  <span>Generate Key</span>
                 </button>
               </div>
             </form>
