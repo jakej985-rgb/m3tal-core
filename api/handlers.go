@@ -76,7 +76,10 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 		}
 		if s.Store != nil {
 			if rec, ok := s.Store.LookupAPIKey(token); ok {
-				s.Store.ValidateAPIKey(token) // records last_used_at
+				// rec is already loaded — stamp usage directly instead of
+				// re-running the lookup inside ValidateAPIKey (saves a SELECT
+				// on every authenticated request).
+				s.Store.RecordAPIKeyUsage(rec)
 				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
 				return
 			}

@@ -1,0 +1,3 @@
+## 2026-11-05 - Auth middleware double-lookup anti-pattern
+**Learning:** `Server.Authenticate` called `LookupAPIKey()` then `ValidateAPIKey()`, and `ValidateAPIKey` re-ran `LookupAPIKey` internally — every authenticated request paid 2 identical SELECTs. Composite store methods that "check + record" hide a second query when the caller already holds the record.
+**Action:** When a store has lookup+mutate pairs, expose a record-level mutator (`RecordAPIKeyUsage(rec)`) and audit call sites for validate-after-lookup duplication. Check `ValidateToken` callers too — it still uses the combined path where only a bool is needed.
