@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { api, subscribeWS } from '../api';
-import DoctorModal from '../components/DoctorModal';
 import NetworkSummary from '../components/NetworkSummary';
 import TopBarWidget from '../components/widgets/TopBarWidget';
 import StatCardWidget from '../components/widgets/StatCardWidget';
@@ -39,9 +38,6 @@ export default function Dashboard() {
   const [coreVersion, setCoreVersion] = useState('v0.18.0');
 
   // Quick action and modal states
-  const [isDoctorOpen, setIsDoctorOpen] = useState(false);
-  const [isReconciling, setIsReconciling] = useState(false);
-  const [isCleaning, setIsCleaning] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -223,60 +219,6 @@ export default function Dashboard() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  const handleReconcile = async () => {
-    setIsReconciling(true);
-    try {
-      const res = await api.reconcileSystem();
-      if (res.status === 'success') {
-        const actionCount = Array.isArray(res.data?.actions) ? res.data.actions.length : 0;
-        showToast(
-          actionCount > 0
-            ? `System reconciled: ${actionCount} adjustment(s) applied.`
-            : 'System state verified: fully converged.',
-          'success'
-        );
-        fetchStats();
-      } else {
-        showToast(res.error || 'Reconciliation failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-    setIsReconciling(false);
-  };
-
-  const handleSystemCleanup = async () => {
-    setIsCleaning(true);
-    try {
-      const res = await api.systemCleanup();
-      if (res.status === 'success') {
-        const freed = res.data?.freed_human || '0 B';
-        const count = res.data?.items_cleaned?.length || 0;
-        showToast(`System cleanup complete (${freed} freed across ${count} tasks).`, 'success');
-        fetchStats();
-      } else {
-        showToast(res.error || 'System cleanup failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-    setIsCleaning(false);
-  };
-
-  const handleUnmountStorage = async (mountpoint) => {
-    try {
-      const res = await api.unmountStorage(mountpoint);
-      if (res.status === 'success') {
-        showToast(`Drive at ${mountpoint} safely unmounted. Safe to unplug.`, 'success');
-        fetchStats();
-      } else {
-        showToast(res.error || 'Failed to unmount drive', 'error');
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-
   const handlePluginAction = async (pluginName, action) => {
     try {
       const res = await api.pluginAction(pluginName, action);
@@ -318,11 +260,6 @@ export default function Dashboard() {
       <TopBarWidget
         metrics={metrics}
         health={health}
-        onOpenDoctor={() => setIsDoctorOpen(true)}
-        onReconcile={handleReconcile}
-        isReconciling={isReconciling}
-        onCleanup={handleSystemCleanup}
-        isCleaning={isCleaning}
         onRefresh={handleManualRefresh}
         isRefreshing={isRefreshing}
         error={error}
@@ -402,23 +339,9 @@ export default function Dashboard() {
                 <StorageDetailedWidget
                   key={widgetId}
                   diskPartitions={metrics?.disk_partitions || []}
-                  onCleanup={handleSystemCleanup}
-                  isCleaning={isCleaning}
-                  onUnmount={handleUnmountStorage}
                   {...moveProps}
                 />
               );
-            case 'fleet-containers': {
-              const pw = pluginWidgets.find((w) => w.id === 'docker-fleet') || { id: 'docker-fleet', title: 'Containers' };
-              return (
-                <PluginWidgetSlot
-                  key={widgetId}
-                  widget={pw}
-                  onAction={handlePluginAction}
-                  {...moveProps}
-                />
-              );
-            }
             case 'network-stats':
               return (
                 <div key={widgetId} className="col-span-1 md:col-span-2 lg:col-span-2 row-span-1 min-h-[260px] lg:h-[260px]">
@@ -452,9 +375,6 @@ export default function Dashboard() {
           }
         })}
       </div>
-
-      {/* Doctor Diagnostics Modal */}
-      <DoctorModal isOpen={isDoctorOpen} onClose={() => setIsDoctorOpen(false)} />
     </div>
   );
 }

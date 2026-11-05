@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react';
 import WidgetCard from './WidgetCard';
-import { IconClean } from '../Icons';
 
 export default function StorageDetailedWidget({
   diskPartitions = [],
-  onCleanup,
-  isCleaning,
-  onUnmount,
   isEditMode = false,
   onMoveLeft,
   onMoveRight,
@@ -14,7 +10,6 @@ export default function StorageDetailedWidget({
   className = '',
 }) {
   const [filterVirtual, setFilterVirtual] = useState(true);
-  const [unmountingMount, setUnmountingMount] = useState(null);
 
   const formatCap = (gb) => {
     if (!gb && gb !== 0) return '0 GB';
@@ -152,17 +147,6 @@ export default function StorageDetailedWidget({
         {filterVirtual ? 'Physical Drives' : 'All Mounts'}
       </button>
 
-      {onCleanup && (
-        <button
-          onClick={onCleanup}
-          disabled={isCleaning}
-          className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-          title="Free disk space: purge caches & temporary files"
-        >
-          <IconClean className={`w-3.5 h-3.5 text-emerald-400 ${isCleaning ? 'animate-spin' : ''}`} />
-          <span>{isCleaning ? 'Cleaning...' : 'Clean Caches'}</span>
-        </button>
-      )}
 
       <span className="text-xs text-slate-500 font-mono ml-1">
         {storageGroups.totalDrives} {storageGroups.totalDrives === 1 ? 'Drive' : 'Drives'} ({storageGroups.totalVolumes} Volumes)
@@ -333,21 +317,6 @@ export default function StorageDetailedWidget({
                       <span className="text-[10px] text-slate-500 font-mono truncate max-w-[150px]" title={card.partitions[0].mountpoint}>
                         {card.partitions[0].mountpoint}
                       </span>
-                      {onUnmount && (
-                        <button
-                          onClick={async () => {
-                            const mp = card.partitions[0].mountpoint;
-                            setUnmountingMount(mp);
-                            await onUnmount(mp);
-                            setUnmountingMount(null);
-                          }}
-                          disabled={unmountingMount === card.partitions[0].mountpoint}
-                          className="px-2.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
-                          title={`Safely unmount ${card.partitions[0].mountpoint}`}
-                        >
-                          <span>{unmountingMount === card.partitions[0].mountpoint ? 'Ejecting...' : '⏏ Safe Eject'}</span>
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>

@@ -11,4 +11,4 @@ fi
 
 go mod download
 ./scripts/build-go.sh native
-echo "Build complete. Binaries: ./m3tal, ./m3tal-api (native platform)"
+echo "Build complete. Binary: ./m3tal-api (native platform)"

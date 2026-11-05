@@ -1,55 +1,32 @@
 #!/bin/bash
 
-# M3TAL Platform Setup Script
-# Verifies environment and prepares standardized storage layout.
+# M3TAL Core Setup Script
+# Prepares the environment for local development of the Web GUI dashboard.
 
 set -e
 
-echo "🚀 Starting M3TAL Platform Setup..."
+echo "🚀 Starting M3TAL Core setup..."
 
-# 1. Dependency Checks
-command -v docker >/dev/null 2>&1 || { echo >&2 "❌ Docker is required but not installed. Aborting."; exit 1; }
+# 1. Dependency checks
 command -v go >/dev/null 2>&1 || { echo >&2 "❌ Go is required but not installed. Aborting."; exit 1; }
-command -v python3 >/dev/null 2>&1 || { echo >&2 "❌ Python3 is required but not installed. Aborting."; exit 1; }
+command -v node >/dev/null 2>&1 || { echo >&2 "❌ Node.js is required for the Web GUI. Aborting."; exit 1; }
 
-# 2. Standardized Storage Setup
-echo "🏗️ Setting up standardized storage paths..."
-# Read from .env if exists, else defaults
-if [ -f ".env" ]; then
-    source .env
-fi
-
-MEDIA_PATH=${MEDIA_PATH:-"./data/media"}
-CONFIG_PATH=${CONFIG_PATH:-"./data/config"}
-DOWNLOADS_PATH=${DOWNLOADS_PATH:-"./data/downloads"}
-
-STORAGE_PATHS=("$MEDIA_PATH" "$CONFIG_PATH" "$DOWNLOADS_PATH")
-
-for path in "${STORAGE_PATHS[@]}"; do
-    if [ ! -d "$path" ]; then
-        echo "Creating $path..."
-        mkdir -p "$path"
-    else
-        echo "✅ $path already exists."
-    fi
-done
-
-# 3. Environment Configuration
+# 2. Environment configuration
 if [ ! -f ".env" ]; then
     echo "📄 Creating .env from .env.example..."
     cp .env.example .env
-    echo "⚠️ Please edit .env and set your secrets before running './m3tal up'."
+    echo "⚠️  Please edit .env and set API_TOKEN before running the server."
 else
     echo "✅ .env already exists."
 fi
 
-# 4. State Directory
-mkdir -p ./state
+# 3. State directory
+mkdir -p ./data
 
-# 5. Build Control Plane
-echo "🔨 Building M3TAL Control Plane..."
-go build -o m3tal ./cmd/m3tal
-chmod +x m3tal
+# 4. Build API binary and GUI
+echo "🔨 Building M3TAL Core..."
+./scripts/build-go.sh
+(cd gui && npm ci && npm run build)
 
 echo "✅ Setup complete!"
-echo "Run './m3tal up' to launch the ecosystem."
+echo "Run './m3tal-api' and open http://localhost:5050/gui/"

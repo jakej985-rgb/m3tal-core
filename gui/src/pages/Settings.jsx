@@ -3,10 +3,6 @@ import { api, getApiBase, getToken, setToken } from '../api';
 import {
   IconSettings,
   IconLock,
-  IconDoctor,
-  IconPrune,
-  IconClean,
-  IconReconcile,
   IconRefresh,
   IconCheck,
   IconCopy,
@@ -24,7 +20,7 @@ export default function Settings() {
   // Core settings state
   const [coreConfig, setCoreConfig] = useState({
     node_name: 'm3tal-node-01',
-    polling_interval: 5,
+    poll_interval: 5,
     theme: 'dark',
     api_host: getApiBase(),
     api_token: getToken(),
@@ -34,13 +30,11 @@ export default function Settings() {
   const [pluginSections, setPluginSections] = useState([]);
   const [pluginConfigs, setPluginConfigs] = useState({});
 
-  // UI state for password visibility & doctor output
+  // UI state for password visibility
   const [showToken, setShowToken] = useState(false);
   const [showPasswordMap, setShowPasswordMap] = useState({});
   const [copiedHost, setCopiedHost] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
-  const [doctorResult, setDoctorResult] = useState(null);
-  const [doctorRunning, setDoctorRunning] = useState(false);
 
   // Plugin Repositories state
   const [repositories, setRepositories] = useState({
@@ -338,56 +332,6 @@ export default function Settings() {
     }
   };
 
-  // Run doctor diagnostics
-  const handleRunDoctor = async () => {
-    setDoctorRunning(true);
-    setDoctorResult(null);
-    try {
-      const res = await api.runDoctor();
-      if (res?.status === 'success') {
-        setDoctorResult(res.data);
-        showToast('System diagnostics complete.', 'success');
-      } else {
-        showToast(res?.error || 'Diagnostic run failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.message || 'Diagnostic error', 'error');
-    } finally {
-      setDoctorRunning(false);
-    }
-  };
-
-  // Prune unused docker images
-  const handlePruneImages = async () => {
-    if (!window.confirm('Prune dangling and unused Docker images?')) return;
-    try {
-      const res = await api.pruneImages();
-      if (res?.status === 'success') {
-        showToast('Docker image pruning completed successfully.', 'success');
-      } else {
-        showToast(res?.error || 'Docker prune failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.message || 'Prune error', 'error');
-    }
-  };
-
-  // Host system cleanup
-  const handleHostCleanup = async () => {
-    if (!window.confirm('Run host temporary file and package cache cleanup?')) return;
-    try {
-      const res = await api.systemCleanup();
-      if (res?.status === 'success') {
-        const freed = res.data?.freed_bytes_human || res.data?.freed_bytes || '0 B';
-        showToast(`System cleanup complete (${freed} freed).`, 'success');
-      } else {
-        showToast(res?.error || 'System cleanup failed', 'error');
-      }
-    } catch (err) {
-      showToast(err.message || 'Cleanup error', 'error');
-    }
-  };
-
   // Copy helper
   const copyToClipboard = (text, type) => {
     navigator.clipboard.writeText(text);
@@ -481,18 +425,6 @@ export default function Settings() {
                     {apiKeys.length}
                   </span>
                 )}
-              </button>
-
-              <button
-                onClick={() => setActiveSection('core_maintenance')}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2.5 transition-all ${
-                  activeSection === 'core_maintenance'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-300 hover:bg-[#21262d] hover:text-white'
-                }`}
-              >
-                <IconDoctor className="w-4 h-4 flex-shrink-0 text-amber-400" />
-                <span>Host Maintenance</span>
               </button>
 
               <button
@@ -590,9 +522,9 @@ export default function Settings() {
                     type="number"
                     min="1"
                     max="60"
-                    value={coreConfig.polling_interval || 5}
+                    value={coreConfig.poll_interval || 5}
                     onChange={(e) =>
-                      setCoreConfig({ ...coreConfig, polling_interval: parseInt(e.target.value, 10) || 5 })
+                      setCoreConfig({ ...coreConfig, poll_interval: parseInt(e.target.value, 10) || 5 })
                     }
                     className="w-32 bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
                   />
@@ -899,125 +831,6 @@ export default function Settings() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* SECTION: Core Host Maintenance */}
-          {activeSection === 'core_maintenance' && (
-            <div className="space-y-6 max-w-2xl">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <IconDoctor className="w-5 h-5 text-amber-400" />
-                  Host Maintenance & Diagnostics
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Execute host diagnostics, reclaim disk space, and reconcile node state.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                {/* Doctor */}
-                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                      <IconDoctor className="w-4 h-4 text-emerald-400" />
-                      <span>Host Diagnostics</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Runs self-checks for Docker daemon socket, cgroups, kernel capabilities, and disk space.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRunDoctor}
-                    disabled={doctorRunning}
-                    className="px-3.5 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {doctorRunning ? <IconRefresh className="w-3.5 h-3.5 animate-spin" /> : <IconDoctor className="w-3.5 h-3.5" />}
-                    <span>Run Doctor</span>
-                  </button>
-                </div>
-
-                {/* Prune Images */}
-                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                      <IconPrune className="w-4 h-4 text-amber-400" />
-                      <span>Prune Docker Images</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Removes untagged and dangling Docker container images to reclaim host drive space.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handlePruneImages}
-                    className="px-3.5 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-amber-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <IconPrune className="w-3.5 h-3.5" />
-                    <span>Prune Images</span>
-                  </button>
-                </div>
-
-                {/* System Cleanup */}
-                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                      <IconClean className="w-4 h-4 text-cyan-400" />
-                      <span>Clean Host System</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Clears APT package cache, rotating journals, and temporary files in <code>/tmp</code>.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleHostCleanup}
-                    className="px-3.5 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-cyan-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <IconClean className="w-3.5 h-3.5" />
-                    <span>System Cleanup</span>
-                  </button>
-                </div>
-
-                {/* Reconcile */}
-                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                      <IconReconcile className="w-4 h-4 text-purple-400" />
-                      <span>Reconcile System</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Forces hardware inventory rescan and plugin daemon health reconciliation.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await api.reconcileSystem();
-                      if (res?.status === 'success') showToast('System state reconciled.', 'success');
-                      else showToast(res?.error || 'Reconcile failed', 'error');
-                    }}
-                    className="px-3.5 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-purple-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <IconReconcile className="w-3.5 h-3.5" />
-                    <span>Reconcile State</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Doctor output display */}
-              {doctorResult && (
-                <div className="mt-4 p-4 bg-[#0d1117] border border-[#30363d] rounded-lg space-y-2">
-                  <div className="text-xs font-bold text-white flex items-center justify-between">
-                    <span>Diagnostic Report Results:</span>
-                    <span className="text-[10px] text-emerald-400 font-mono">STATUS: HEALTHY</span>
-                  </div>
-                  <pre className="text-[11px] text-slate-300 font-mono bg-[#161b22] p-3 rounded overflow-x-auto max-h-60">
-                    {JSON.stringify(doctorResult, null, 2)}
-                  </pre>
-                </div>
-              )}
             </div>
           )}
 

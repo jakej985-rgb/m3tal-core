@@ -17,7 +17,7 @@ func TestPluginManifestSerialization(t *testing.T) {
 		},
 		Spec: PluginSpec{
 			Command:      "./bin/docker-plugin",
-			Capabilities: []Capability{CapabilityCollector, CapabilityTUIWidget, CapabilityActions},
+			Capabilities: []Capability{CapabilityCollector, CapabilityActions},
 			PollInterval: "2s",
 		},
 		Config: map[string]any{
@@ -40,9 +40,6 @@ func TestPluginManifestSerialization(t *testing.T) {
 	}
 	if !parsed.HasCapability(CapabilityCollector) {
 		t.Errorf("Expected capability 'collector'")
-	}
-	if !parsed.HasCapability(CapabilityTUIWidget) {
-		t.Errorf("Expected capability 'tui_widget'")
 	}
 	if parsed.HasCapability(CapabilityExporter) {
 		t.Errorf("Did not expect capability 'exporter'")

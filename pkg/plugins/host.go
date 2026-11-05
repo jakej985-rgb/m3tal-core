@@ -416,30 +416,6 @@ func (p *PluginInstance) Collect(ctx context.Context) (*CollectResult, error) {
 	return &res, nil
 }
 
-// Render calls m3tal.render to get UI view for a given tab.
-func (p *PluginInstance) Render(ctx context.Context, tabID string, width, height int, theme string) (*RenderResult, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.State != StateRunning {
-		return nil, fmt.Errorf("plugin %s not running", p.Manifest.Metadata.Name)
-	}
-
-	params := RenderParams{
-		TabID:  tabID,
-		Width:  width,
-		Height: height,
-		Theme:  theme,
-	}
-
-	var res RenderResult
-	err := p.callLocked(ctx, MethodRender, params, &res)
-	if err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
 // Action executes an action hook on the plugin.
 func (p *PluginInstance) Action(ctx context.Context, actionID, target string, args map[string]any) (*ActionResult, error) {
 	p.mu.Lock()

@@ -1,9 +1,7 @@
-# 🤖 M3TAL Telegram Bot — Command Reference (v5.0)
+# 🤖 [LEGACY] M3TAL Telegram Bot — Command Reference (v5.0)
 
-Complete reference for all **24 commands** available via the M3TAL Telegram bot.
-Supports both **typed commands** and a fully **button-driven UI** — no typing required.
-
----
+> [!WARNING]
+> **DEPRECATED**: The Python Telegram bot has been retired and is no longer part of M3TAL Core. Modern M3TAL uses the native Linux Desktop GUI and Web GUI on port `5050`. This document is preserved in `docs/archive/` for historical reference only.
 
 ## 🎛️ Button Menu System
 

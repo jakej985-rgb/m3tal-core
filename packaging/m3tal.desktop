@@ -1,11 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=M3TAL Control Center
-Comment=M3TAL Core System Monitor & Control Center
-Exec=m3tal ui
+Name=M3TAL Core
+Comment=M3TAL Core System Monitor & Settings
+Exec=xdg-open http://localhost:5050/gui/
 Icon=m3tal
 Terminal=false
 Categories=System;Utility;Settings;
-StartupWMClass=m3tal
-Keywords=docker;orchestration;homelab;traefik;
-
+Keywords=system;monitor;settings;gpu;

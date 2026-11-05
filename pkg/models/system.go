@@ -28,16 +28,6 @@ type DetailedStats struct {
 	Hostname          string                 `json:"hostname"`
 }
 
-// ServiceStatus represents a systemd service status.
-type ServiceStatus struct {
-	Name        string `json:"name"`
-	LoadState   string `json:"load_state"`
-	ActiveState string `json:"active_state"`
-	SubState    string `json:"sub_state"`
-	Description string `json:"description"`
-	Enabled     string `json:"enabled"` // "enabled", "disabled", "static", "masked", etc.
-}
-
 // DiskPartition represents a storage partition or mount point.
 type DiskPartition struct {
 	Device      string  `json:"device"`
@@ -51,30 +41,6 @@ type DiskPartition struct {
 	Used        float64 `json:"used"`         // GB
 	Free        float64 `json:"free"`         // GB
 	UsedPercent float64 `json:"used_percent"` // %
-}
-
-// SambaShare represents a Samba network share config.
-type SambaShare struct {
-	Name     string `json:"name"`
-	Path     string `json:"path"`
-	Comment  string `json:"comment"`
-	ReadOnly bool   `json:"read_only"`
-	GuestOk  bool   `json:"guest_ok"`
-}
-
-// CronJob represents a scheduled task from cron or systemd timers.
-type CronJob struct {
-	Schedule string `json:"schedule"`
-	Command  string `json:"command"`
-	User     string `json:"user"`
-	Source   string `json:"source"` // "cron", "systemd"
-}
-
-// SystemUpdates represents available system updates.
-type SystemUpdates struct {
-	HasUpdates  bool     `json:"has_updates"`
-	Count       int      `json:"count"`
-	UpdatesList []string `json:"updates_list"`
 }
 
 // ProcessInfo represents a running process on the host.
@@ -120,12 +86,4 @@ type SystemSpecs struct {
 	SwapUsed          float64                `json:"swap_used"`    // GB
 	GPUModel          string                 `json:"gpu_model"`
 	NetworkInterfaces []NetworkInterfaceInfo `json:"network_interfaces"`
-}
-
-// SystemCleanupResult represents the result of a system maintenance and cleanup run.
-type SystemCleanupResult struct {
-	FreedBytes   int64    `json:"freed_bytes"`
-	FreedHuman   string   `json:"freed_human"`
-	ItemsCleaned []string `json:"items_cleaned"`
-	Details      string   `json:"details"`
 }

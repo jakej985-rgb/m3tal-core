@@ -15,13 +15,12 @@ const (
 type Capability string
 
 const (
-	CapabilityCollector Capability = "collector"  // Periodically emits telemetry metrics & tables
-	CapabilityUIView    Capability = "ui_view"    // Mounts dedicated view in Web GUI
-	CapabilityUIWidget  Capability = "ui_widget"  // Exposes dashboard grid widgets
-	CapabilityActions   Capability = "actions"    // Exposes executable actions/commands
-	CapabilitySettings  Capability = "settings"   // Exposes configurable settings sections
-	CapabilityExporter  Capability = "exporter"   // Streams or exports core telemetry
-	CapabilityTUIWidget Capability = "tui_widget" // Deprecated: legacy terminal UI widget
+	CapabilityCollector Capability = "collector" // Periodically emits telemetry metrics & tables
+	CapabilityUIView    Capability = "ui_view"   // Mounts dedicated view in Web GUI
+	CapabilityUIWidget  Capability = "ui_widget" // Exposes dashboard grid widgets
+	CapabilityActions   Capability = "actions"   // Exposes executable actions/commands
+	CapabilitySettings  Capability = "settings"  // Exposes configurable settings sections
+	CapabilityExporter  Capability = "exporter"  // Streams or exports core telemetry
 )
 
 // PluginManifest represents the static definition file (plugin.yaml) for an external plugin.
@@ -147,7 +146,6 @@ func (e *RPCError) Error() string {
 const (
 	MethodInit    = "m3tal.init"
 	MethodCollect = "m3tal.collect"
-	MethodRender  = "m3tal.render"
 	MethodAction  = "m3tal.action"
 )
 
@@ -205,7 +203,7 @@ type Metric struct {
 	Status   string  `json:"status,omitempty"` // "ok", "warning", "critical"
 }
 
-// TableData represents structured tabular data for display in TUI or GUI.
+// TableData represents structured tabular data for display in the Web GUI.
 type TableData struct {
 	ID      string     `json:"id"`
 	Title   string     `json:"title,omitempty"`
@@ -219,20 +217,6 @@ type CollectResult struct {
 	Metrics []Metric    `json:"metrics,omitempty"`
 	Tables  []TableData `json:"tables,omitempty"`
 	Message string      `json:"message,omitempty"`
-}
-
-// RenderParams request TUI or GUI render output.
-type RenderParams struct {
-	TabID  string `json:"tab_id"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	Theme  string `json:"theme,omitempty"` // e.g. "dark", "matrix", "dracula"
-}
-
-// RenderResult returns the rendered content.
-type RenderResult struct {
-	Format  string `json:"format"` // "ansi", "plain", "json_tree"
-	Content string `json:"content"`
 }
 
 // ActionParams request plugin to execute an action.

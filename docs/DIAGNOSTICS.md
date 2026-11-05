@@ -1,78 +1,78 @@
 # 🔍 Diagnostics & Troubleshooting Guide
 
-If something goes wrong with your M3TAL Media Server, follow this guide to find and fix the error.
+This guide covers diagnostic procedures and error resolution for M3TAL Core.
 
 ---
 
-## 🚦 First Steps: The Dashboard
+## 🩺 Health Endpoints
 
-The quickest way to diagnose an issue is the **Health Score** in the Dashboard.
-
-* **100%**: System is perfect.
-* **85% - 99%**: Warning. Small issue (e.g., a stalled log or a transient spike).
-* **Below 60%**: Critical. A core agent has crashed or a primary container is down.
-
----
-
-## 📂 The "State" Directory
-
-The `control-plane/state/` folder is the "Single Source of Truth."
-
-### 1. Checking the Logs
-
-Every agent logs its activity to `control-plane/state/logs/`.
-
-* `reconcile.log`: See if restarts are failing.
-* `anomaly.log`: See what the system thinks is "wrong."
-* `leader.log`: Check if this node thinks it is the Leader or a Follower.
-* `supervisor.log`: Check if agents are crashing repeatedly.
-
-**Pro-Tip**: Use `tail -f` to watch a log in real-time:
+Quick programmatic checks against the running service:
 
 ```bash
-tail -f control-plane/state/logs/reconcile.log
-```
+# Version (public, no auth)
+curl -s http://localhost:5050/api/v2/version
 
-### 2. Inspecting the State Files
+# Host + plugin-manager health (requires token)
+curl -H "X-API-Token: <key>" http://localhost:5050/api/v2/system/health
 
-The JSON files in `state/` show exactly what the agents are seeing:
-
-* `health.json`: The raw health status of every container.
-* `decisions.json`: The pending actions the system is about to take.
-* `metrics.json`: The latest CPU and Memory stats.
-
----
-
-## ⚠️ Common Issues
-
-### "My container won't stay started!"
-
-1. Check `reconcile.log`. It might show a Docker error (e.g., port already in use).
-2. Check `decision.py`'s cooldowns. If an app crashes too many times, M3TAL might put it on a 10-minute "cooldown" to prevent log spam.
-
-### "Dashboard says 'Agent Stalled'"
-
-1. This means an agent hasn't updated its heartbeat in over 2 minutes.
-2. Check `control-plane/run.sh` to see if the supervisor is trying to restart it.
-3. Check the specific agent's log. It might have a syntax error or a missing Python library.
-
-### "Permission Denied"
-
-M3TAL needs permission to talk to the Docker socket.
-
-```bash
-sudo usermod -aG docker $USER
-newgrp docker
+# Live telemetry snapshot
+curl -H "X-API-Token: <key>" http://localhost:5050/api/v2/system/stats
 ```
 
 ---
 
-## 🚑 Full Reset
+## 🪵 Service Logs & systemd
 
-If the state machine gets into a weird loop, you can safely reset all non-persistent state:
+M3TAL Core runs as the native systemd service `m3tal-api.service`.
 
 ```bash
-bash control-plane/init.sh
+# Runtime status
+systemctl status m3tal-api
+
+# Live logs
+journalctl -u m3tal-api -f
+
+# Logs since last boot
+journalctl -u m3tal-api -b
+
+# Restart after config changes
+sudo systemctl restart m3tal-api
 ```
 
-This will recreate missing files and clear any "stuck" decisions.
+Common log signals:
+
+* `� State database:` — SQLite store opened successfully.
+* `🚀 M3TAL Core API starting` — HTTP listener is up.
+* `🔄 Received SIGHUP: refreshing plugins` — plugin rediscovery triggered (e.g., after `apt install m3tal-plugin-*`).
+* `⚠️ Could not open state database` — check `/var/lib/m3tal` permissions and `M3TAL_STATE_DB`.
+
+---
+
+## 🧩 Plugin Diagnostics
+
+* **Plugin not appearing**: confirm the plugin directory is under a search path (`/usr/lib/m3tal/plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/etc/m3tal/plugins`, `./plugins`, or `M3TAL_PLUGINS_DIR`) and contains a valid manifest. Send `SIGHUP` to `m3tal-api` or restart the service to rediscover.
+* **Plugin UI 404 at `/plugins/<name>/`**: the plugin must ship `ui/dist` (or `ui/index.html`) inside its directory.
+* **Plugin auth failures**: verify `~/.config/m3tal/api_keys.json` exists and the plugin reads `M3TAL_API_KEY`.
+
+---
+
+## 🌐 GUI / Networking Issues
+
+* **GUI won't load**: verify the service is listening (`ss -tlnp | grep :5050`) and open `http://localhost:5050/gui/` (note the `/gui/` path — `/` redirects there).
+* **Port conflict**: see [Port Configuration](PORT_CONFIGURATION.md).
+* **WebSocket events not streaming**: ensure the reverse proxy (if any) upgrades WebSocket connections for `/api/v2/ws/events`.
+
+---
+
+## 🐞 Development Debugging
+
+```bash
+# Run tests
+go test ./...
+
+# Build everything (GUI + binary)
+make build
+
+# Run the API directly with debug logging
+LOG_LEVEL=debug ./m3tal-api
+```

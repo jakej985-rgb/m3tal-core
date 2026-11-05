@@ -679,7 +679,7 @@ export default function Plugins() {
               const hasUpdate = semver && semver.cmp === -1;
               const isDevAhead = semver && semver.cmp === 1;
 
-              const hasDeb = Boolean(item.has_deb || item.deb_filename || item.name === 'docker-monitor' || item.name === 'compose');
+              const hasDeb = Boolean(item.has_deb || item.deb_filename);
               const downloadUrl = api.getPluginDownloadUrl(item.name);
 
               return (

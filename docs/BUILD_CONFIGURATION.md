@@ -1,54 +1,12 @@
 # Build Configuration Guide
 
-| [🚀 Overview](../README.md) | [⚙️ Environment](ENVIRONMENT_VARIABLES.md) | [🛠️ Build](BUILD_CONFIGURATION.md) | [🌐 Networking](NETWORKING.md) | [🤖 Architecture](ARCHITECTURE_VISION.md) |
-| :---: | :---: | :---: | :---: | :---: |
-
-This guide explains the build requirements, process, and troubleshooting for M3TAL.
+This guide explains how to build M3TAL Core from source.
 
 ## 📋 Build Requirements
 
-### Go Environment
-
-M3TAL requires **Go 1.21 or higher** to build.
-
-#### Check Your Go Version
-
-```bash
-go version
-```
-
-**Expected output:**
-
-```text
-go version go1.21.x linux/amd64
-```
-
-#### Install Go (Linux/macOS)
-
-```bash
-# Download and install Go
-wget https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
-sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz
-
-# Add to PATH (add this to your ~/.bashrc or ~/.zshrc)
-export PATH=$PATH:/usr/local/go/bin
-
-# Verify installation
-go version
-```
-
-#### Install Go (macOS with Homebrew)
-
-```bash
-brew install go
-```
-
-### Go Modules Dependencies
-
-M3TAL uses Go modules. All dependencies are listed in `go.mod`.
-
-**Download dependencies:**
+* **Go 1.25+** (`go version` to verify)
+* **Node.js + npm** (for the Web GUI assets)
+* **Linux AMD64** target for packaged builds
 
 ```bash
 go mod download
@@ -57,224 +15,67 @@ go mod tidy
 
 ## 🛠️ Build Process
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/jakej985-rgb/M3tal-Media-Server.git
-cd M3tal-Media-Server
+git clone https://github.com/jakej985-rgb/m3tal-core.git
+cd m3tal-core
 ```
 
-### 2. Build the Binary
-
-#### Option A: Using build.sh (Linux/macOS)
+### 2. Build the Web GUI (embedded assets)
 
 ```bash
-chmod +x build.sh
-./build.sh
+cd gui && npm ci && npm run build && cd ..
 ```
 
-#### Option B: Using Makefile
+The output in `gui/dist` is embedded into the Go binary via `go:embed`.
+
+### 3. Build the API binary
 
 ```bash
-make build
+# Official script (native profile)
+./scripts/build-go.sh
+
+# Debian profile: linux/amd64, GOAMD64=v1 baseline, CGO disabled
+VERSION=$(cat VERSION) ./scripts/build-go.sh debian
+
+# Or manually
+CGO_ENABLED=0 GOAMD64=v1 go build -trimpath -o m3tal-api ./api/cmd
 ```
 
-#### Option C: Manual Build
+The only binary produced is `m3tal-api` — there is no CLI.
+
+### 4. Build the Debian package
 
 ```bash
-go build -o m3tal ./cmd/m3tal/main.go
-```
-
-A successful build produces:
-
-```text
-Build completed successfully
-Binary location: ./m3tal
-Binary size: ~15 MB
+./scripts/build-deb.sh                 # auto-detects nfpm or dpkg-deb
+PACKAGER=dpkg-deb ./scripts/build-deb.sh
 ```
 
 ## 📊 Build Output
 
-A successful build looks like:
-
 ```bash
-$ ./build.sh
-📥 Downloading dependencies...
-🚀 Building M3TAL CLI...
-     → Writes: ./m3tal (the main CLI binary)
-🚀 Building M3TAL API...
-     → Writes: ./m3tal-api (the backend API binary)
-✅ Build complete. Binaries: ./m3tal, ./m3tal-api
+$ make build
+🎨 Building Web GUI...
+🚀 Building M3TAL Core API daemon...
+✅ Build complete.
 ```
 
-The build produces two binaries:
+| Artifact | Purpose |
+| :--- | :--- |
+| `./m3tal-api` | Web GUI + REST/WebSocket API server (~12-14 MB) |
+| `gui/dist/` | Embedded frontend assets |
+| `m3tal_<version>_amd64.deb` | Installable Debian package |
 
-| Binary | Purpose | Size (approx) |
-| :--- | :--- | :--- |
-| `./m3tal` | Main CLI orchestrator | ~14-16 MB |
-| `./m3tal-api` | Backend API server | ~12-14 MB |
+## 🔍 Common Build Errors
 
-## 🔍 Build Logs
+| Error | Fix |
+| :--- | :--- |
+| `go: command not found` | Install Go 1.25+ and ensure it's on `PATH`. |
+| `module not found` | Run `go mod download && go mod tidy`. |
+| GUI build fails | Run `cd gui && npm ci` first; check Node version. |
+| `permission denied` | `chmod +x scripts/*.sh build.sh`. |
 
-If the build fails, check:
+## 🎯 Debian Baseline
 
-### Build Log Location
-
-```bash
-# Check for build.log
-ls -la build.log
-
-# Or check stderr
-./build.sh 2> build-error.log
-```
-
-### Common Build Errors
-
-#### Error: "go: command not found"
-
-**Cause**: Go is not installed or not in PATH.
-
-**Solution**:
-
-```bash
-# Verify Go installation
-which go
-
-# Or check PATH
-echo $PATH | grep go
-```
-
-#### Error: "module not found"
-
-**Cause**: Go modules not downloaded.
-
-**Solution**:
-
-```bash
-go mod download
-go mod tidy
-./build.sh
-```
-
-#### Error: "permission denied"
-
-**Cause**: File permissions issue.
-
-**Solution**:
-
-```bash
-chmod +x build.sh
-./build.sh
-```
-
-## 🎯 Build Script Details
-
-### What build.sh Does
-
-1. **Checks Go installation** - Verifies `go version`
-2. **Verifies dependencies** - Runs `go mod verify`
-3. **Builds binary** - Compiles with `go build`
-4. **Optimizes** - Strips debug info for smaller binary
-
-### Build Flags
-
-```bash
-# The build script uses these flags:
-go build \
-    -ldflags "-s -w" \  # Strip debug info
-    -o m3tal \            # Output file
-    ./cmd/m3tal/main.go   # Entry point
-```
-
-## 📦 Cross-Platform Builds
-
-### Build for Different Platforms
-
-**Linux (amd64)**:
-
-```bash
-GOOS=linux GOARCH=amd64 go build -o m3tal-linux ./cmd/m3tal/main.go
-```
-
-**macOS (amd64)**:
-
-```bash
-GOOS=darwin GOARCH=amd64 go build -o m3tal-macos ./cmd/m3tal/main.go
-```
-
-**macOS (arm64)**:
-
-```bash
-GOOS=darwin GOARCH=arm64 go build -o m3tal-macos-arm ./cmd/m3tal/main.go
-```
-
-**Windows**:
-
-```bash
-GOOS=windows GOARCH=amd64 go build -o m3tal.exe ./cmd/m3tal/main.go
-```
-
-### Make Cross-Compile Easy
-
-Add to your `~/.bashrc`:
-
-```bash
-build-m3tal() {
-    local platform=$1
-    local ext=""
-    [ "$platform" = "windows" ] && ext=".exe"
-    GOOS=$platform GOARCH=amd64 go build -o "m3tal-${platform}${ext}" ./cmd/m3tal/main.go
-}
-```
-
-## 🔧 Docker Build (Alternative)
-
-If you don't want to install Go locally:
-
-```bash
-# Build in Docker container
-docker run --rm -v $(pwd):/app golang:1.21-alpine \
-    sh -c "cd /app && go mod download && go build -o m3tal ./cmd/m3tal/main.go"
-
-# Or use the provided Dockerfile
-docker build -t m3tal-builder .
-docker run --rm -v $(pwd):/output m3tal-builder cp /app/m3tal /output/m3tal
-```
-
-## ✅ Pre-Build Checklist
-
-Before building, verify:
-
-- [ ] Go 1.21+ installed: `go version`
-- [ ] Dependencies installed: `go mod download`
-- [ ] Sufficient disk space: `df -h .`
-- [ ] Write permissions: `touch test && rm test`
-
-## 🚀 After Build
-
-After successful build:
-
-1. **Verify binary works**:
-
-   ```bash
-   ./m3tal version
-   ```
-
-2. **Check file size** (should be ~15MB):
-
-   ```bash
-   ls -lh m3tal
-   ```
-
-3. **Test basic commands**:
-
-   ```bash
-   ./m3tal help
-   ```
-
-## 📝 Notes
-
-- The binary is **statically linked** - no external dependencies needed
-- Build time: ~10-30 seconds (depends on CPU)
-- Binary size: ~14-16 MB after stripping
-- Debug builds: Remove `-ldflags "-s -w"` for debugging info
+Packaged builds use `GOAMD64=v1` and `CGO_ENABLED=0` for compatibility with older x86-64 CPUs (e.g., Intel Core i5-750). See [Debian CPU Baseline](DEBIAN_CPU_BASELINE.md).

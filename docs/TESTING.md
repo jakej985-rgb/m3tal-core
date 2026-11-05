@@ -1,63 +1,71 @@
-# 🧪 Resilience & Chaos Testing
+# 🧪 Testing & Verification Guide
 
-M3TAL includes a built-in "Chaos Agent" to verify that the self-healing systems are working correctly.
-
----
-
-## 💥 The Chaos Agent (`chaos_test.py`)
-
-The Chaos Agent is a destructive testing tool. It randomly injects failures into the control plane to see how fast the system can recover.
-
-### What it does
-
-* **Deletes** critical state files (like `decisions.json`).
-* **Corrupts** JSON files with garbage data.
-* **Empties** status files.
-
-### How to use it
-
-By default, the Chaos Agent is disabled for stability. To run a "Chaos Experiment":
-
-1. Open `sudo nano control-plane/run.sh`.
-2. Uncomment the line: `# run_agent chaos "$BASE_DIR/agents/chaos_test.py" python &`.
-3. Restart the control plane: `bash control-plane/run.sh`.
+This guide documents the automated test suites and verification procedures for M3TAL Core.
 
 ---
 
-## 📊 Measuring Performance (TTR)
+## 🏃 Running Go Tests
 
-Once chaos is injected, the system tracks its **Time-To-Recovery (TTR)**.
+```bash
+# All packages
+go test ./...
 
-1. **Check the Stats**: Look in `control-plane/state/chaos_events.json`.
-2. **Understand the Metrics**:
-    * **action**: What damage was done (e.g., "delete").
-    * **ttr**: How many seconds it took for the `init.sh` or the agents to repair the file.
-    * **avg_ttr**: The average recovery time for the whole experiment session.
+# With race detector
+go test -race ./...
 
-**Goal**: A healthy M3TAL system should have an `avg_ttr` of **less than 15 seconds**.
+# Verbose output
+go test -v ./...
+```
 
----
+### Package coverage
 
-## 🛠️ Manual Testing
-
-If you don't want to use the Chaos Agent, you can test self-healing manually:
-
-### 1. The Container Crash Test
-
-* Stop a container manually: `docker stop qbittorrent`.
-* Watch `control-plane/state/logs/monitor.log` → It will detect the "offline" state.
-* Watch `control-plane/state/logs/reconcile.log` → Within 60 seconds, it should issue a `docker start` command.
-
-### 2. The File Corruption Test
-
-* Open `control-plane/state/metrics.json` and delete everything inside it.
-* Wait 5 seconds.
-* The `metrics.py` agent will detect the invalid file and regenerate it automatically.
+| Package | Covers |
+|---|---|
+| `api` | HTTP handlers, auth middleware, plugin/repository/settings handlers. |
+| `core/state` | SQLite store, schema migration, API key CRUD/validation. |
+| `core/system` | Telemetry collection, metrics aggregator, processes, specs, storage. |
+| `core/events` | Event bus pub/sub and wildcards. |
+| `pkg/plugins` | Plugin manifest parsing, JSON-RPC protocol, host supervisor lifecycle. |
+| `pkg/version` | Version metadata. |
 
 ---
 
-## ⚠️ Safety Warning
+## 🖥️ Web GUI Build Verification
 
-**DO NOT RUN THE CHAOS AGENT IN PRODUCTION.**
+```bash
+cd gui
+npm ci
+npm run build    # produces gui/dist, embedded via go:embed
+```
 
-It is designed to break things. While M3TAL is designed to fix itself, running chaos experiments while you are trying to watch a movie may result in service interruptions.
+---
+
+## 📦 Debian Package (.deb) Verification
+
+Packages are validated inside a minimal Debian container for `GOAMD64=v1` CPU baseline compatibility and zero-cgo stability:
+
+```bash
+# Build test package
+PACKAGER=dpkg-deb DEB_TARGET=m3tal_test_amd64.deb ./scripts/build-deb.sh
+
+# Run containerized package validation
+./scripts/test-pkg.sh m3tal_test_amd64.deb
+```
+
+The test script verifies:
+
+1. Package contents (`/usr/bin/m3tal-api`, GUI assets, systemd unit, desktop entry).
+2. No `/usr/bin/m3tal` CLI binary is shipped.
+3. The systemd unit has no `docker.service` dependency.
+4. `m3tal-api` starts and serves `/api/v2/version` under an AVX-less CPU model.
+5. Upgrades preserve an existing `/etc/m3tal/.env`.
+
+---
+
+## ✅ Release Checklist
+
+1. `gofmt -l .` returns nothing.
+2. `go test ./...` passes.
+3. `cd gui && npm run build` succeeds.
+4. `./scripts/build-deb.sh` produces a lint-clean `.deb`.
+5. `./scripts/test-pkg.sh <deb>` passes.

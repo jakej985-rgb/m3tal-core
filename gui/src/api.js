@@ -65,11 +65,6 @@ const fetchAPI = async (method, path, body = null) => {
 };
 
 export const api = {
-  getStacks: () => fetchAPI('GET', '/api/v2/stacks'),
-  deployStack: (name) => fetchAPI('POST', `/api/v2/stacks/${name}/up`),
-  stopStack: (name) => fetchAPI('POST', `/api/v2/stacks/${name}/down`),
-  getContainers: () => fetchAPI('GET', '/api/v2/services'),
-  controlContainer: (name, action) => fetchAPI('POST', `/api/v2/containers/${name}/${action}`),
   getMetrics: () => fetchAPI('GET', '/api/v2/system/stats'),
   getSystemMetricsHistory: () => fetchAPI('GET', '/api/v2/system/metrics'),
   getSystemHealth: () => fetchAPI('GET', '/api/v2/system/health'),
@@ -84,14 +79,6 @@ export const api = {
   collectPlugin: (name) => fetchAPI('GET', `/api/v2/plugins/${name}/collect`),
   pluginAction: (name, action, args = {}) => fetchAPI('POST', `/api/v2/plugins/${name}/action`, { action, args }),
   getPluginTabs: () => fetchAPI('GET', '/api/v2/plugins/tabs'),
-  runDoctor: () => fetchAPI('GET', '/api/v2/system/doctor'),
-  pruneImages: () => fetchAPI('POST', '/api/v2/docker/images/prune'),
-  systemCleanup: () => fetchAPI('POST', '/api/v2/system/cleanup'),
-  reconcileSystem: () => fetchAPI('POST', '/api/v2/system/reconcile'),
-  unmountStorage: (mountpoint) => fetchAPI('POST', '/api/v2/system/storage/unmount', { mountpoint }),
-  getNetworkStats: () => fetchAPI('GET', '/api/v2/system/network'),
-  getVPNStatus: () => fetchAPI('GET', '/api/v2/vpn/status'),
-  getRoutes: () => fetchAPI('GET', '/api/v2/routes'),
   getProcesses: (limit = 150) => fetchAPI('GET', `/api/v2/system/processes?limit=${limit}`),
   killProcess: (pid) => fetchAPI('POST', `/api/v2/system/processes/${pid}/kill`),
   getSystemSpecs: () => fetchAPI('GET', '/api/v2/system/specs'),
