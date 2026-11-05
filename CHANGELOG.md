@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.2] - 2026-11-05
+
+### Overview & Release Highlights
+Release v0.24.2 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🎨 Web GUI & Dashboard
+- **refactor: strip core to web dashboard, system monitor, and plugin host (#141)** (`4f21b7e`):
+  - *What Changed*: * docs: add comprehensive Docker and container orchestration guide  * refactor: strip core to web dashboard, system monitor, and plugin host  M3TAL Core is now only the embedded Web GUI, host/GPU telemetry, system monitor, settings/API keys, and the external plugin supervisor. All workload features (Docker, Compose, stacks, Traefik, VPN, agents, reconcile, doctor, queue, CLI/TUI/tray) are removed from core and left to external plugins.  - Delete cli/, pkg/client|config|output|cmdutil|registry|compose, and   core workload packages (agents, docker, doctor, networking,   orchestrator, preflight, queue, stack, traefik) - Slim API to core routes: version, system stats/metrics/health/   processes/specs/network, plugins, settings, repositories, API keys,   and the events WebSocket - Remove TUI plugin protocol (tui_widget, m3tal.render) and stale models - Reduce state store to API-key persistence; drop route/stack/middleware - Clean GUI of Docker/stack/VPN/maintenance calls and dead widgets - Build/package only m3tal-api; systemd unit no longer depends on Docker - Update .env.example, scripts, and docs to match the new boundary  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>  ---------  Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.1] - 2026-11-05
 
 ### Overview & Release Highlights
