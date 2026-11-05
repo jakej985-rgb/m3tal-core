@@ -83,16 +83,16 @@ DEFAULT_CATALOG = [
         "apt_command": "sudo apt install -y m3tal-plugin-vpn"
     },
     {
-        "name": "samba-manager",
-        "title": "Samba Manager",
-        "process_name": "m3tal-samba",
-        "package_name": "m3tal-plugin-samba",
+        "name": "samba-nfs",
+        "title": "File Shares",
+        "process_name": "m3tal-samba-nfs",
+        "package_name": "m3tal-plugin-samba-nfs",
         "category": "File Sharing",
-        "description": "Graphical Samba/NFS share manager, guest permissions, user credentials, and active mounts.",
-        "capabilities": ["actions", "ui_view", "system_admin"],
+        "description": "Graphical Samba (SMB/CIFS) and NFS share manager: share provisioning, user credentials, guest permissions, active client monitoring, and network mounts.",
+        "capabilities": ["collector", "actions", "ui_view", "settings"],
         "version": "0.1.0",
-        "status": "planned",
-        "apt_command": "sudo apt install -y m3tal-plugin-samba"
+        "status": "developing",
+        "apt_command": "sudo apt install -y m3tal-plugin-samba-nfs"
     },
     {
         "name": "system-bench",

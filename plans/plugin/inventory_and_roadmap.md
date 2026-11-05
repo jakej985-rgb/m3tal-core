@@ -109,7 +109,7 @@ The following plugins are scheduled for development under the new standardized p
 | Plugin Name | Category | Process Name | Description | Key Capabilities |
 |---|---|---|---|---|
 | **`smart-disk`** | Hardware Storage | `m3tal-smart` | Drive health telemetry, NVMe wear life, S.M.A.R.T. self-tests, and temperature history. | `collector`, `ui_widget`, `alerts` |
-| **`samba-manager`** | File Sharing | `m3tal-samba` | Graphical Samba/NFS share creator, guest permissions, user credentials, and active connections. | `actions`, `ui_view`, `system_admin` |
+| **`samba-nfs`** | File Sharing | `m3tal-samba-nfs` | Graphical Samba (SMB/CIFS) & NFS share manager: share provisioning, user credentials, guest permissions, and active client monitoring. | `collector`, `actions`, `ui_view`, `settings` |
 | **`system-bench`** | Diagnostics | `m3tal-bench` | One-click benchmarking for CPU multi-threading, GPU compute, and disk read/write throughput. | `benchmark_runner`, `ui_view` |
 | **`tailscale-mesh`** | Networking | `m3tal-tailscale` | Tailscale VPN node connector, exit node selector, and MagicDNS routing status. | `network_mesh`, `status_checker` |
 | **`backup-sync`** | Maintenance | `m3tal-backup` | Scheduled snapshot and offsite backup manager utilizing Borg, Rclone, or local block mirroring. | `cron_runner`, `storage_sync`, `ui_view` |
