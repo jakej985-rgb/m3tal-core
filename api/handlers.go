@@ -57,17 +57,6 @@ func (s *Server) ValidateToken(token string) bool {
 	return false
 }
 
-// AuthMiddleware validates the API token
-func (s *Server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.ValidateToken(s.ExtractToken(r)) {
-			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
-			return
-		}
-		next(w, r)
-	}
-}
-
 // GetVersion returns canonical M3TAL Core version metadata.
 func (s *Server) GetVersion(w http.ResponseWriter, r *http.Request) {
 	sendSuccess(w, http.StatusOK, version.GetInfo(), nil)

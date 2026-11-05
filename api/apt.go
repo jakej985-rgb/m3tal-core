@@ -19,11 +19,6 @@ type AptPackageCandidate struct {
 	Status           string `json:"status"` // "installed", "available", "not_found"
 }
 
-type aptCacheEntry struct {
-	data      map[string]AptPackageCandidate
-	timestamp time.Time
-}
-
 var (
 	aptMu         sync.RWMutex
 	aptCache      = make(map[string]AptPackageCandidate)

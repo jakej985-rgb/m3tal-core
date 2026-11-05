@@ -68,7 +68,6 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Ping() error { return s.db.Ping() }
 
 // Migrate creates the required tables if they don't exist.
-// Existing legacy workload tables are intentionally left untouched for compatibility.
 func (s *Store) Migrate() error {
 	migrations := []string{
 		`CREATE TABLE IF NOT EXISTS api_keys (
