@@ -107,6 +107,42 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 }
 
+func TestRecordAPIKeyUsage(t *testing.T) {
+	db := tempDB(t)
+
+	rec, err := db.CreateAPIKey("Usage Key", nil, DirectionLocal, "", "")
+	if err != nil {
+		t.Fatalf("CreateAPIKey: %v", err)
+	}
+
+	// Lookup + record usage without a second SELECT (the Authenticate path).
+	looked, ok := db.LookupAPIKey(rec.Token)
+	if !ok {
+		t.Fatal("LookupAPIKey failed")
+	}
+	db.RecordAPIKeyUsage(looked)
+	if looked.LastUsedAt == nil {
+		t.Fatal("expected LastUsedAt to be stamped on the record")
+	}
+
+	// A fresh record object for the same key should now throttle the write.
+	again, ok := db.LookupAPIKey(rec.Token)
+	if !ok {
+		t.Fatal("second LookupAPIKey failed")
+	}
+	before := *again.LastUsedAt
+	db.RecordAPIKeyUsage(again)
+	keys, err := db.ListAPIKeys()
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	for _, k := range keys {
+		if k.ID == rec.ID && k.LastUsedAt != nil && *k.LastUsedAt != before {
+			t.Errorf("expected throttled usage write to keep %s, got %s", before, *k.LastUsedAt)
+		}
+	}
+}
+
 func TestGetPrimaryAPIKey(t *testing.T) {
 	db := tempDB(t)
 

@@ -307,17 +307,30 @@ func (s *Store) ValidateAPIKey(token string) bool {
 	if !ok {
 		return false
 	}
+	s.RecordAPIKeyUsage(rec)
+	return true
+}
+
+// RecordAPIKeyUsage stamps last_used_at on an already-looked-up key record.
+// Callers that already hold the record (e.g. Authenticate) use this to avoid
+// a second SELECT per request; writes are throttled to one per minute.
+func (s *Store) RecordAPIKeyUsage(rec *APIKeyRecord) {
+	if rec == nil {
+		return
+	}
 	shouldUpdate := true
 	if rec.LastUsedAt != nil && *rec.LastUsedAt != "" {
 		if t, err := time.Parse("2006-01-02 15:04:05", *rec.LastUsedAt); err == nil && time.Since(t) < 60*time.Second {
 			shouldUpdate = false
 		}
 	}
-	if shouldUpdate {
-		now := time.Now().UTC().Format("2006-01-02 15:04:05")
-		_, _ = s.db.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, rec.ID)
+	if !shouldUpdate {
+		return
 	}
-	return true
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	if _, err := s.db.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, rec.ID); err == nil {
+		rec.LastUsedAt = &now
+	}
 }
 
 // GetPrimaryAPIKey returns the most recently used local API key token.
