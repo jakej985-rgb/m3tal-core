@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.1] - 2026-11-05
+
+### Overview & Release Highlights
+Release v0.24.1 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🚀 New Features & Capabilities
+- **⚡ Bolt: optimize disk partition label resolution in GetDiskPartitions (#140)** (`79ddc5b`):
+  - *What Changed*: Batch scan /dev/disk/by-label once before partition inspection loop to eliminate repeated O(N*M) filesystem directory reads and os.Readlink syscalls on every metrics poll.  Co-authored-by: google-labs-jules[bot] <161369871+google-labs-jules[bot]@users.noreply.github.com> Co-authored-by: jakej985-rgb <224218482+jakej985-rgb@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.0] - 2026-11-01
 
 ### Overview & Release Highlights
