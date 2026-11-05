@@ -44,6 +44,13 @@ type PluginInstance struct {
 	stdin  io.WriteCloser
 	reader *bufio.Reader
 
+	// pending demultiplexes JSON-RPC responses by request ID. A single
+	// readLoop goroutine owns p.reader for the life of the process, so a
+	// timed-out call can never leave a zombie reader consuming (and
+	// discarding) the next response.
+	pending   map[uint64]chan rpcResult
+	pendingMu sync.Mutex
+
 	reqID  atomic.Uint64
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -345,6 +352,8 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 	p.cmd = cmd
 	p.stdin = stdin
 	p.reader = bufio.NewReader(stdout)
+	p.pending = make(map[uint64]chan rpcResult)
+	go p.readLoop()
 	p.State = StateStarting
 
 	// Perform m3tal.init handshake
@@ -463,6 +472,55 @@ func (p *PluginInstance) Action(ctx context.Context, actionID, target string, ar
 }
 
 // callLocked sends a JSON-RPC 2.0 message over stdin and reads response from stdout.
+// rpcResult delivers one JSON-RPC response (or a terminal read error) to the
+// callLocked invocation that owns the matching request ID.
+type rpcResult struct {
+	resp RPCResponse
+	err  error
+}
+
+// readLoop is the single goroutine allowed to read plugin stdout. It demuxes
+// responses to pending callers by request ID; lines with no pending caller
+// (notifications, late responses after a timeout) are dropped. On read error
+// or EOF every pending call is failed so none hang until context cancellation.
+func (p *PluginInstance) readLoop() {
+	for {
+		line, err := p.reader.ReadBytes('\n')
+		if len(line) > 0 {
+			var resp RPCResponse
+			if uerr := json.Unmarshal(line, &resp); uerr == nil {
+				p.pendingMu.Lock()
+				ch, ok := p.pending[resp.ID]
+				if !ok && len(p.pending) == 1 {
+					// Compat fallback: calls are serialized by p.mu so at most
+					// one is in flight; deliver ID-mismatched responses (sloppy
+					// plugins, test doubles) to it rather than dropping them.
+					for id, c := range p.pending {
+						ch, ok = c, true
+						delete(p.pending, id)
+						break
+					}
+				} else if ok {
+					delete(p.pending, resp.ID)
+				}
+				p.pendingMu.Unlock()
+				if ok {
+					ch <- rpcResult{resp: resp}
+				}
+			}
+		}
+		if err != nil {
+			p.pendingMu.Lock()
+			for id, ch := range p.pending {
+				delete(p.pending, id)
+				ch <- rpcResult{err: fmt.Errorf("plugin stdout closed: %w", err)}
+			}
+			p.pendingMu.Unlock()
+			return
+		}
+	}
+}
+
 func (p *PluginInstance) callLocked(ctx context.Context, method string, params any, out any) error {
 	id := p.reqID.Add(1)
 
@@ -488,34 +546,34 @@ func (p *PluginInstance) callLocked(ctx context.Context, method string, params a
 	}
 	reqData = append(reqData, '\n')
 
+	// Register the pending call before writing so a fast response cannot be
+	// missed; the deferred delete also covers write/select failures.
+	ch := make(chan rpcResult, 1)
+	p.pendingMu.Lock()
+	if p.pending == nil {
+		p.pendingMu.Unlock()
+		return fmt.Errorf("plugin %s has no active response reader", p.Manifest.Metadata.Name)
+	}
+	p.pending[id] = ch
+	p.pendingMu.Unlock()
+	defer func() {
+		p.pendingMu.Lock()
+		delete(p.pending, id)
+		p.pendingMu.Unlock()
+	}()
+
 	if _, err := p.stdin.Write(reqData); err != nil {
 		return fmt.Errorf("write error: %w", err)
 	}
-
-	// Read response line with timeout
-	type readResult struct {
-		line []byte
-		err  error
-	}
-
-	ch := make(chan readResult, 1)
-	go func() {
-		line, err := p.reader.ReadBytes('\n')
-		ch <- readResult{line: line, err: err}
-	}()
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case res := <-ch:
 		if res.err != nil {
-			return fmt.Errorf("read response error: %w", res.err)
+			return res.err
 		}
-
-		var resp RPCResponse
-		if err := json.Unmarshal(res.line, &resp); err != nil {
-			return fmt.Errorf("unmarshal response error: %w (raw: %s)", err, string(res.line))
-		}
+		resp := res.resp
 
 		if resp.Error != nil {
 			return resp.Error
