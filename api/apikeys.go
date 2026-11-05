@@ -12,11 +12,16 @@ import (
 )
 
 // CreateAPIKeyRequest defines payload for generating an API key.
-// Note: Custom key tokens cannot be specified; tokens are strictly server-generated (Jellyfin-style).
+// Local keys cannot specify a custom token (Jellyfin-style server generation).
+// Remote keys record a credential issued by another machine/app, so Token is
+// required when Direction is "remote".
 type CreateAPIKeyRequest struct {
-	Name  string `json:"name"`
-	Token string `json:"token,omitempty"`
-	Key   string `json:"key,omitempty"`
+	Name        string   `json:"name"`
+	Token       string   `json:"token,omitempty"`
+	Key         string   `json:"key,omitempty"`
+	Permissions []string `json:"permissions,omitempty"`
+	Direction   string   `json:"direction,omitempty"`
+	Target      string   `json:"target,omitempty"`
 }
 
 // ListAPIKeys returns all stored API keys.
@@ -51,9 +56,21 @@ func (s *Server) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Strictly prohibit custom token submissions (Jellyfin generation behavior)
-	if strings.TrimSpace(req.Token) != "" || strings.TrimSpace(req.Key) != "" {
-		sendError(w, http.StatusBadRequest, "CUSTOM_ENTRIES_PROHIBITED", "Custom API key entries are prohibited. API keys are generated automatically by Core.", nil)
+	direction := state.NormalizeDirection(req.Direction)
+	suppliedToken := strings.TrimSpace(req.Token)
+	if suppliedToken == "" {
+		suppliedToken = strings.TrimSpace(req.Key)
+	}
+
+	// Strictly prohibit custom token submissions for local keys (Jellyfin
+	// generation behavior). Remote keys are foreign credentials and must
+	// carry the token issued by the remote machine.
+	if direction == state.DirectionLocal && suppliedToken != "" {
+		sendError(w, http.StatusBadRequest, "CUSTOM_ENTRIES_PROHIBITED", "Custom API key entries are prohibited for this PC. API keys are generated automatically by Core. Use the remote tab to register a credential issued by another machine.", nil)
+		return
+	}
+	if direction == state.DirectionRemote && suppliedToken == "" {
+		sendError(w, http.StatusBadRequest, "TOKEN_REQUIRED", "Remote API keys require the token issued by the remote machine", nil)
 		return
 	}
 
@@ -67,7 +84,7 @@ func (s *Server) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := s.Store.CreateAPIKey(trimmedName)
+	rec, err := s.Store.CreateAPIKey(trimmedName, req.Permissions, direction, req.Target, suppliedToken)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "CREATE_FAILED", err.Error(), nil)
 		return

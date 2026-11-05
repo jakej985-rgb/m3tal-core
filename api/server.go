@@ -189,61 +189,50 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	pluginH := NewPluginHandlers(GlobalPluginManager)
 
 	r.Route("/api/v2", func(r chi.Router) {
-		r.Use(srv.chiAuthMiddleware)
+		r.Use(srv.Authenticate)
 
 		// API Keys
-		r.Get("/auth/keys", srv.ListAPIKeys)
-		r.Post("/auth/keys", srv.CreateAPIKey)
-		r.Delete("/auth/keys/{id}", srv.DeleteAPIKey)
+		r.Get("/auth/keys", srv.requireScope(state.ScopeKeysManage, srv.ListAPIKeys))
+		r.Post("/auth/keys", srv.requireScope(state.ScopeKeysManage, srv.CreateAPIKey))
+		r.Delete("/auth/keys/{id}", srv.requireScope(state.ScopeKeysManage, srv.DeleteAPIKey))
 
 		// Plugins
-		r.Get("/plugins", pluginH.ListPlugins)
-		r.Get("/plugins/catalog", pluginH.GetPluginCatalog)
-		r.Get("/plugins/tabs", pluginH.ListTabs)
-		r.Get("/plugins/{name}/changelog", pluginH.GetPluginChangelog)
-		r.Get("/plugins/{name}/download", pluginH.DownloadPluginDeb)
-		r.Post("/plugins/{name}/install", pluginH.InstallPlugin)
-		r.Post("/plugins/{name}/uninstall", pluginH.UninstallPlugin)
-		r.Post("/plugins/{name}/start", pluginH.StartPlugin)
-		r.Post("/plugins/{name}/stop", pluginH.StopPlugin)
-		r.Get("/plugins/{name}/collect", pluginH.CollectPlugin)
-		r.Post("/plugins/{name}/action", pluginH.ExecuteAction)
-		r.Get("/plugins/{name}/settings", pluginH.GetPluginSettings)
-		r.Post("/plugins/{name}/settings", pluginH.SavePluginSettings)
+		r.Get("/plugins", srv.requireScope(state.ScopePluginsRead, pluginH.ListPlugins))
+		r.Get("/plugins/catalog", srv.requireScope(state.ScopePluginsRead, pluginH.GetPluginCatalog))
+		r.Get("/plugins/tabs", srv.requireScope(state.ScopePluginsRead, pluginH.ListTabs))
+		r.Get("/plugins/{name}/changelog", srv.requireScope(state.ScopePluginsRead, pluginH.GetPluginChangelog))
+		r.Get("/plugins/{name}/download", srv.requireScope(state.ScopePluginsRead, pluginH.DownloadPluginDeb))
+		r.Post("/plugins/{name}/install", srv.requireScope(state.ScopePluginsWrite, pluginH.InstallPlugin))
+		r.Post("/plugins/{name}/uninstall", srv.requireScope(state.ScopePluginsWrite, pluginH.UninstallPlugin))
+		r.Post("/plugins/{name}/start", srv.requireScope(state.ScopePluginsWrite, pluginH.StartPlugin))
+		r.Post("/plugins/{name}/stop", srv.requireScope(state.ScopePluginsWrite, pluginH.StopPlugin))
+		r.Get("/plugins/{name}/collect", srv.requireScope(state.ScopePluginsRead, pluginH.CollectPlugin))
+		r.Post("/plugins/{name}/action", srv.requireScope(state.ScopePluginsWrite, pluginH.ExecuteAction))
+		r.Get("/plugins/{name}/settings", srv.requireScope(state.ScopePluginsRead, pluginH.GetPluginSettings))
+		r.Post("/plugins/{name}/settings", srv.requireScope(state.ScopePluginsWrite, pluginH.SavePluginSettings))
 
 		// Settings & repositories
-		r.Get("/settings", pluginH.GetAllSettings)
-		r.Post("/settings/core", pluginH.SaveCoreSettings)
-		r.Get("/repositories", pluginH.GetRepositories)
-		r.Post("/repositories", pluginH.SaveRepository)
-		r.Post("/repositories/refresh", pluginH.RefreshRepositories)
-		r.Delete("/repositories/{id}", pluginH.DeleteRepository)
+		r.Get("/settings", srv.requireScope(state.ScopeSystemRead, pluginH.GetAllSettings))
+		r.Post("/settings/core", srv.requireScope(state.ScopeSettingsWrite, pluginH.SaveCoreSettings))
+		r.Get("/repositories", srv.requireScope(state.ScopeSystemRead, pluginH.GetRepositories))
+		r.Post("/repositories", srv.requireScope(state.ScopeSettingsWrite, pluginH.SaveRepository))
+		r.Post("/repositories/refresh", srv.requireScope(state.ScopeSettingsWrite, pluginH.RefreshRepositories))
+		r.Delete("/repositories/{id}", srv.requireScope(state.ScopeSettingsWrite, pluginH.DeleteRepository))
 
 		// Host telemetry and system monitor
-		r.Get("/system/metrics", GetMetricsHistory)
-		r.Get("/system/health", srv.GetHealth)
-		r.Get("/system/stats", srv.GetStats)
-		r.Get("/system/processes", srv.GetProcesses)
-		r.Post("/system/processes/{pid}/kill", srv.KillProcess)
-		r.Get("/system/specs", srv.GetSystemSpecs)
-		r.Get("/system/network", srv.GetSystemNetwork)
+		r.Get("/system/metrics", srv.requireScope(state.ScopeSystemRead, GetMetricsHistory))
+		r.Get("/system/health", srv.requireScope(state.ScopeSystemRead, srv.GetHealth))
+		r.Get("/system/stats", srv.requireScope(state.ScopeSystemRead, srv.GetStats))
+		r.Get("/system/processes", srv.requireScope(state.ScopeSystemRead, srv.GetProcesses))
+		r.Post("/system/processes/{pid}/kill", srv.requireScope(state.ScopeSystemWrite, srv.KillProcess))
+		r.Get("/system/specs", srv.requireScope(state.ScopeSystemRead, srv.GetSystemSpecs))
+		r.Get("/system/network", srv.requireScope(state.ScopeSystemRead, srv.GetSystemNetwork))
 
 		// WebSocket events
-		r.Get("/ws/events", srv.GetWSEvents)
+		r.Get("/ws/events", srv.requireScope(state.ScopeSystemRead, srv.GetWSEvents))
 	})
 
 	return http.ListenAndServe(":"+port, r)
-}
-
-// chiAuthMiddleware is a chi-compatible auth middleware.
-func (s *Server) chiAuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.ValidateToken(s.ExtractToken(r)) {
-			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // GetMetricsHistory returns the sliding window history of system metrics.

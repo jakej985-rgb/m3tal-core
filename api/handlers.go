@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,6 +56,53 @@ func (s *Server) ValidateToken(token string) bool {
 		return true
 	}
 	return false
+}
+
+type apiKeyContextKey struct{}
+
+// Authenticate validates the request token and stores the matched API key
+// record in the request context. A nil record means the static APIToken was
+// used, which has full access to every scope.
+func (s *Server) Authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := s.ExtractToken(r)
+		if token == "" {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
+		if s.APIToken != "" && token == s.APIToken {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, (*state.APIKeyRecord)(nil))))
+			return
+		}
+		if s.Store != nil {
+			if rec, ok := s.Store.LookupAPIKey(token); ok {
+				s.Store.ValidateAPIKey(token) // records last_used_at
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
+				return
+			}
+		}
+		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+	})
+}
+
+// APIKeyFromContext returns the API key record attached by Authenticate.
+// A nil record (or absent context value) means full-access static token auth.
+func APIKeyFromContext(r *http.Request) *state.APIKeyRecord {
+	rec, _ := r.Context().Value(apiKeyContextKey{}).(*state.APIKeyRecord)
+	return rec
+}
+
+// requireScope wraps a handler so it only serves requests whose API key
+// grants the given permission scope. Static-token auth (nil record) bypasses
+// scope checks.
+func (s *Server) requireScope(scope string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if rec := APIKeyFromContext(r); rec != nil && !state.KeyAllows(rec, scope) {
+			sendError(w, http.StatusForbidden, "INSUFFICIENT_SCOPE", "API key does not have permission for "+scope, nil)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
 }
 
 // GetVersion returns canonical M3TAL Core version metadata.

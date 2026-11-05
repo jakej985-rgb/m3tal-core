@@ -37,7 +37,7 @@ func TestGetWSEvents_Upgrade(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Route("/api/v2", func(r chi.Router) {
-		r.Use(srv.chiAuthMiddleware)
+		r.Use(srv.Authenticate)
 		r.Get("/ws/events", srv.GetWSEvents)
 	})
 

@@ -106,6 +106,51 @@ func savePluginConfig(pluginName string, config map[string]any) error {
 	return os.WriteFile(getPluginConfigFile(pluginName), data, 0644)
 }
 
+// Preset settings categories and the plugins that belong to them. Plugins may
+// override this by declaring `category:` on their settings sections.
+var presetSettingsCategories = []struct {
+	ID      string
+	Title   string
+	Icon    string
+	Plugins []string
+}{
+	{ID: "containers", Title: "Containers", Icon: "IconPlugins", Plugins: []string{
+		"docker-monitor", "m3tal-docker", "docker", "compose", "m3tal-compose",
+		"stack-orchestrator", "stacks", "m3tal-stacks",
+	}},
+	{ID: "network", Title: "Network & Proxy", Icon: "IconServer", Plugins: []string{
+		"mesh", "m3tal-mesh", "mesh-node", "m3tal-mesh-node",
+		"gluetun-vpn", "vpn", "m3tal-vpn",
+		"traefik-gateway", "traefik", "m3tal-traefik",
+	}},
+	{ID: "file-sharing", Title: "File Sharing", Icon: "IconDocument", Plugins: []string{
+		"samba-nfs", "m3tal-samba-nfs",
+	}},
+	{ID: "ai", Title: "AI & LLM", Icon: "IconPlugins", Plugins: []string{
+		"ai-engine", "ai", "m3tal-ai",
+	}},
+	{ID: "hardware", Title: "Hardware & Diagnostics", Icon: "IconSettings", Plugins: []string{
+		"smart-disk", "smart", "m3tal-smart",
+		"system-bench", "bench", "m3tal-bench",
+	}},
+}
+
+// presetPluginCategory returns the preset category id for a plugin name, or ""
+// when the plugin is not part of a preset group.
+func presetPluginCategory(pluginName string) string {
+	name := strings.TrimPrefix(strings.TrimSpace(pluginName), "m3tal-")
+	name = strings.TrimPrefix(name, "plugin-")
+	for _, cat := range presetSettingsCategories {
+		for _, p := range cat.Plugins {
+			pName := strings.TrimPrefix(p, "m3tal-")
+			if name == pName || pluginName == p {
+				return cat.ID
+			}
+		}
+	}
+	return ""
+}
+
 // GetAllSettings returns Core settings + all registered plugin settings sections and current values.
 // GET /api/v2/settings
 func (h *PluginHandlers) GetAllSettings(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +159,23 @@ func (h *PluginHandlers) GetAllSettings(w http.ResponseWriter, r *http.Request) 
 	if sections == nil {
 		sections = []plugins.PluginSettingSection{}
 	}
+
+	// Apply preset category fallback for plugins that don't self-declare one.
+	for i := range sections {
+		if sections[i].Category == "" {
+			sections[i].Category = presetPluginCategory(sections[i].Plugin)
+		}
+	}
+
+	categories := make([]map[string]string, 0, len(presetSettingsCategories)+1)
+	for _, cat := range presetSettingsCategories {
+		categories = append(categories, map[string]string{
+			"id": cat.ID, "title": cat.Title, "icon": cat.Icon,
+		})
+	}
+	categories = append(categories, map[string]string{
+		"id": "other", "title": "Other Plugins", "icon": "IconPlugins",
+	})
 
 	pluginConfigs := make(map[string]map[string]any)
 	for _, sec := range sections {
@@ -126,6 +188,7 @@ func (h *PluginHandlers) GetAllSettings(w http.ResponseWriter, r *http.Request) 
 	sendSuccess(w, http.StatusOK, map[string]any{
 		"core":           core,
 		"sections":       sections,
+		"categories":     categories,
 		"plugin_configs": pluginConfigs,
 	}, nil)
 }
@@ -170,6 +233,15 @@ func (h *PluginHandlers) GetPluginSettings(w http.ResponseWriter, r *http.Reques
 				sections = m.Spec.Settings
 				break
 			}
+		}
+	}
+
+	for i := range sections {
+		if sections[i].Category == "" {
+			sections[i].Category = presetPluginCategory(sections[i].Plugin)
+		}
+		if sections[i].Plugin == "" {
+			sections[i].Plugin = name
 		}
 	}
 

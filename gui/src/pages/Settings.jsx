@@ -11,6 +11,45 @@ import {
   IconTrash,
 } from '../components/Icons';
 
+// Catalog of API key permission scopes (mirrors core/state/permissions.go)
+const API_KEY_SCOPES = [
+  { id: '*', label: 'Full Access', description: 'Unrestricted access to every API endpoint' },
+  { id: 'system:read', label: 'System Monitor (Read)', description: 'View metrics, health, processes, and specs' },
+  { id: 'system:write', label: 'System Control (Write)', description: 'Kill processes and other system mutations' },
+  { id: 'plugins:read', label: 'Plugins (Read)', description: 'List plugins, view settings, collect telemetry' },
+  { id: 'plugins:write', label: 'Plugins (Write)', description: 'Install, start, stop, and configure plugins' },
+  { id: 'settings:write', label: 'Settings & Repositories', description: 'Modify core settings and APT repositories' },
+  { id: 'keys:manage', label: 'Manage API Keys', description: 'Create and revoke API keys' },
+  { id: 'mesh:access', label: 'Mesh Fleet Access', description: 'Authenticate to mesh node telemetry endpoints' },
+];
+
+// Preset plugin-settings categories. The backend also sends `categories` and
+// injects `category` on each section; these are fallbacks for older backends.
+const FALLBACK_SETTINGS_CATEGORIES = [
+  { id: 'containers', title: 'Containers' },
+  { id: 'network', title: 'Network & Proxy' },
+  { id: 'file-sharing', title: 'File Sharing' },
+  { id: 'ai', title: 'AI & LLM' },
+  { id: 'hardware', title: 'Hardware & Diagnostics' },
+  { id: 'other', title: 'Other Plugins' },
+];
+
+const PRESET_PLUGIN_CATEGORY = {
+  'docker-monitor': 'containers', docker: 'containers', 'm3tal-docker': 'containers',
+  compose: 'containers', 'm3tal-compose': 'containers',
+  'stack-orchestrator': 'containers', stacks: 'containers', 'm3tal-stacks': 'containers',
+  mesh: 'network', 'm3tal-mesh': 'network', 'mesh-node': 'network', 'm3tal-mesh-node': 'network',
+  'gluetun-vpn': 'network', vpn: 'network', 'm3tal-vpn': 'network',
+  'traefik-gateway': 'network', traefik: 'network', 'm3tal-traefik': 'network',
+  'samba-nfs': 'file-sharing', 'm3tal-samba-nfs': 'file-sharing',
+  'ai-engine': 'ai', ai: 'ai', 'm3tal-ai': 'ai',
+  'smart-disk': 'hardware', smart: 'hardware', 'm3tal-smart': 'hardware',
+  'system-bench': 'hardware', bench: 'hardware', 'm3tal-bench': 'hardware',
+};
+
+const effectiveSectionCategory = (sec) =>
+  sec.category || PRESET_PLUGIN_CATEGORY[sec.plugin] || 'other';
+
 export default function Settings() {
   const [activeSection, setActiveSection] = useState('core_general');
   const [loading, setLoading] = useState(true);
@@ -29,6 +68,7 @@ export default function Settings() {
   // Plugin settings state
   const [pluginSections, setPluginSections] = useState([]);
   const [pluginConfigs, setPluginConfigs] = useState({});
+  const [settingsCategories, setSettingsCategories] = useState([]);
 
   // UI state for password visibility
   const [showToken, setShowToken] = useState(false);
@@ -55,8 +95,9 @@ export default function Settings() {
 
   // API Keys manager state
   const [apiKeys, setApiKeys] = useState([]);
+  const [keyTab, setKeyTab] = useState('local'); // 'local' (This PC) or 'remote' (Other PCs & Apps)
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyForm, setNewKeyForm] = useState({ name: '', token: '', target: '', permissions: ['*'] });
   const [createdKeyAlert, setCreatedKeyAlert] = useState(null);
   const [showKeyMap, setShowKeyMap] = useState({});
   const [copiedKeyMap, setCopiedKeyMap] = useState({});
@@ -90,17 +131,36 @@ export default function Settings() {
 
   const handleCreateApiKey = async (e) => {
     if (e) e.preventDefault();
-    if (!newKeyName.trim()) {
+    const isRemote = keyTab === 'remote';
+    if (!newKeyForm.name.trim()) {
       showToast('Application name is required', 'error');
+      return;
+    }
+    if (isRemote && !newKeyForm.token.trim()) {
+      showToast('Remote API keys require the token issued by the remote machine', 'error');
+      return;
+    }
+    if (!isRemote && newKeyForm.permissions.length === 0) {
+      showToast('Select at least one permission scope for this key', 'error');
       return;
     }
     setSaving(true);
     try {
-      const res = await api.createApiKey(newKeyName.trim());
+      const payload = isRemote
+        ? {
+            direction: 'remote',
+            token: newKeyForm.token.trim(),
+            target: newKeyForm.target.trim(),
+          }
+        : {
+            direction: 'local',
+            permissions: newKeyForm.permissions.includes('*') ? ['*'] : newKeyForm.permissions,
+          };
+      const res = await api.createApiKey(newKeyForm.name.trim(), payload);
       if (res?.status === 'success' && res.data) {
         showToast(`API Key for "${res.data.name}" generated successfully.`, 'success');
         setCreatedKeyAlert(res.data);
-        setNewKeyName('');
+        setNewKeyForm({ name: '', token: '', target: '', permissions: ['*'] });
         setShowAddKeyModal(false);
         loadApiKeys();
       } else {
@@ -147,6 +207,9 @@ export default function Settings() {
         }
         if (Array.isArray(res.data.sections)) {
           setPluginSections(res.data.sections);
+        }
+        if (Array.isArray(res.data.categories)) {
+          setSettingsCategories(res.data.categories);
         }
         if (res.data.plugin_configs && typeof res.data.plugin_configs === 'object') {
           setPluginConfigs(res.data.plugin_configs);
@@ -344,6 +407,33 @@ export default function Settings() {
     }
   };
 
+  // API keys split by direction: local = This PC (inbound), remote = Other PCs & Apps
+  const localKeys = apiKeys.filter((k) => (k.direction || 'local') === 'local');
+  const remoteKeys = apiKeys.filter((k) => k.direction === 'remote');
+  const visibleKeys = keyTab === 'remote' ? remoteKeys : localKeys;
+
+  // Group plugin settings sections into preset categories
+  const categoriesToShow = settingsCategories.length > 0 ? settingsCategories : FALLBACK_SETTINGS_CATEGORIES;
+  const sectionsByCategory = {};
+  pluginSections.forEach((sec) => {
+    const catId = effectiveSectionCategory(sec);
+    if (!sectionsByCategory[catId]) sectionsByCategory[catId] = [];
+    sectionsByCategory[catId].push(sec);
+  });
+
+  const toggleKeyPermission = (scopeId) => {
+    setNewKeyForm((prev) => {
+      let perms;
+      if (scopeId === '*') {
+        perms = prev.permissions.includes('*') ? [] : ['*'];
+      } else {
+        perms = prev.permissions.filter((p) => p !== '*');
+        perms = perms.includes(scopeId) ? perms.filter((p) => p !== scopeId) : [...perms, scopeId];
+      }
+      return { ...prev, permissions: perms };
+    });
+  };
+
   return (
     <div className="w-full h-full flex flex-col space-y-6">
       {/* Top Banner / Header */}
@@ -422,7 +512,7 @@ export default function Settings() {
                 </div>
                 {apiKeys.length > 0 && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1117] text-slate-300 border border-[#30363d]">
-                    {apiKeys.length}
+                    {localKeys.length + remoteKeys.length}
                   </span>
                 )}
               </button>
@@ -455,28 +545,49 @@ export default function Settings() {
                   No plugins have registered settings sections yet.
                 </div>
               ) : (
-                pluginSections.map((sec) => {
-                  const isSecActive = activeSection === `plugin_${sec.plugin}_${sec.id}`;
-                  return (
-                    <button
-                      key={`${sec.plugin}_${sec.id}`}
-                      onClick={() => setActiveSection(`plugin_${sec.plugin}_${sec.id}`)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-all ${
-                        isSecActive
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-300 hover:bg-[#21262d] hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 truncate">
-                        <IconPlugins className="w-4 h-4 flex-shrink-0 text-cyan-400" />
-                        <span className="truncate">{sec.title || sec.id}</span>
+                (() => {
+                  const knownIds = new Set(categoriesToShow.map((c) => c.id));
+                  const extraCatIds = Object.keys(sectionsByCategory).filter((id) => !knownIds.has(id)).sort();
+                  const orderedCategories = [
+                    ...categoriesToShow.map((c) => ({ id: c.id, title: c.title })),
+                    ...extraCatIds.map((id) => ({ id, title: id })),
+                  ];
+                  return orderedCategories.map((cat) => {
+                    const secs = sectionsByCategory[cat.id];
+                    if (!secs || secs.length === 0) return null;
+                    return (
+                      <div key={cat.id} className="pt-2 first:pt-0">
+                        <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {cat.title}
+                        </div>
+                        <div className="space-y-1">
+                          {secs.map((sec) => {
+                            const isSecActive = activeSection === `plugin_${sec.plugin}_${sec.id}`;
+                            return (
+                              <button
+                                key={`${sec.plugin}_${sec.id}`}
+                                onClick={() => setActiveSection(`plugin_${sec.plugin}_${sec.id}`)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-all ${
+                                  isSecActive
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : 'text-slate-300 hover:bg-[#21262d] hover:text-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 truncate">
+                                  <IconPlugins className="w-4 h-4 flex-shrink-0 text-cyan-400" />
+                                  <span className="truncate">{sec.title || sec.id}</span>
+                                </div>
+                                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 flex-shrink-0">
+                                  {sec.plugin}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 flex-shrink-0">
-                        {sec.plugin}
-                      </span>
-                    </button>
-                  );
-                })
+                    );
+                  });
+                })()
               )}
             </div>
           </div>
@@ -693,7 +804,7 @@ export default function Settings() {
                     API Key Manager
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Manage external application API keys for M3TAL Core and connected services (including Mesh Fleet).
+                    Manage API keys for this PC&apos;s services and credentials used to reach other machines (including Mesh Fleet).
                   </p>
                 </div>
                 <button
@@ -702,18 +813,53 @@ export default function Settings() {
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-md shadow-emerald-900/30 flex items-center gap-2 self-start sm:self-auto"
                 >
                   <IconKey className="w-4 h-4" />
-                  <span>Generate New API Key</span>
+                  <span>{keyTab === 'remote' ? 'Register Remote Key' : 'Generate New API Key'}</span>
                 </button>
               </div>
 
-              {/* Informational banner about Jellyfin-style automatic key generation */}
-              <div className="p-4 bg-[#161b22] border border-[#30363d] rounded-xl flex items-start gap-3">
-                <IconLock className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-slate-300 leading-relaxed">
-                  <span className="font-semibold text-white">Jellyfin-Style Server Generation: </span>
-                  API keys are generated automatically using cryptographically secure random entropy. Custom key strings cannot be entered manually to protect against weak or predictable authentication tokens.
-                </div>
+              {/* Direction Tabs: This PC (local inbound) vs Other PCs & Apps (remote outbound) */}
+              <div className="flex items-center gap-2 bg-[#0d1117] border border-[#30363d] p-1 rounded-lg w-fit">
+                <button
+                  type="button"
+                  onClick={() => setKeyTab('local')}
+                  className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    keyTab === 'local'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  This PC ({localKeys.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKeyTab('remote')}
+                  className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    keyTab === 'remote'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Other PCs &amp; Apps ({remoteKeys.length})
+                </button>
               </div>
+
+              {keyTab === 'local' ? (
+                <div className="p-4 bg-[#161b22] border border-[#30363d] rounded-xl flex items-start gap-3">
+                  <IconLock className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-white">This PC keys: </span>
+                    Authenticate anything accessing this machine&apos;s API — the dashboard, plugins, and mesh nodes. Keys are generated automatically using cryptographically secure random entropy; custom key strings cannot be entered manually. Each key can be scoped to specific API areas via permissions.
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-[#161b22] border border-[#30363d] rounded-xl flex items-start gap-3">
+                  <IconKey className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-white">Remote credentials: </span>
+                    Tokens issued by <em>other</em> machines or apps that this PC uses to reach their APIs (e.g. mesh peers, remote M3TAL nodes). Paste the token exactly as issued by the remote machine — it is stored for outbound use only and can never authenticate into this PC.
+                  </div>
+                </div>
+              )}
 
               {/* Newly Created Key Flash Alert */}
               {createdKeyAlert && (
@@ -757,7 +903,7 @@ export default function Settings() {
               <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-[#30363d] flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Active API Keys ({apiKeys.length})
+                    {keyTab === 'remote' ? 'Remote Credentials' : 'Active API Keys'} ({visibleKeys.length})
                   </span>
                   <button
                     type="button"
@@ -769,23 +915,51 @@ export default function Settings() {
                   </button>
                 </div>
 
-                {apiKeys.length === 0 ? (
+                {visibleKeys.length === 0 ? (
                   <div className="p-8 text-center text-slate-500 text-xs">
-                    No API keys found. Click &quot;Generate New API Key&quot; above to create one.
+                    {keyTab === 'remote'
+                      ? 'No remote credentials registered. Use "Register Remote Key" to store a token issued by another machine.'
+                      : 'No API keys found. Click "Generate New API Key" above to create one.'}
                   </div>
                 ) : (
                   <div className="divide-y divide-[#30363d]">
-                    {apiKeys.map((key) => {
+                    {visibleKeys.map((key) => {
                       const isRevealed = !!showKeyMap[key.id];
                       const isCopied = !!copiedKeyMap[key.id];
                       return (
                         <div key={key.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#1c2128] transition-colors">
                           <div className="space-y-1.5 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-semibold text-white truncate">{key.name}</span>
-                              {key.name === 'Default Key' && (
+                              {key.name === 'Default Key' && key.direction !== 'remote' && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-semibold">
                                   System Default
+                                </span>
+                              )}
+                              {key.direction === 'remote' && (
+                                <>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-950 text-violet-300 border border-violet-800 font-semibold">
+                                    Remote
+                                  </span>
+                                  {key.target && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                                      {key.target}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              {key.direction !== 'remote' && Array.isArray(key.permissions) && key.permissions.length > 0 && key.permissions[0] !== '*' && (
+                                <span className="flex items-center gap-1 flex-wrap">
+                                  {key.permissions.map((p) => (
+                                    <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                                      {p}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
+                              {key.direction !== 'remote' && (!Array.isArray(key.permissions) || key.permissions.length === 0 || key.permissions.includes('*')) && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold">
+                                  Full Access
                                 </span>
                               )}
                             </div>
@@ -1285,14 +1459,14 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Modal: Generate API Key (Jellyfin style, app name only, no custom key) */}
+      {/* Modal: Generate / Register API Key */}
       {showAddKeyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl relative space-y-5">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <IconKey className="w-5 h-5 text-amber-300" />
-                Generate New API Key
+                {keyTab === 'remote' ? 'Register Remote API Key' : 'Generate New API Key'}
               </h3>
               <button
                 type="button"
@@ -1306,31 +1480,100 @@ export default function Settings() {
             <form onSubmit={handleCreateApiKey} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Application / Client Name
+                  {keyTab === 'remote' ? 'Remote Machine / App Name' : 'Application / Client Name'}
                 </label>
                 <input
                   type="text"
                   required
                   autoFocus
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                  placeholder="e.g. Mesh Fleet, Home Assistant, Backup Daemon"
+                  value={newKeyForm.name}
+                  onChange={(e) => setNewKeyForm({ ...newKeyForm, name: e.target.value })}
+                  placeholder={keyTab === 'remote' ? 'e.g. NAS Node, Home Assistant' : 'e.g. Mesh Fleet, Home Assistant, Backup Daemon'}
                   className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                 />
                 <p className="text-[11px] text-slate-500 mt-1.5">
-                  A descriptive identifier for the connecting service or external application.
+                  {keyTab === 'remote'
+                    ? 'A descriptive identifier for the remote machine or service this credential belongs to.'
+                    : 'A descriptive identifier for the connecting service or external application.'}
                 </p>
               </div>
 
-              <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-slate-400 space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-                  <IconLock className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Automatic Key Generation</span>
-                </div>
-                <div>
-                  The API key will be securely generated by the server upon creation. Manual custom key entries are prohibited.
-                </div>
-              </div>
+              {keyTab === 'remote' ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Remote API Token *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newKeyForm.token}
+                      onChange={(e) => setNewKeyForm({ ...newKeyForm, token: e.target.value })}
+                      placeholder="Paste the token issued by the remote machine"
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      Issued by the remote machine&apos;s own API Key Manager. Stored for outbound use only — it cannot authenticate into this PC.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Target Host / Address (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newKeyForm.target}
+                      onChange={(e) => setNewKeyForm({ ...newKeyForm, target: e.target.value })}
+                      placeholder="e.g. 192.168.1.20, nas.local:5050"
+                      className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      Permission Scopes
+                    </label>
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {API_KEY_SCOPES.map((scope) => {
+                        const checked = newKeyForm.permissions.includes(scope.id);
+                        return (
+                          <label
+                            key={scope.id}
+                            className={`flex items-start gap-2.5 p-2 rounded-lg border cursor-pointer transition-colors ${
+                              checked
+                                ? 'border-emerald-600/60 bg-emerald-950/30'
+                                : 'border-[#30363d] bg-[#0d1117] hover:border-slate-600'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleKeyPermission(scope.id)}
+                              className="mt-0.5 accent-emerald-500"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-xs font-semibold text-slate-200 font-mono">{scope.id}</span>
+                              <span className="block text-[11px] text-slate-500">{scope.description}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-slate-400 space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                      <IconLock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Automatic Key Generation</span>
+                    </div>
+                    <div>
+                      The API key will be securely generated by the server upon creation. Manual custom key entries are prohibited for this PC.
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#30363d]">
                 <button
@@ -1342,11 +1585,11 @@ export default function Settings() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !newKeyName.trim()}
+                  disabled={saving || !newKeyForm.name.trim() || (keyTab === 'remote' && !newKeyForm.token.trim())}
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 flex items-center gap-1.5"
                 >
                   {saving ? <IconRefresh className="w-3.5 h-3.5 animate-spin" /> : <IconKey className="w-3.5 h-3.5" />}
-                  <span>Generate Key</span>
+                  <span>{keyTab === 'remote' ? 'Register Key' : 'Generate Key'}</span>
                 </button>
               </div>
             </form>

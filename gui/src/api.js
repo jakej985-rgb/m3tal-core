@@ -92,7 +92,7 @@ export const api = {
   refreshRepositories: () => fetchAPI('POST', '/api/v2/repositories/refresh'),
   deleteRepository: (id) => fetchAPI('DELETE', `/api/v2/repositories/${id}`),
   getApiKeys: () => fetchAPI('GET', '/api/v2/auth/keys'),
-  createApiKey: (name) => fetchAPI('POST', '/api/v2/auth/keys', { name }),
+  createApiKey: (name, payload = {}) => fetchAPI('POST', '/api/v2/auth/keys', { name, ...payload }),
   deleteApiKey: (id) => fetchAPI('DELETE', `/api/v2/auth/keys/${id}`),
 };
 

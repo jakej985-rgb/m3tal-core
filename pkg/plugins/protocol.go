@@ -73,6 +73,7 @@ type PluginSettingSection struct {
 	Title       string               `yaml:"title" json:"title"`
 	Description string               `yaml:"description,omitempty" json:"description,omitempty"`
 	Icon        string               `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Category    string               `yaml:"category,omitempty" json:"category,omitempty"` // Preset category id (e.g. "containers"); core supplies a fallback when empty
 	Fields      []PluginSettingField `yaml:"fields,omitempty" json:"fields,omitempty"`
 }
 

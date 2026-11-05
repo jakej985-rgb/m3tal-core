@@ -53,7 +53,7 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 
 	// Create new key for mesh
-	newKey, err := db.CreateAPIKey("Mesh Fleet")
+	newKey, err := db.CreateAPIKey("Mesh Fleet", nil, DirectionLocal, "", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 
 	// Empty name rejected
-	if _, err := db.CreateAPIKey("   "); err == nil {
+	if _, err := db.CreateAPIKey("   ", nil, DirectionLocal, "", ""); err == nil {
 		t.Error("expected error creating API key with empty name")
 	}
 
@@ -117,7 +117,7 @@ func TestGetPrimaryAPIKey(t *testing.T) {
 	}
 
 	// Create a new key and validate it to update last_used_at
-	meshKey, err := db.CreateAPIKey("Mesh Fleet")
+	meshKey, err := db.CreateAPIKey("Mesh Fleet", nil, DirectionLocal, "", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
