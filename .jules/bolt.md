@@ -12,3 +12,6 @@
 ## 2026-11-05 - gopsutil MemoryPercent double-reads /proc
 **Learning:** `p.MemoryPercent()` internally calls `mem.VirtualMemory()` AND `p.MemoryInfo()` — calling both it and `MemoryInfo()` costs 2 statm reads + N VirtualMemory reads per process. Deriving percent from one `MemoryInfo` + one `VirtualMemory` is identical math (RSS/total*100).
 **Action:** Check gopsutil source before assuming a convenience method is cheap — several compose other calls.
+## 2026-11-05 - Per-call reader goroutines on shared pipes are a leak+corruption bug
+**Learning:** `callLocked` spawned `go reader.ReadBytes()` per RPC call; ctx timeout orphaned it, and the zombie consumed the NEXT call's response line — silent corruption plus goroutine leak per timeout. Any "spawn reader per request" pattern over a shared stream needs a single reader with demux.
+**Action:** For stdio JSON-RPC, own the reader in one goroutine for the process lifetime and route by request ID. calls are serialized anyway, so a sole-pending-call fallback preserves compat with plugins that echo wrong/null IDs (test doubles do this).
