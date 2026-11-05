@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.6] - 2026-11-05
+
+### Overview & Release Highlights
+Release v0.24.6 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🚀 New Features & Capabilities
+- **⚡ Bolt: parallelize SystemMonitor poll requests (#146)** (`285a2de`):
+  - *What Changed*: * ⚡ Bolt: parallelize SystemMonitor poll requests  fetchData awaited metrics, history, processes, and specs sequentially every 3.5s — wall-clock per refresh was the sum of all latencies. Promise.all collapses it to the slowest call; tab-conditional fetches resolve to null when skipped.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>  * chore: remove dead EventBus publish-subscribe code  core/events.EventBus had zero non-test callers — the live websocket path uses ChannelEventBus exclusively. Removing ~150 lines of dead code including its test file.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>  ---------  Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.5] - 2026-11-05
 
 ### Overview & Release Highlights
