@@ -72,6 +72,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	r.Use(apiMiddleware.Recoverer)
 	r.Use(apiMiddleware.RequestLogger)
 	r.Use(middleware.RealIP)
+	// Compress JSON API payloads — the dashboard polls several endpoints every
+	// few seconds and responses (process lists, stats history, catalogs) are
+	// highly compressible (~5-10x smaller on the wire).
+	r.Use(middleware.Compress(5, "application/json"))
 
 	// Embedded React GUI
 	subFS, err := fs.Sub(gui.DistFS, "dist")
@@ -80,7 +84,16 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 
 		assetsFS, err := fs.Sub(subFS, "assets")
 		if err == nil {
-			fileServer(r, "/assets", http.FS(assetsFS))
+			// Vite emits content-hashed filenames (index-<hash>.js), so these
+			// assets are safe to cache immutably — eliminates revalidation
+			// requests on every page load.
+			assetCache := func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					next.ServeHTTP(w, r)
+				})
+			}
+			fileServer(r.With(assetCache), "/assets", http.FS(assetsFS))
 		}
 
 		redirectRoot := func(w http.ResponseWriter, r *http.Request) {

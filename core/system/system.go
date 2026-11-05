@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
@@ -98,13 +99,14 @@ func GetDetailedStats() (*models.DetailedStats, error) {
 		stats.Hostname = info.Hostname
 	}
 
-	// GPU Stats (nvidia-smi fallback)
-	gpuUsage, gpuTemp, gpuMemUsed, gpuMemTotal, gpuModel := getGPUStats()
-	stats.GPUUsage = gpuUsage
-	stats.GPUTemp = gpuTemp
-	stats.GPUMemUsed = gpuMemUsed
-	stats.GPUMemTotal = gpuMemTotal
-	stats.GPUModel = gpuModel
+	// GPU Stats (nvidia-smi fallback) — served from a short-lived cache so
+	// polling endpoints don't spawn a subprocess per request.
+	gpu := getGPUStatsCached()
+	stats.GPUUsage = gpu.usage
+	stats.GPUTemp = gpu.temp
+	stats.GPUMemUsed = gpu.memUsed
+	stats.GPUMemTotal = gpu.memTotal
+	stats.GPUModel = gpu.model
 
 	// Network Interfaces & Throughput
 	if ifList, err := GetNetworkInterfaces(); err == nil {
@@ -127,6 +129,35 @@ func getCPUTemp() float64 {
 	return 0
 }
 
+// getGPUStatsCached wraps getGPUStats with a 5s TTL. nvidia-smi costs
+// ~50-300ms per spawn; dashboard polling hits this every few seconds, so a
+// cache aligned with the poll cadence removes nearly every subprocess call
+// while keeping readings fresh enough for telemetry.
+var (
+	gpuStatsMu    sync.Mutex
+	gpuStatsCache gpuStatsResult
+	gpuStatsAt    time.Time
+)
+
+const gpuStatsTTL = 5 * time.Second
+
+type gpuStatsResult struct {
+	usage, temp, memUsed, memTotal float64
+	model                          string
+}
+
+func getGPUStatsCached() gpuStatsResult {
+	gpuStatsMu.Lock()
+	defer gpuStatsMu.Unlock()
+	if !gpuStatsAt.IsZero() && time.Since(gpuStatsAt) < gpuStatsTTL {
+		return gpuStatsCache
+	}
+	u, t, mu, mt, model := getGPUStats()
+	gpuStatsCache = gpuStatsResult{usage: u, temp: t, memUsed: mu, memTotal: mt, model: model}
+	gpuStatsAt = time.Now()
+	return gpuStatsCache
+}
+
 func getGPUStats() (usage float64, temp float64, memUsed float64, memTotal float64, model string) {
 	out, err := exec.Command("nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,name", "--format=csv,noheader,nounits").Output()
 	if err != nil {
@@ -143,7 +174,9 @@ func getGPUStats() (usage float64, temp float64, memUsed float64, memTotal float
 	return
 }
 
-func getMemoryFrequency() string {
+// memoryFrequency probes `inxi -m` once — RAM speed cannot change at runtime,
+// so the subprocess result is cached for the process lifetime.
+var memoryFrequency = sync.OnceValue(func() string {
 	out, err := exec.Command("/usr/bin/inxi", "-m").Output()
 	if err != nil {
 		return "Unknown"
@@ -158,4 +191,8 @@ func getMemoryFrequency() string {
 		}
 	}
 	return "Unknown"
+})
+
+func getMemoryFrequency() string {
+	return memoryFrequency()
 }
