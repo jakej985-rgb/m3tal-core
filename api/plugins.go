@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -51,8 +52,13 @@ type PluginDTO struct {
 // ListPlugins returns all discovered and managed plugins.
 // GET /api/v2/plugins
 func (h *PluginHandlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
-	// Trigger discovery to ensure any newly added plugins in search paths are picked up
-	discovered, _ := h.Manager.Discover()
+	// Serve the discovery snapshot maintained by the background auto-discovery
+	// loop instead of rescanning plugin directories on every poll. Fall back
+	// to a live scan only if discovery has never run.
+	discovered := h.Manager.GetDiscoveredManifests()
+	if discovered == nil {
+		discovered, _ = h.Manager.Discover()
+	}
 
 	allInstances := h.Manager.GetAllPlugins()
 	instanceMap := make(map[string]*plugins.PluginInstance)
@@ -575,10 +581,52 @@ func findPluginChangelog(name string) string {
 	return ""
 }
 
+// Plugin catalog responses are expensive to build (manifest discovery plus
+// per-entry .deb/CHANGELOG filesystem probes), while the Plugins page polls
+// every 12s. Cache the assembled catalog briefly; mutations call
+// invalidatePluginCatalogCache (directly or via InvalidateAptCache).
+var (
+	catalogCacheMu sync.Mutex
+	catalogCache   []CatalogPluginDTO
+	catalogCacheAt time.Time
+)
+
+const catalogCacheTTL = 30 * time.Second
+
+func invalidatePluginCatalogCache() {
+	catalogCacheMu.Lock()
+	catalogCache = nil
+	catalogCacheAt = time.Time{}
+	catalogCacheMu.Unlock()
+}
+
 // GetPluginCatalog returns all plugins in the catalog with versions, deb, and changelog.
 // GET /api/v2/plugins/catalog
 func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request) {
-	discovered, _ := h.Manager.Discover()
+	catalogCacheMu.Lock()
+	if catalogCache != nil && time.Since(catalogCacheAt) < catalogCacheTTL {
+		cached := catalogCache
+		catalogCacheMu.Unlock()
+		sendSuccess(w, http.StatusOK, cached, nil)
+		return
+	}
+	catalogCacheMu.Unlock()
+
+	results := h.buildPluginCatalog(r.Context())
+
+	catalogCacheMu.Lock()
+	catalogCache = results
+	catalogCacheAt = time.Now()
+	catalogCacheMu.Unlock()
+
+	sendSuccess(w, http.StatusOK, results, nil)
+}
+
+func (h *PluginHandlers) buildPluginCatalog(ctx context.Context) []CatalogPluginDTO {
+	discovered := h.Manager.GetDiscoveredManifests()
+	if discovered == nil {
+		discovered, _ = h.Manager.Discover()
+	}
 	installedMap := make(map[string]plugins.PluginManifest)
 	for _, d := range discovered {
 		installedMap[d.Metadata.Name] = d
@@ -624,7 +672,7 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	aptCandidates, _ := QueryAptCandidates(r.Context(), pkgsToQuery, false)
+	aptCandidates, _ := QueryAptCandidates(ctx, pkgsToQuery, false)
 
 	results := make([]CatalogPluginDTO, len(catalogEntries))
 	for i, item := range catalogEntries {
@@ -731,7 +779,7 @@ func (h *PluginHandlers) GetPluginCatalog(w http.ResponseWriter, r *http.Request
 		results[i] = entry
 	}
 
-	sendSuccess(w, http.StatusOK, results, nil)
+	return results
 }
 
 // CompareSemVer compares two semantic version strings (v1 vs v2).
@@ -980,6 +1028,7 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger re-discovery to reload new manifest and binary paths
 	_, _ = h.Manager.Discover()
+	invalidatePluginCatalogCache()
 
 	// If plugin was running before update, restart it with the new version
 	if wasRunning {
@@ -1031,6 +1080,7 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 
 	// Re-discover
 	_, _ = h.Manager.Discover()
+	invalidatePluginCatalogCache()
 
 	sendSuccess(w, http.StatusOK, map[string]any{
 		"name":        name,

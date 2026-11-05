@@ -30,6 +30,9 @@ func (w *responseWriterWrapper) Write(b []byte) (int, error) {
 }
 
 // RequestLogger is a middleware that logs incoming requests and processing duration.
+// The GUI polls several endpoints every few seconds, so fast successful requests
+// would emit several log lines per second of pure noise. Only errors (>=400) and
+// slow requests (>200ms) are logged — those are the ones worth an audit trail.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -40,6 +43,9 @@ func RequestLogger(next http.Handler) http.Handler {
 			status := wrapper.statusCode
 			if status == 0 {
 				status = http.StatusOK
+			}
+			if status < http.StatusBadRequest && duration < 200*time.Millisecond {
+				return
 			}
 			log.Printf("[API] %d %s %s (took %v)", status, r.Method, r.URL.Path, duration)
 		}()

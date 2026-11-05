@@ -62,6 +62,10 @@ type Manager struct {
 	coreVersion  string
 	pollInterval time.Duration
 	cancel       context.CancelFunc
+	// discoveredManifests caches the last Discover() result so read-only
+	// endpoints (plugin list, catalog) don't rescan the filesystem per request.
+	// Refreshed by every Discover call, including the 5s auto-discovery loop.
+	discoveredManifests []PluginManifest
 }
 
 // NewManager creates a new plugin manager with standard search paths.
@@ -152,7 +156,26 @@ func (m *Manager) Discover() ([]PluginManifest, error) {
 		}
 	}
 
+	m.mu.Lock()
+	m.discoveredManifests = discovered
+	m.mu.Unlock()
+
 	return discovered, nil
+}
+
+// GetDiscoveredManifests returns the manifest snapshot from the most recent
+// Discover() call, or nil if discovery has never run. Read-only endpoints
+// should prefer this over calling Discover() per request; fall back to
+// Discover() when nil (e.g. auto-discovery not yet started).
+func (m *Manager) GetDiscoveredManifests() []PluginManifest {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.discoveredManifests == nil {
+		return nil
+	}
+	out := make([]PluginManifest, len(m.discoveredManifests))
+	copy(out, m.discoveredManifests)
+	return out
 }
 
 // StartAutoDiscovery launches a background routine that periodically senses

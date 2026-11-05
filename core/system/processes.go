@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -14,6 +15,14 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 	procs, err := process.Processes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list processes: %w", err)
+	}
+
+	// Total RAM once — used to derive per-process memory percent without
+	// gopsutil's MemoryPercent(), which would re-read /proc/<pid>/statm that
+	// MemoryInfo() already fetched (saves one file read per process).
+	var totalMem uint64
+	if vm, err := mem.VirtualMemory(); err == nil {
+		totalMem = vm.Total
 	}
 
 	results := make([]models.ProcessInfo, 0, len(procs))
@@ -26,11 +35,14 @@ func GetProcesses(limit int) ([]models.ProcessInfo, error) {
 		}
 
 		cpuPercent, _ := p.CPUPercent()
-		memPercent, _ := p.MemoryPercent()
 		memInfo, _ := p.MemoryInfo()
 		var rss uint64
+		var memPercent float32
 		if memInfo != nil {
 			rss = memInfo.RSS
+			if totalMem > 0 {
+				memPercent = float32(float64(rss) / float64(totalMem) * 100)
+			}
 		}
 
 		username, _ := p.Username()

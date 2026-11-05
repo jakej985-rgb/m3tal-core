@@ -55,9 +55,8 @@ func GetSystemSpecs() (*models.SystemSpecs, error) {
 		specs.SwapUsed = float64(swap.Used) / (1024 * 1024 * 1024)
 	}
 
-	// GPU
-	_, _, _, _, gpuModel := getGPUStats()
-	specs.GPUModel = gpuModel
+	// GPU — cached wrapper avoids an nvidia-smi spawn per specs poll
+	specs.GPUModel = getGPUStatsCached().model
 	if ifList, err := GetNetworkInterfaces(); err == nil {
 		specs.NetworkInterfaces = ifList
 	}

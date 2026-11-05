@@ -45,6 +45,12 @@ const fetchAPI = async (method, path, body = null) => {
     options.body = JSON.stringify(body);
   }
 
+  // Bound every request: a hung connection would otherwise stall a polling
+  // cycle forever. 30s is generous enough for plugin install/uninstall calls.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  options.signal = controller.signal;
+
   try {
     const res = await fetch(url, options);
     if (res.status === 401) {
@@ -60,7 +66,12 @@ const fetchAPI = async (method, path, body = null) => {
     }
     return { status: 'success', data };
   } catch (err) {
+    if (err.name === 'AbortError') {
+      return { status: 'error', error: 'Request timed out' };
+    }
     return { status: 'error', error: err.message };
+  } finally {
+    clearTimeout(timeout);
   }
 };
 

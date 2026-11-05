@@ -23,15 +23,24 @@ var (
 	aptMu         sync.RWMutex
 	aptCache      = make(map[string]AptPackageCandidate)
 	aptLastUpdate time.Time
+	// searchCache memoizes `apt-cache search ^m3tal-plugin-` output; the package
+	// list changes far slower than the 60s policy TTL, and the exec itself is
+	// the expensive part of DiscoverAptPlugins.
+	searchCache   []string
+	searchCacheAt time.Time
 	cacheTTL      = 60 * time.Second
 )
 
-// InvalidateAptCache clears the cached APT policy results.
+// InvalidateAptCache clears the cached APT policy results and the derived
+// plugin catalog cache, since catalog entries embed candidate versions.
 func InvalidateAptCache() {
 	aptMu.Lock()
-	defer aptMu.Unlock()
 	aptCache = make(map[string]AptPackageCandidate)
 	aptLastUpdate = time.Time{}
+	searchCache = nil
+	searchCacheAt = time.Time{}
+	aptMu.Unlock()
+	invalidatePluginCatalogCache()
 }
 
 // ParseAptPolicy parses the stdout of `apt-cache policy [packages...]`.
@@ -173,19 +182,33 @@ func QueryAptCandidates(ctx context.Context, packageNames []string, forceRefresh
 
 // DiscoverAptPlugins searches APT cache for all registered m3tal-plugin-* packages.
 func DiscoverAptPlugins(ctx context.Context, forceRefresh bool) ([]AptPackageCandidate, error) {
-	cmd := exec.CommandContext(ctx, "apt-cache", "search", "^m3tal-plugin-")
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	_ = cmd.Run()
-
+	aptMu.RLock()
+	cachedSearch := !forceRefresh && time.Since(searchCacheAt) < cacheTTL && searchCache != nil
 	var pkgs []string
-	scanner := bufio.NewScanner(&stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Fields(line)
-		if len(parts) > 0 {
-			pkgs = append(pkgs, parts[0])
+	if cachedSearch {
+		pkgs = searchCache
+	}
+	aptMu.RUnlock()
+
+	if !cachedSearch {
+		cmd := exec.CommandContext(ctx, "apt-cache", "search", "^m3tal-plugin-")
+		var stdout bytes.Buffer
+		cmd.Stdout = &stdout
+		_ = cmd.Run()
+
+		scanner := bufio.NewScanner(&stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			parts := strings.Fields(line)
+			if len(parts) > 0 {
+				pkgs = append(pkgs, parts[0])
+			}
 		}
+
+		aptMu.Lock()
+		searchCache = pkgs
+		searchCacheAt = time.Now()
+		aptMu.Unlock()
 	}
 
 	if len(pkgs) == 0 {

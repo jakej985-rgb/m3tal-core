@@ -144,8 +144,15 @@ export default function Dashboard() {
   };
 
   const fetchStats = async () => {
-    // 1. Fetch current metrics
-    const resMetrics = await api.getMetrics();
+    // Fire all five requests concurrently — they are independent, so wall-clock
+    // time per refresh drops from the sum of latencies to the slowest call.
+    const [resMetrics, resHistory, resHealth, resPlugins] = await Promise.all([
+      api.getMetrics(),
+      api.getSystemMetricsHistory(),
+      api.getSystemHealth(),
+      api.getPlugins(),
+    ]);
+
     if (resMetrics.status === 'success') {
       setMetrics(resMetrics.data);
       setError(null);
@@ -153,31 +160,16 @@ export default function Dashboard() {
       setError(resMetrics.error || 'Failed to fetch metrics');
     }
 
-    // 2. Fetch history
-    const resHistory = await api.getSystemMetricsHistory();
     if (resHistory.status === 'success') {
       setHistory(resHistory.data || []);
     }
 
-    // 3. Fetch health status
-    const resHealth = await api.getSystemHealth();
     if (resHealth.status === 'success') {
       setHealth(resHealth.data);
     }
 
-    // 4. Fetch core version
+    // Dynamic plugin widgets (non-critical)
     try {
-      const resVer = await api.getVersion();
-      if (resVer?.status === 'success' && resVer.data) {
-        setCoreVersion(resVer.data.display || `v${resVer.data.version}`);
-      }
-    } catch {
-      // Fallback stays v0.18.0
-    }
-
-    // 5. Fetch dynamic plugin widgets if available
-    try {
-      const resPlugins = await api.getPlugins();
       if (resPlugins?.status === 'success' && Array.isArray(resPlugins.data)) {
         const widgets = [];
         resPlugins.data.forEach((p) => {
@@ -193,6 +185,13 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    // Version is immutable for the process lifetime — fetch once, not per poll.
+    api.getVersion().then((resVer) => {
+      if (resVer?.status === 'success' && resVer.data) {
+        setCoreVersion(resVer.data.display || `v${resVer.data.version}`);
+      }
+    }).catch(() => {});
+
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
 
