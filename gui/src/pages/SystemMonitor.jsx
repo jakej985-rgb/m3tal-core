@@ -23,32 +23,29 @@ export default function SystemMonitor() {
 
   const fetchData = async () => {
     try {
-      // 1. Fetch metrics
-      const resMetrics = await api.getMetrics();
+      const wantProcs = activeTab === 'processes' || activeTab === 'performance';
+      const wantSpecs = activeTab === 'specs' || activeTab === 'performance';
+
+      // Fire all requests concurrently — tab-conditional calls resolve to
+      // null when skipped, so wall-clock per refresh is the slowest call.
+      const [resMetrics, resHistory, resProcs, resSpecs] = await Promise.all([
+        api.getMetrics(),
+        api.getSystemMetricsHistory(),
+        wantProcs ? api.getProcesses(150) : Promise.resolve(null),
+        wantSpecs ? api.getSystemSpecs() : Promise.resolve(null),
+      ]);
+
       if (resMetrics.status === 'success') {
         setMetrics(resMetrics.data);
       }
-
-      // 2. Fetch history for sparklines
-      const resHistory = await api.getSystemMetricsHistory();
       if (resHistory.status === 'success') {
         setHistory(resHistory.data || []);
       }
-
-      // 3. Fetch processes if on processes or performance tab
-      if (activeTab === 'processes' || activeTab === 'performance') {
-        const resProcs = await api.getProcesses(150);
-        if (resProcs.status === 'success' && Array.isArray(resProcs.data)) {
-          setProcesses(resProcs.data);
-        }
+      if (resProcs && resProcs.status === 'success' && Array.isArray(resProcs.data)) {
+        setProcesses(resProcs.data);
       }
-
-      // 4. Fetch system specs
-      if (activeTab === 'specs' || activeTab === 'performance') {
-        const resSpecs = await api.getSystemSpecs();
-        if (resSpecs.status === 'success') {
-          setSpecs(resSpecs.data);
-        }
+      if (resSpecs && resSpecs.status === 'success') {
+        setSpecs(resSpecs.data);
       }
     } catch (err) {
       console.error('SystemMonitor fetch error:', err);
