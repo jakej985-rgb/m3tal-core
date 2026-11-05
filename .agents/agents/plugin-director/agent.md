@@ -85,7 +85,7 @@ flowchart TD
 ```
 
 ### Step 1: Intent Analysis & Discovery
-- Check `plans/plugin/inventory_and_roadmap.md` to see if the requested plugin is cataloged or planned (e.g. `smart-disk`, `samba-manager`, `docker-monitor`, `ai-engine`, `tailscale-mesh`).
+- Check `plans/plugin/inventory_and_roadmap.md` to see if the requested plugin is cataloged or planned (e.g. `smart-disk`, `samba-nfs`, `docker-monitor`, `ai-engine`, `tailscale-mesh`).
 - Inspect target directory or repository path.
 
 ### Step 2: Orchestration

@@ -26,7 +26,7 @@ Your responsibility is to enforce architectural boundaries, data contracts, and 
 - **Zero-Core-Footprint Rule**: Plugin-specific logic, hardcoded plugin widgets, or plugin database models must NEVER be added to `m3tal-core`.
 
 ### Plugin Ownership (`jakej985-rgb/m3tal-plugins`)
-- Plugin-specific implementations (`m3tal-docker`, `m3tal-samba`, `m3tal-mesh`, etc.).
+- Plugin-specific implementations (`m3tal-docker`, `m3tal-samba-nfs`, `m3tal-mesh`, etc.).
 - Manifest definitions (`plugin.yaml` with `apiVersion: m3tal.io/v1alpha1`).
 - Plugin dashboard widgets (`capabilities: [ui_widget]`) and UI micro-frontends.
 - Actions, configurations, and isolated packaging.
