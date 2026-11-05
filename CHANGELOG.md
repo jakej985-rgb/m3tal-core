@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.3] - 2026-11-05
+
+### Overview & Release Highlights
+Release v0.24.3 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **chore(plugins): rename samba-manager catalog entry to samba-nfs (#142)** (`72f88e9`):
+  - *What Changed*: The Samba/NFS share plugin shipped as m3tal-samba-nfs (m3tal-plugins feat/samba-nfs-plugin). Update the built-in catalog, plugin alias map, GUI fallback list, catalog generator, roadmap doc, and agent docs to match the new name, package, process identity, and valid capabilities.  Generated with [Devin](https://devin.ai)  Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.2] - 2026-11-05
 
 ### Overview & Release Highlights
