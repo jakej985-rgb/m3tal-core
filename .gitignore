@@ -69,3 +69,7 @@ plugins/**/docker-plugin
 
 # Review Engine Audit Trails
 .m3tal-review/
+
+# Local runtime state
+data/state.db
+data/*.db-*

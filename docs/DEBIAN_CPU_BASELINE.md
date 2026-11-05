@@ -1,15 +1,15 @@
 # Debian AMD64 CPU baseline and release checklist
 
 The `m3tal` Debian package supports the original x86-64 baseline (Go `GOAMD64=v1`),
-including the Intel Core i5-750. The CLI and API are built through `scripts/build-go.sh`
+including the Intel Core i5-750. The API is built through `scripts/build-go.sh`
 with `CGO_ENABLED=0`; this prevents C compiler defaults from selecting instructions
 above the supported baseline. The module and CI use the Go version declared in `go.mod`.
 
 Use `./build.sh` or `make build` for native development binaries. The Debian
 package build uses the explicit `debian` profile in `scripts/build-go.sh` to pin
 Linux AMD64 v1 with cgo disabled. The Debian package remains one
-`m3tal` package containing the CLI, API, GUI assets, configuration templates, and
-service files.
+`m3tal` package containing the `m3tal-api` binary, GUI assets, configuration
+templates, and service files.
 
 ## Incident diagnosis
 
