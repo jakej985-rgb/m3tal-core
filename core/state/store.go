@@ -15,7 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store wraps a SQLite database for M3TAL state persistence.
+// Store wraps a SQLite database for M3TAL Core state persistence.
 type Store struct {
 	db        *sql.DB
 	ConfigDir string // Optional directory for api_keys.json export (defaults to ~/.config/m3tal or /etc/m3tal)
@@ -30,38 +30,7 @@ type APIKeyRecord struct {
 	LastUsedAt *string `json:"last_used_at,omitempty"`
 }
 
-// RouteRecord is a stored route with its database ID.
-type RouteRecord struct {
-	ID          int64  `json:"id"`
-	Service     string `json:"service"`
-	Domain      string `json:"domain"`
-	Port        int    `json:"port"`
-	Entrypoints string `json:"entrypoints"`
-	Stack       string `json:"stack,omitempty"`
-	SSL         bool   `json:"ssl"`
-	Middlewares string `json:"middlewares,omitempty"`
-	CreatedAt   string `json:"created_at"`
-}
-
-// StackRecord is a stored stack reference.
-type StackRecord struct {
-	Name         string `json:"name"`
-	ComposePath  string `json:"compose_path"`
-	LastDeployed string `json:"last_deployed,omitempty"`
-	Status       string `json:"status"`
-}
-
-// MiddlewareRecord is a stored middleware definition.
-type MiddlewareRecord struct {
-	ID        int64             `json:"id"`
-	Name      string            `json:"name"`
-	Type      string            `json:"type"`
-	Config    map[string]string `json:"config"`
-	CreatedAt string            `json:"created_at"`
-}
-
 // Open creates or opens a SQLite database at the given path.
-// It creates parent directories if they don't exist.
 func Open(path string) (*Store, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -73,22 +42,15 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("cannot open database %s: %w", path, err)
 	}
 
-	// Enable WAL mode for concurrent reads
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("cannot set WAL mode: %w", err)
-	}
-
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("cannot enable foreign keys: %w", err)
-	}
-
-	// Set busy timeout for concurrent access
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("cannot set busy timeout: %w", err)
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA foreign_keys=ON",
+		"PRAGMA busy_timeout=5000",
+	} {
+		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("cannot apply pragma %q: %w", pragma, err)
+		}
 	}
 
 	s := &Store{db: db}
@@ -96,52 +58,19 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-
 	return s, nil
 }
 
 // Close closes the database connection.
-func (s *Store) Close() error {
-	return s.db.Close()
-}
+func (s *Store) Close() error { return s.db.Close() }
 
 // Ping verifies the database connection is alive.
-func (s *Store) Ping() error {
-	return s.db.Ping()
-}
+func (s *Store) Ping() error { return s.db.Ping() }
 
 // Migrate creates the required tables if they don't exist.
+// Existing legacy workload tables are intentionally left untouched for compatibility.
 func (s *Store) Migrate() error {
 	migrations := []string{
-		`CREATE TABLE IF NOT EXISTS routes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			service TEXT NOT NULL,
-			domain TEXT NOT NULL UNIQUE,
-			port INTEGER NOT NULL,
-			entrypoints TEXT DEFAULT 'web',
-			stack TEXT DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS stacks (
-			name TEXT PRIMARY KEY,
-			compose_path TEXT NOT NULL,
-			last_deployed DATETIME,
-			status TEXT DEFAULT 'unknown'
-		)`,
-		`CREATE TABLE IF NOT EXISTS middleware (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			type TEXT NOT NULL,
-			config TEXT DEFAULT '{}',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS plugin_states (
-			name TEXT PRIMARY KEY,
-			kind TEXT NOT NULL,
-			enabled INTEGER NOT NULL DEFAULT 1,
-			installed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			config TEXT DEFAULT '{}'
-		)`,
 		`CREATE TABLE IF NOT EXISTS api_keys (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -157,11 +86,6 @@ func (s *Store) Migrate() error {
 		}
 	}
 
-	// Schema migrations for v2 proxy (SSL and Middlewares support)
-	_, _ = s.db.Exec("ALTER TABLE routes ADD COLUMN ssl INTEGER DEFAULT 0")
-	_, _ = s.db.Exec("ALTER TABLE routes ADD COLUMN middlewares TEXT DEFAULT ''")
-
-	// Ensure at least one primary API key exists if empty
 	var keyCount int
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM api_keys").Scan(&keyCount); err == nil && keyCount == 0 {
 		token, err := GenerateRandomAPIKeyToken()
@@ -170,253 +94,7 @@ func (s *Store) Migrate() error {
 			_, _ = s.db.Exec(`INSERT INTO api_keys (name, token, created_at) VALUES (?, ?, ?)`, "Default Key", token, now)
 		}
 	}
-
 	return nil
-}
-
-// --- Routes ---
-
-// CreateRoute inserts a new route and returns its ID.
-func (s *Store) CreateRoute(service, domain string, port int, entrypoints, stack string, ssl bool, middlewares string) (int64, error) {
-	if entrypoints == "" {
-		entrypoints = "web"
-	}
-	sslVal := 0
-	if ssl {
-		sslVal = 1
-	}
-	result, err := s.db.Exec(
-		`INSERT INTO routes (service, domain, port, entrypoints, stack, ssl, middlewares) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		service, domain, port, entrypoints, stack, sslVal, middlewares,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("cannot create route: %w", err)
-	}
-	return result.LastInsertId()
-}
-
-// ListRoutes returns all stored routes.
-func (s *Store) ListRoutes() ([]RouteRecord, error) {
-	rows, err := s.db.Query(`SELECT id, service, domain, port, entrypoints, stack, ssl, COALESCE(middlewares, ''), created_at FROM routes ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var routes []RouteRecord
-	for rows.Next() {
-		var r RouteRecord
-		var sslInt int
-		if err := rows.Scan(&r.ID, &r.Service, &r.Domain, &r.Port, &r.Entrypoints, &r.Stack, &sslInt, &r.Middlewares, &r.CreatedAt); err != nil {
-			return nil, err
-		}
-		r.SSL = (sslInt == 1)
-		routes = append(routes, r)
-	}
-	return routes, rows.Err()
-}
-
-// GetRouteByDomain looks up a route by its domain.
-func (s *Store) GetRouteByDomain(domain string) (*RouteRecord, error) {
-	var r RouteRecord
-	var sslInt int
-	err := s.db.QueryRow(
-		`SELECT id, service, domain, port, entrypoints, stack, ssl, COALESCE(middlewares, ''), created_at FROM routes WHERE domain = ?`,
-		domain,
-	).Scan(&r.ID, &r.Service, &r.Domain, &r.Port, &r.Entrypoints, &r.Stack, &sslInt, &r.Middlewares, &r.CreatedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	r.SSL = (sslInt == 1)
-	return &r, nil
-}
-
-// DeleteRoute removes a route by ID.
-func (s *Store) DeleteRoute(id int64) error {
-	result, err := s.db.Exec(`DELETE FROM routes WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("route %d not found", id)
-	}
-	return nil
-}
-
-// --- Stacks ---
-
-// UpsertStack creates or updates a stack record.
-func (s *Store) UpsertStack(name, composePath string) error {
-	_, err := s.db.Exec(
-		`INSERT INTO stacks (name, compose_path, status) VALUES (?, ?, 'discovered')
-		 ON CONFLICT(name) DO UPDATE SET compose_path = excluded.compose_path`,
-		name, composePath,
-	)
-	return err
-}
-
-// UpdateStackStatus updates the deployment status and timestamp.
-func (s *Store) UpdateStackStatus(name, status string) error {
-	_, err := s.db.Exec(
-		`UPDATE stacks SET status = ?, last_deployed = ? WHERE name = ?`,
-		status, time.Now().UTC().Format(time.RFC3339), name,
-	)
-	return err
-}
-
-// ListStacks returns all stored stacks.
-func (s *Store) ListStacks() ([]StackRecord, error) {
-	rows, err := s.db.Query(`SELECT name, compose_path, COALESCE(last_deployed, ''), status FROM stacks ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var stacks []StackRecord
-	for rows.Next() {
-		var st StackRecord
-		if err := rows.Scan(&st.Name, &st.ComposePath, &st.LastDeployed, &st.Status); err != nil {
-			return nil, err
-		}
-		stacks = append(stacks, st)
-	}
-	return stacks, rows.Err()
-}
-
-// --- Middleware ---
-
-// CreateMiddleware inserts a new middleware definition.
-func (s *Store) CreateMiddleware(name, mwType string, config map[string]string) (int64, error) {
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		return 0, err
-	}
-	result, err := s.db.Exec(
-		`INSERT INTO middleware (name, type, config) VALUES (?, ?, ?)`,
-		name, mwType, string(configJSON),
-	)
-	if err != nil {
-		return 0, fmt.Errorf("cannot create middleware: %w", err)
-	}
-	return result.LastInsertId()
-}
-
-// ListMiddleware returns all stored middleware definitions.
-func (s *Store) ListMiddleware() ([]MiddlewareRecord, error) {
-	rows, err := s.db.Query(`SELECT id, name, type, config, created_at FROM middleware ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var mws []MiddlewareRecord
-	for rows.Next() {
-		var m MiddlewareRecord
-		var configJSON string
-		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &configJSON, &m.CreatedAt); err != nil {
-			return nil, err
-		}
-		m.Config = make(map[string]string)
-		json.Unmarshal([]byte(configJSON), &m.Config)
-		mws = append(mws, m)
-	}
-	return mws, rows.Err()
-}
-
-// DeleteMiddleware removes a middleware by ID.
-func (s *Store) DeleteMiddleware(id int64) error {
-	result, err := s.db.Exec(`DELETE FROM middleware WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("middleware %d not found", id)
-	}
-	return nil
-}
-
-// --- Plugin States ---
-
-// PluginStateRecord represents a persistent record of a plugin's configuration and enablement status.
-type PluginStateRecord struct {
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	Enabled     bool   `json:"enabled"`
-	InstalledAt string `json:"installed_at"`
-	Config      string `json:"config"`
-}
-
-// SetPluginState creates or updates the status and config of a plugin.
-func (s *Store) SetPluginState(name, kind string, enabled bool, config string) error {
-	enabledVal := 0
-	if enabled {
-		enabledVal = 1
-	}
-	if config == "" {
-		config = "{}"
-	}
-	_, err := s.db.Exec(
-		`INSERT INTO plugin_states (name, kind, enabled, config) VALUES (?, ?, ?, ?)
-		 ON CONFLICT(name) DO UPDATE SET enabled = excluded.enabled, config = excluded.config`,
-		name, kind, enabledVal, config,
-	)
-	if err != nil {
-		return fmt.Errorf("cannot set plugin state: %w", err)
-	}
-	return nil
-}
-
-// GetPluginState retrieves a single plugin's state record.
-func (s *Store) GetPluginState(name string) (*PluginStateRecord, error) {
-	var rec PluginStateRecord
-	var enabledInt int
-	err := s.db.QueryRow(
-		`SELECT name, kind, enabled, installed_at, config FROM plugin_states WHERE name = ?`,
-		name,
-	).Scan(&rec.Name, &rec.Kind, &enabledInt, &rec.InstalledAt, &rec.Config)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("cannot get plugin state: %w", err)
-	}
-	rec.Enabled = (enabledInt == 1)
-	return &rec, nil
-}
-
-// DeletePluginState removes a plugin's state record when uninstalled.
-func (s *Store) DeletePluginState(name string) error {
-	_, err := s.db.Exec(`DELETE FROM plugin_states WHERE name = ?`, name)
-	if err != nil {
-		return fmt.Errorf("cannot delete plugin state: %w", err)
-	}
-	return nil
-}
-
-// ListPluginStates returns all stored plugin states.
-func (s *Store) ListPluginStates() ([]PluginStateRecord, error) {
-	rows, err := s.db.Query(`SELECT name, kind, enabled, installed_at, config FROM plugin_states ORDER BY name`)
-	if err != nil {
-		return nil, fmt.Errorf("cannot list plugin states: %w", err)
-	}
-	defer rows.Close()
-
-	var list []PluginStateRecord
-	for rows.Next() {
-		var rec PluginStateRecord
-		var enabledInt int
-		if err := rows.Scan(&rec.Name, &rec.Kind, &enabledInt, &rec.InstalledAt, &rec.Config); err != nil {
-			return nil, err
-		}
-		rec.Enabled = (enabledInt == 1)
-		list = append(list, rec)
-	}
-	return list, rows.Err()
 }
 
 // GetStatePath returns the default database path, respecting overrides.
@@ -424,21 +102,14 @@ func GetStatePath() string {
 	if p := os.Getenv("M3TAL_STATE_DB"); p != "" {
 		return p
 	}
-	// System install path
 	sysPath := "/var/lib/m3tal/state.db"
-	if dir := filepath.Dir(sysPath); dirExists(dir) {
+	if info, err := os.Stat(filepath.Dir(sysPath)); err == nil && info.IsDir() {
 		return sysPath
 	}
-	// Fallback to local
 	return "./data/state.db"
 }
 
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
-}
-
-// --- API Keys (Jellyfin-style server generated tokens) ---
+// --- API Keys ---
 
 // ListAPIKeys returns all stored API keys.
 func (s *Store) ListAPIKeys() ([]APIKeyRecord, error) {
@@ -448,7 +119,7 @@ func (s *Store) ListAPIKeys() ([]APIKeyRecord, error) {
 	}
 	defer rows.Close()
 
-	var keys []APIKeyRecord
+	keys := []APIKeyRecord{}
 	for rows.Next() {
 		var rec APIKeyRecord
 		var lastUsed sql.NullString
@@ -460,13 +131,10 @@ func (s *Store) ListAPIKeys() ([]APIKeyRecord, error) {
 		}
 		keys = append(keys, rec)
 	}
-	if keys == nil {
-		keys = []APIKeyRecord{}
-	}
 	return keys, rows.Err()
 }
 
-// GenerateRandomAPIKeyToken generates a 32 hex characters cryptographically secure token (like Jellyfin).
+// GenerateRandomAPIKeyToken generates a 32 hex character token.
 func GenerateRandomAPIKeyToken() (string, error) {
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -475,8 +143,7 @@ func GenerateRandomAPIKeyToken() (string, error) {
 	return hex.EncodeToString(tokenBytes), nil
 }
 
-// CreateAPIKey generates a cryptographically secure random token (like Jellyfin) and stores it with the specified name.
-// Custom key entries are prohibited: the token is strictly server-generated.
+// CreateAPIKey generates a server-side token and stores it with the given name.
 func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
 	trimmedName := strings.TrimSpace(name)
 	if trimmedName == "" {
@@ -498,18 +165,12 @@ func (s *Store) CreateAPIKey(name string) (*APIKeyRecord, error) {
 		return nil, err
 	}
 
-	rec := &APIKeyRecord{
-		ID:        id,
-		Name:      trimmedName,
-		Token:     token,
-		CreatedAt: now,
-	}
-
+	rec := &APIKeyRecord{ID: id, Name: trimmedName, Token: token, CreatedAt: now}
 	_ = s.SyncAPIKeysToFile()
 	return rec, nil
 }
 
-// ErrAPIKeyNotFound is returned when attempting to operate on an API key that does not exist.
+// ErrAPIKeyNotFound is returned when operating on an API key that does not exist.
 var ErrAPIKeyNotFound = errors.New("API key not found")
 
 // DeleteAPIKey removes an API key by its database ID.
@@ -529,7 +190,7 @@ func (s *Store) DeleteAPIKey(id int64) error {
 	return nil
 }
 
-// ValidateAPIKey checks if a token exists in the store and records its last usage.
+// ValidateAPIKey checks a token and records its last usage.
 func (s *Store) ValidateAPIKey(token string) bool {
 	if token == "" {
 		return false
@@ -540,13 +201,10 @@ func (s *Store) ValidateAPIKey(token string) bool {
 	if err != nil {
 		return false
 	}
-	// Throttle last_used_at updates to once every 60 seconds to avoid SQLite lock contention
 	shouldUpdate := true
 	if lastUsed.Valid && lastUsed.String != "" {
-		if t, err := time.Parse("2006-01-02 15:04:05", lastUsed.String); err == nil {
-			if time.Since(t) < 60*time.Second {
-				shouldUpdate = false
-			}
+		if t, err := time.Parse("2006-01-02 15:04:05", lastUsed.String); err == nil && time.Since(t) < 60*time.Second {
+			shouldUpdate = false
 		}
 	}
 	if shouldUpdate {
@@ -556,33 +214,27 @@ func (s *Store) ValidateAPIKey(token string) bool {
 	return true
 }
 
-// GetPrimaryAPIKey returns the most recently used or primary API key token.
-// If no keys exist, it automatically provisions an initial "Default Key".
+// GetPrimaryAPIKey returns the most recently used API key token.
 func (s *Store) GetPrimaryAPIKey() string {
 	var token string
-	err := s.db.QueryRow(`SELECT token FROM api_keys ORDER BY last_used_at DESC, id ASC LIMIT 1`).Scan(&token)
-	if err == nil && token != "" {
+	if err := s.db.QueryRow(`SELECT token FROM api_keys ORDER BY last_used_at DESC, id ASC LIMIT 1`).Scan(&token); err == nil && token != "" {
 		return token
 	}
-	rec, err := s.CreateAPIKey("Default Key")
-	if err == nil && rec != nil {
+	if rec, err := s.CreateAPIKey("Default Key"); err == nil && rec != nil {
 		return rec.Token
 	}
 	return ""
 }
 
-// SyncAPIKeysToFile writes active API keys to ~/.config/m3tal/api_keys.json (or ConfigDir) for easy plugin/daemon discovery.
+// SyncAPIKeysToFile writes active API keys for plugin/daemon discovery.
 func (s *Store) SyncAPIKeysToFile() error {
 	keys, err := s.ListAPIKeys()
 	if err != nil {
 		return err
 	}
-	var targetDir string
-	if s.ConfigDir != "" {
-		targetDir = s.ConfigDir
-	} else {
-		home, err := os.UserHomeDir()
-		if err == nil && home != "" {
+	targetDir := s.ConfigDir
+	if targetDir == "" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
 			targetDir = filepath.Join(home, ".config", "m3tal")
 		} else {
 			targetDir = "/etc/m3tal"
@@ -591,18 +243,17 @@ func (s *Store) SyncAPIKeysToFile() error {
 	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return err
 	}
-	filePath := filepath.Join(targetDir, "api_keys.json")
-	payload := map[string]any{
-		"primary_token": s.GetPrimaryAPIKey(),
-		"keys":          keys,
+
+	primary := s.GetPrimaryAPIKey()
+	if primary == "" && len(keys) > 0 {
+		primary = keys[0].Token
 	}
-	if payload["primary_token"] == "" && len(keys) > 0 {
-		payload["primary_token"] = keys[0].Token
-	}
-	data, err := json.MarshalIndent(payload, "", "  ")
+	data, err := json.MarshalIndent(map[string]any{"primary_token": primary, "keys": keys}, "", "  ")
 	if err != nil {
 		return err
 	}
+
+	filePath := filepath.Join(targetDir, "api_keys.json")
 	tmpFile, err := os.CreateTemp(targetDir, "api_keys-*.tmp")
 	if err != nil {
 		return err

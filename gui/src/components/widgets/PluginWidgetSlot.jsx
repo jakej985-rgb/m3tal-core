@@ -1,5 +1,4 @@
 import WidgetCard from './WidgetCard';
-import FleetMiniOverview from '../FleetMiniOverview';
 
 /**
  * Slot for dynamically mounting third-party external plugin widgets
@@ -22,20 +21,6 @@ export default function PluginWidgetSlot({
   className = '',
 }) {
   if (!widget) return null;
-
-  // Dedicated container fleet overview widget owned by m3tal-docker / docker-monitor
-  if (widget.id === 'docker-fleet' || widget.id === 'container-fleet' || widget.id === 'fleet-containers') {
-    return (
-      <div className={`col-span-1 md:col-span-2 lg:col-span-2 row-span-1 min-h-[260px] lg:h-[260px] ${className}`}>
-        <FleetMiniOverview
-          isEditMode={isEditMode}
-          onMoveLeft={onMoveLeft}
-          onMoveRight={onMoveRight}
-          onHide={onHide}
-        />
-      </div>
-    );
-  }
 
   const colSpan = widget.size?.[0] || widget.colSpan || 1;
   const rowSpan = widget.size?.[1] || widget.rowSpan || 1;

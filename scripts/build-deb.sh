@@ -16,8 +16,7 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
-# Remove outputs first so a failed compile can never package stale binaries.
-rm -f m3tal m3tal-api "$DEB_TARGET"
+rm -f m3tal-api "$DEB_TARGET"
 
 if [[ -d gui ]]; then
     (cd gui && npm ci && npm run build)
@@ -51,10 +50,7 @@ case "$PACKAGER" in
             "$STAGE_DIR/usr/share/pixmaps" \
             "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps"
 
-        install -m 755 m3tal m3tal-api "$STAGE_DIR/usr/bin/"
-        for alias in m3tal-core m3tal-gui m3tal-headless m3tal-web; do
-            ln -s /usr/bin/m3tal "$STAGE_DIR/usr/bin/$alias"
-        done
+        install -m 755 m3tal-api "$STAGE_DIR/usr/bin/"
 
         if [[ -d gui/dist ]]; then
             cp -a gui/dist/. "$STAGE_DIR/usr/share/m3tal/gui/"
@@ -66,12 +62,6 @@ case "$PACKAGER" in
         install -m 644 packaging/m3tal.desktop "$STAGE_DIR/usr/share/applications/m3tal.desktop"
         install -m 644 docs/goback_logo.svg "$STAGE_DIR/usr/share/icons/hicolor/scalable/apps/m3tal.svg"
         install -m 644 docs/goback_logo.svg "$STAGE_DIR/usr/share/pixmaps/m3tal.svg"
-        for size in 16 24 32 48 64 128 256; do
-            icon="cli/m3tal_icon_pack/m3tal_icon_${size}x${size}.png"
-            if [[ -f "$icon" ]]; then
-                install -D -m 644 "$icon" "$STAGE_DIR/usr/share/icons/hicolor/${size}x${size}/apps/m3tal.png"
-            fi
-        done
 
         cat > "$STAGE_DIR/DEBIAN/control" <<EOF
 Package: m3tal
@@ -80,10 +70,8 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Jake Johnson <jake@m3tal.io>
-Recommends: xdotool
-Description: M3TAL Core — DEB-first infrastructure orchestration platform.
- Includes the m3tal CLI and control-plane API.
- Optimized for Traefik ecosystems and home lab automation.
+Description: M3TAL Core — embedded Web GUI dashboard, system monitor, settings, GPU telemetry, and plugin host.
+ All workload features are provided by external plugins.
 EOF
         printf '%s\n' \
             /etc/m3tal/.env.example \

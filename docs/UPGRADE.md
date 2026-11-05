@@ -1,47 +1,59 @@
-# ⬆️ Upgrading to M3TAL Core (System Install)
+# ⬆️ Upgrading M3TAL Core
 
-M3TAL has transitioned from a repository-based execution model to a system-wide installation model (`.deb`). This guide explains how to migrate your existing installation to the new structure.
+M3TAL Core is distributed as a system-wide Debian package (`.deb`). This guide covers upgrades and configuration migration.
 
-## 📁 Key Path Changes
+## 📁 Key Paths
 
-| Component | Old Path (Repo) | New Path (System) |
-| :--- | :--- | :--- |
-| **Binaries** | `./m3tal` | `/usr/bin/m3tal` |
-| **API** | `./m3tal-api` | `/usr/bin/m3tal-api` |
-| **Config** | `./.env` | `/etc/m3tal/config.yaml` |
-| **Stacks** | `./deploy/stack/` | `/opt/m3tal/stack/` |
-| **Data** | `./data/` | `/var/lib/m3tal/` |
+| Component | Path |
+| :--- | :--- |
+| **Binary** | `/usr/bin/m3tal-api` |
+| **Config** | `/etc/m3tal/.env` |
+| **State (API keys)** | `/var/lib/m3tal/state.db` |
+| **GUI assets** | `/usr/share/m3tal/gui` |
+| **Systemd unit** | `/lib/systemd/system/m3tal-api.service` |
+| **Plugins** | `/usr/lib/m3tal/plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/etc/m3tal/plugins` |
 
-## 🚀 Migration Steps
+## 🚀 Upgrade Steps
 
-### 1. Back up your configuration
-If you have an existing `.env` file in your repository:
-```bash
-cp .env .env.bak
-```
-
-### 2. Install the system package
-Follow the instructions in the main [README.md](../README.md) to add the repository and install `m3tal-core`.
-
-### 3. Migrate configuration
-The new system uses `/etc/m3tal/config.yaml` by default. You can run the initialization wizard to re-enter your settings, or manually map your `.env` values to the new location.
+### 1. Back up configuration
 
 ```bash
-sudo m3tal init
+sudo cp /etc/m3tal/.env /etc/m3tal/.env.bak
 ```
 
-### 4. Transition Services
-If you were running M3TAL manually or via a custom service:
-1. Stop your existing processes.
-2. The `m3tal-core` package includes systemd units. Enable them:
+### 2. Install the new package
+
 ```bash
-sudo systemctl enable --now m3tal m3tal-api
+sudo apt update && sudo apt install -y --only-upgrade m3tal
 ```
+
+or install the `.deb` directly:
+
+```bash
+sudo dpkg -i m3tal_<version>_amd64.deb
+sudo apt-get install -f   # resolve dependencies if needed
+```
+
+The package postinst preserves an existing `/etc/m3tal/.env`; it only seeds `.env.example` when no `.env` exists.
+
+### 3. Restart the service
+
+```bash
+sudo systemctl restart m3tal-api
+journalctl -u m3tal-api -f
+```
+
+## 🔄 Migrating from older versions
+
+* The legacy `m3tal` CLI, TUI, tray, Docker/Compose/Traefik/VPN orchestration, and agent/daemon code have been **removed from Core**. Those features now live in external plugins under [m3tal-plugins](https://github.com/jakej985-rgb/m3tal-plugins).
+* Legacy `/etc/m3tal/.env` keys for removed features (VPN credentials, Traefik ports, storage paths, etc.) are ignored by Core. Plugin-specific variables should be configured by the corresponding plugins.
+* Existing `state.db` files keep working; unused legacy tables are left in place but no longer written to.
+* API keys are preserved across upgrades.
 
 ## ❓ FAQ
 
-**Q: Where are my Docker Compose files now?**
-A: They are located in `/opt/m3tal/stack/`. You should not modify these directly; use `m3tal config` to update parameters.
+**Q: Where did `m3tal ps`, `m3tal compose`, `m3tal vpn`, etc. go?**
+A: They were removed with the CLI. Equivalent functionality ships as external plugins (`m3tal-docker`, `m3tal-compose`, `m3tal-vpn`, …) managed from the Web GUI's Plugin Manager.
 
-**Q: Can I still run M3TAL from the repository?**
-A: Yes, but it is not recommended for production. The `m3tal` CLI will look for local `.env` and `deploy/stack/` if system paths are missing.
+**Q: Do I need Docker to run Core?**
+A: No. Core has no container runtime dependency. Docker is only needed by plugins that manage containers.

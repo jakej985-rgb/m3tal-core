@@ -1,127 +1,75 @@
 # ⚡ M3TAL Core
 
-**M3TAL Core** is a high-performance, Go-native **Linux Desktop Application** and homelab container orchestrator. Designed specifically for Linux desktops and home servers, M3TAL provides an integrated control center for monitoring hardware telemetry, orchestrating Docker containers, and managing Traefik reverse proxies—with zero CLI TUI overhead.
+**M3TAL Core** is a high-performance, Go-native **Web Dashboard and System Monitor** for Linux desktops and servers. It serves an embedded React GUI for hardware telemetry, system performance, settings, and API key management—plus a plugin host supervisor for everything else.
 
 ---
 
 ## 🚀 Key Features
 
-* **🖥️ Dedicated Desktop Application**: Launch `m3tal` or open from your desktop app menu. Launches a sleek, borderless desktop window (`--app` mode with isolated profile and window class `m3tal`) powered by an embedded React/Vite GUI.
-* **🌐 Headless Home Server Ready**: Run on headless home servers with `m3tal headless [port]` or `m3tal --headless` to serve the full Web GUI on your local network without requiring a display.
-* **📊 Comprehensive Hardware Telemetry**:
-  * Real-time CPU & System RAM utilization.
-  * Dedicated NVIDIA GPU monitoring (Core load, VRAM used/total, temperatures).
-  * System thermals sensor polling.
-  * Storage mounts monitoring (including `/mnt/disk1`, `/mnt/disk2`, and root filesystem).
-* **⚡ Instant Terminal Telemetry**: Run `m3tal stats` for a fast, clean terminal summary of host metrics, GPU status, temperatures, and storage mounts.
-* **🐳 Smart Container Orchestrator**: Multi-stack Docker Compose V2 management (`/docker` / `/opt/m3tal/stack`), health monitoring, container logs streaming, and automated state reconciliation.
-* **🔒 Traefik Reverse Proxy & VPN**: Built-in routing configuration, automatic route discovery, SSL termination, and Gluetun VPN leak detection.
-* **📦 Fully Self-Contained**: Statically compiled Go binary with embedded Web GUI assets—no Python or Flask runtime required.
+* **🖥️ Embedded Web GUI**: A sleek React/Vite dashboard served directly by the Go API binary on port `5050` (`/gui/`). No separate frontend server or Node.js runtime required.
+* **🌐 Headless Server Ready**: Runs as a native systemd service (`m3tal-api.service`) to serve the full Web GUI across your local network without requiring a display.
+* **📊 Comprehensive System Monitoring**:
+  * Real-time CPU & System RAM utilization with history graphs.
+  * Dedicated NVIDIA GPU monitoring (core load, VRAM used/total, temperatures, model).
+  * System thermals and motherboard sensor polling.
+  * Storage mounts monitoring (physical disks, removable media, network shares).
+  * Host network interface statistics and top process inspector.
+* **⚙️ Settings & API Keys**: Core settings (node identity, telemetry interval, theme) plus Jellyfin-style server-generated API keys for programmatic access.
+* **🔌 Extensible Plugin Host Supervisor**: Discovers and supervises external plugins over standard JSON-RPC 2.0 `stdio`, automatically injecting API authentication (`M3TAL_API_KEY`) and mounting frontend UI tabs dynamically into the dashboard (`/plugins/<name>/`).
+* **📦 Fully Self-Contained**: Statically compiled Go binary with embedded Web GUI assets—no Python, Node.js, container runtime, or CLI required to run the core dashboard and system monitor.
+
+---
+
+> [!NOTE]
+> **🧩 Extra Plugins & Ecosystem Repositories**:  
+> M3TAL Core strictly limits its scope to the system dashboard, telemetry monitor, settings, and plugin supervisor. External workloads—such as Docker container fleet monitoring (`m3tal-docker`), Compose editing (`m3tal-compose`), reverse proxies (`m3tal-traefik`), VPN tunnels (`m3tal-vpn`), local AI inference (`m3tal-ai`), and multi-node clustering (`m3tal-mesh`)—are maintained as **extra plugins** in [m3tal-plugins](https://github.com/jakej985-rgb/m3tal-plugins). Application templates, repository distribution, and packaging standards belong to [M3tal-Hub](https://github.com/jakej985-rgb/M3tal-Hub).
 
 ---
 
 ## 📥 Installation
 
 The Linux AMD64 Debian package targets the Go `GOAMD64=v1` baseline, including older
-x86-64 CPUs such as the Intel Core i5-750. Both packaged Go binaries are built with
+x86-64 CPUs such as the Intel Core i5-750. The packaged Go binary is built with
 cgo disabled. See [the Debian CPU baseline and release checklist](docs/DEBIAN_CPU_BASELINE.md).
 
 ### Debian / Ubuntu / Linux Mint (.deb)
 
-Download and install the official Debian package:
+Install via the official M3tal APT repository:
 
 ```bash
-# Install deb package
-sudo dpkg -i m3tal_0.1.0_amd64.deb
+# Universal one-line bootstrap installer (recommended)
+curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/install.sh | sudo bash
 
-# Or install from APT repository
+# Or configure the APT repository manually:
 curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/public.key | sudo gpg --dearmor -o /usr/share/keyrings/m3tal-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/m3tal-archive-keyring.gpg] https://jakej985-rgb.github.io/m3tal-apt-key stable main" | sudo tee /etc/apt/sources.list.d/m3tal.list
 sudo apt update && sudo apt install -y m3tal
 ```
 
 ### Prerequisites
-* **Docker Engine** & **Docker Compose V2** (`docker compose version`)
-* **Google Chrome / Chromium** (for standalone desktop app window mode)
+* **Linux AMD64** (`Debian 12/13`, `Ubuntu 22.04/24.04`, `Linux Mint 21/22`, or compatible)
+* **Google Chrome / Chromium** (optional, only if you want a desktop window wrapper)
+* *(Note: Docker Engine is only needed if installing container-related plugins like `m3tal-docker`)*
 
 ---
 
-## 🖥️ Running M3TAL
+## 🖥️ Running M3TAL Core
 
-### 1. Linux Desktop Application
-Simply run `m3tal` or click the **M3TAL Control Center** icon in your application launcher:
+M3TAL Core is a single binary: `m3tal-api`. It serves both the REST/WebSocket API and the embedded Web GUI.
+
+### 1. Direct run (development)
 
 ```bash
-m3tal
-# or explicitly:
-m3tal ui
+# Build the GUI assets and API binary
+make build
+
+# Start the server (default port 5050)
+./m3tal-api
 ```
 
-This starts the embedded API backend, serves the Web GUI locally, and opens a dedicated application window with no browser address bar or tabs.
+Open `http://localhost:5050/gui/` in your browser. Set `API_TOKEN` and `API_PORT` via environment or `/etc/m3tal/.env`.
 
-### 2. Headless Home Server Mode
-For home servers running without a display (or over SSH):
-
-```bash
-# Start headless on default port 5050
-m3tal headless
-
-# Start headless on a custom port
-m3tal headless 8080
-
-# Or using the flag
-m3tal --port 5050 --headless
-```
-
-Access the Web GUI from any computer on your network at `http://<server-ip>:5050`.
-
-### 3. Instant Terminal Stats
-Check your server or desktop hardware status in the terminal without opening a browser:
-
-```bash
-m3tal stats
-```
-
-Output includes CPU load, memory utilization, NVIDIA GPU engine load, VRAM, sensor temperatures, and mounted drive capacities.
-
----
-
-## 🛠️ CLI Command Overview
-
-| Command | Description |
-| :--- | :--- |
-| `m3tal` / `m3tal ui` | Launch M3TAL Linux Desktop Application window. |
-| `m3tal headless [port]` | Start M3TAL in headless mode for home servers. |
-| `m3tal stats` | Print comprehensive system, GPU, thermals, and storage metrics to stdout. |
-| `m3tal up` | Initialize and start all Docker Compose stacks in `/docker/`. |
-| `m3tal down` | Stop and tear down all M3TAL-managed Docker Compose stacks. |
-| `m3tal ps` / `m3tal list` | List all running Docker containers and health states. |
-| `m3tal logs [container]` | View live container logs. |
-| `m3tal compose` | Smart Docker Compose editor & syntax linter. |
-| `m3tal config wizard` | Interactive environment setup wizard (`/etc/m3tal/.env`). |
-| `m3tal proxy` | Manage reverse proxy routes, auto-discovery, and SSL. |
-| `m3tal tray` | Run the background system tray status indicator. |
-| `m3tal doctor` | Run comprehensive pre-flight health diagnostics. |
-
----
-
-## 🗂️ Filesystem Layout
-
-| Path | Purpose |
-| :--- | :--- |
-| `/usr/bin/m3tal` | Unified M3TAL Desktop App and CLI binary. |
-| `/usr/share/applications/m3tal.desktop` | Desktop launcher menu entry. |
-| `/etc/m3tal/.env` | Primary configuration file. |
-| `/var/lib/m3tal/state.db` | SQLite persistent state database. |
-| `/opt/m3tal/stack/` | Canonical Docker Compose stacks and Traefik dynamic configurations. |
-| `/docker` | User-facing symlink to `/opt/m3tal/stack/`. |
-| `~/.config/m3tal/browser-profile` | Isolated browser profile for the desktop window. |
-
----
-
-## ⚙️ Background Service (systemd)
-
-To run the M3TAL API daemon continuously in the background on a server:
+### 2. systemd service
 
 ```bash
 # Check service status
@@ -134,13 +82,57 @@ sudo systemctl restart m3tal-api
 journalctl -u m3tal-api -f
 ```
 
+The service has no Docker dependency; it only needs host access for telemetry and plugin supervision.
+
+---
+
+## 🌐 API Surface
+
+All API routes live under `/api/v2` and require an API token (`X-API-Token` header or `?token=` query param):
+
+| Endpoint | Description |
+| :--- | :--- |
+| `GET /api/v2/version` | Core version metadata (public). |
+| `GET /api/v2/system/stats` | Current host telemetry snapshot (CPU, RAM, GPU, disk, network). |
+| `GET /api/v2/system/metrics` | Sliding-window metrics history. |
+| `GET /api/v2/system/health` | Host and plugin-manager health. |
+| `GET /api/v2/system/processes` | Top host processes. |
+| `POST /api/v2/system/processes/{pid}/kill` | Terminate a host process. |
+| `GET /api/v2/system/specs` | OS, kernel, CPU, memory, GPU, and NIC inventory. |
+| `GET /api/v2/system/network` | Network interface counters. |
+| `GET /api/v2/ws/events` | WebSocket event stream. |
+| `GET/POST/DELETE /api/v2/auth/keys` | API key management. |
+| `GET /api/v2/plugins*` | Plugin discovery, lifecycle, collect, action, settings. |
+| `GET/POST /api/v2/settings*` | Core and plugin settings. |
+| `GET/POST/DELETE /api/v2/repositories*` | Plugin repositories. |
+
+Plugin UIs are served at `/plugins/{name}/`.
+
+---
+
+## 🗂️ Filesystem Layout
+
+| Path | Purpose |
+| :--- | :--- |
+| `/usr/bin/m3tal-api` | M3TAL Core Web GUI + API binary. |
+| `/usr/share/applications/m3tal.desktop` | Desktop launcher menu entry. |
+| `/etc/m3tal/.env` | Primary configuration file. |
+| `/etc/m3tal/.env.example` | Default configuration template. |
+| `/var/lib/m3tal/state.db` | SQLite persistent state database (API keys). |
+| `/usr/lib/m3tal/plugins` | System-wide plugin directory. |
+| `~/.config/m3tal/plugins` | Per-user plugin directory. |
+
 ---
 
 ## 📚 Documentation
 
-For deeper configuration and architectural guides:
-* [Command Reference](docs/COMMAND_REFERENCE.md)
 * [Getting Started Guide](docs/GET_STARTED.md)
+* [Environment Variables Reference](docs/ENVIRONMENT_VARIABLES.md)
+* [Port Configuration Guide](docs/PORT_CONFIGURATION.md)
+* [Diagnostics & Troubleshooting](docs/DIAGNOSTICS.md)
+* [Observability & Metrics](docs/OBSERVABILITY.md)
+* [Build Configuration](docs/BUILD_CONFIGURATION.md)
+* [Debian CPU Baseline](docs/DEBIAN_CPU_BASELINE.md)
+* [Testing & Verification](docs/TESTING.md)
 * [Architecture Vision](docs/ARCHITECTURE_VISION.md)
-* [Environment Variables](docs/ENVIRONMENT_VARIABLES.md)
-* [Networking & Reverse Proxy](docs/NETWORKING.md)
+* [System Upgrade Guide](docs/UPGRADE.md)

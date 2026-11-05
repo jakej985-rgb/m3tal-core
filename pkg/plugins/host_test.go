@@ -226,9 +226,6 @@ while IFS= read -r line; do
     *'"method":"m3tal.collect"'*)
       echo '{"jsonrpc":"2.0","id":2,"result":{"status":"ok","tables":[{"name":"mock_table","columns":["a","b"],"rows":[["1","2"]]}]}}'
       ;;
-    *'"method":"m3tal.render"'*)
-      echo '{"jsonrpc":"2.0","id":3,"result":{"content":"<h1>Mock Render</h1>"}}'
-      ;;
     *)
       echo '{"jsonrpc":"2.0","id":0,"error":{"code":-32601,"message":"Method not found"}}'
       ;;
@@ -284,14 +281,6 @@ done
 		t.Errorf("Expected tables in collect result")
 	}
 
-	// Test Render
-	renderRes, err := mockInst.Render(ctx, "mock-tab", 80, 24, "dark")
-	if err != nil {
-		t.Fatalf("mockInst.Render failed: %v", err)
-	}
-	if renderRes.Content == "" {
-		t.Errorf("Expected non-empty render content")
-	}
 }
 
 func TestAutoDiscoveryAndAutoStart(t *testing.T) {

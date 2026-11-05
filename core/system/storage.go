@@ -1,10 +1,7 @@
 package system
 
 import (
-	"bufio"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -193,113 +190,4 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 	}
 
 	return list, nil
-}
-
-// GetSambaShares parses /etc/samba/smb.conf to list Samba network share definitions.
-func GetSambaShares() ([]models.SambaShare, error) {
-	file, err := os.Open("/etc/samba/smb.conf")
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []models.SambaShare{}, nil // No Samba config, return empty gracefully
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	var shares []models.SambaShare
-	var currentShare *models.SambaShare
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-
-		// Check for section header
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			sectionName := strings.Trim(line, "[]")
-			if strings.ToLower(sectionName) == "global" || strings.ToLower(sectionName) == "printers" || strings.ToLower(sectionName) == "homes" {
-				if currentShare != nil {
-					shares = append(shares, *currentShare)
-					currentShare = nil
-				}
-				continue
-			}
-
-			if currentShare != nil {
-				shares = append(shares, *currentShare)
-			}
-			currentShare = &models.SambaShare{
-				Name:     sectionName,
-				ReadOnly: true, // Samba default
-			}
-			continue
-		}
-
-		if currentShare == nil {
-			continue
-		}
-
-		// Parse key-value pairs
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(strings.ToLower(parts[0]))
-		val := strings.TrimSpace(parts[1])
-
-		switch key {
-		case "path":
-			currentShare.Path = val
-		case "comment":
-			currentShare.Comment = val
-		case "read only":
-			currentShare.ReadOnly = (strings.ToLower(val) == "yes" || strings.ToLower(val) == "true" || val == "1")
-		case "writable", "writeable":
-			currentShare.ReadOnly = !(strings.ToLower(val) == "yes" || strings.ToLower(val) == "true" || val == "1")
-		case "guest ok", "public":
-			currentShare.GuestOk = (strings.ToLower(val) == "yes" || strings.ToLower(val) == "true" || val == "1")
-		}
-	}
-
-	if currentShare != nil {
-		shares = append(shares, *currentShare)
-	}
-
-	return shares, nil
-}
-
-// UnmountDrive safely unmounts a removable, USB, or external storage drive.
-// It strictly prevents unmounting root and protected system directories.
-func UnmountDrive(mountpoint string) error {
-	cleanMP := filepath.Clean(mountpoint)
-	criticalMounts := map[string]bool{
-		"/":     true,
-		"/home": true,
-		"/tmp":  true,
-		"/boot": true,
-		"/efi":  true,
-		"/var":  true,
-		"/usr":  true,
-		"/etc":  true,
-		"/dev":  true,
-		"/proc": true,
-		"/sys":  true,
-	}
-	if criticalMounts[cleanMP] || cleanMP == "." || cleanMP == "/" || strings.HasPrefix(cleanMP, "/boot") {
-		return fmt.Errorf("refusing to unmount protected system directory: %s", cleanMP)
-	}
-
-	// Flush file system caches
-	_ = exec.Command("sync").Run()
-
-	// Execute unmount command
-	cmd := exec.Command("umount", cleanMP)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("unmount failed: %s (%v)", strings.TrimSpace(string(output)), err)
-	}
-	return nil
 }

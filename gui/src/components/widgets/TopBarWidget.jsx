@@ -1,22 +1,9 @@
 import { useState } from 'react';
-import {
-  IconDoctor,
-  IconClean,
-  IconReconcile,
-  IconRefresh,
-  IconShield,
-  IconServer,
-  IconChevronDown,
-} from '../Icons';
+import { IconRefresh, IconShield, IconServer, IconChevronDown } from '../Icons';
 
 export default function TopBarWidget({
   metrics,
   health,
-  onOpenDoctor,
-  onReconcile,
-  isReconciling,
-  onCleanup,
-  isCleaning,
   onRefresh,
   isRefreshing,
   error,
@@ -106,36 +93,6 @@ export default function TopBarWidget({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Quick Actions */}
-          <button
-            onClick={onOpenDoctor}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20 transition-all shadow-sm active:scale-95"
-            title="Run comprehensive pre-flight health diagnostics"
-          >
-            <IconDoctor className="w-4 h-4 text-teal-400" />
-            <span>Diagnostics</span>
-          </button>
-
-          <button
-            onClick={onReconcile}
-            disabled={isReconciling}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Enforce target state across all declared services and configurations"
-          >
-            <IconReconcile className={`w-4 h-4 text-indigo-400 ${isReconciling ? 'animate-spin' : ''}`} />
-            <span>{isReconciling ? 'Reconciling...' : 'Reconcile'}</span>
-          </button>
-
-          <button
-            onClick={onCleanup}
-            disabled={isCleaning}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-750 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Clean APT cache, unused Flatpaks, old Snaps, and temporary caches"
-          >
-            <IconClean className={`w-4 h-4 text-emerald-400 ${isCleaning ? 'animate-spin' : ''}`} />
-            <span>{isCleaning ? 'Cleaning...' : 'Clean Up'}</span>
-          </button>
-
           <button
             onClick={onRefresh}
             disabled={isRefreshing}

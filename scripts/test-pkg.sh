@@ -28,12 +28,7 @@ docker run --rm \
         apt-get install -y -qq --no-install-recommends curl qemu-user >/dev/null
 
         expected=(
-            /usr/bin/m3tal
             /usr/bin/m3tal-api
-            /usr/bin/m3tal-core
-            /usr/bin/m3tal-gui
-            /usr/bin/m3tal-headless
-            /usr/bin/m3tal-web
             /etc/m3tal/.env.example
             /etc/m3tal/VERSION
             /usr/share/m3tal/VERSION
@@ -42,7 +37,6 @@ docker run --rm \
             /usr/share/m3tal/gui/index.html
             /usr/share/icons/hicolor/scalable/apps/m3tal.svg
             /usr/share/pixmaps/m3tal.svg
-            /usr/share/icons/hicolor/256x256/apps/m3tal.png
         )
 
         echo "[test] Fresh install and package contents"
@@ -50,11 +44,11 @@ docker run --rm \
         for path in "${expected[@]}"; do
             test -e "$path" || { echo "Missing package path: $path" >&2; exit 1; }
         done
-        test -x /usr/bin/m3tal
         test -x /usr/bin/m3tal-api
+        test ! -e /usr/bin/m3tal
         grep -Fq "StartLimitIntervalSec=60" /lib/systemd/system/m3tal-api.service
         grep -Fq "StartLimitBurst=5" /lib/systemd/system/m3tal-api.service
-        m3tal --help >/dev/null
+        ! grep -q "docker.service" /lib/systemd/system/m3tal-api.service
         test "$(dpkg-deb -f /tmp/m3tal.deb Package)" = m3tal
         test "$(dpkg-deb -f /tmp/m3tal.deb Architecture)" = amd64
 
@@ -70,8 +64,7 @@ docker run --rm \
         healthy=false
         for _ in $(seq 1 40); do
             if curl --silent --show-error --fail \
-                -H "Authorization: Bearer cpu-compat-test" \
-                http://127.0.0.1:15050/api/health >/tmp/health.json 2>/dev/null; then
+                http://127.0.0.1:15050/api/v2/version >/tmp/version.json 2>/dev/null; then
                 healthy=true
                 break
             fi
@@ -83,7 +76,7 @@ docker run --rm \
         done
         if [[ "$healthy" != true ]]; then
             cat /tmp/m3tal-api.log >&2
-            echo "API health endpoint did not become ready" >&2
+            echo "API version endpoint did not become ready" >&2
             exit 1
         fi
         cleanup

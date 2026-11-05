@@ -6,10 +6,8 @@ import Settings from './pages/Settings';
 import {
   IconDashboard,
   IconSystemMonitor,
-  IconContainers,
   IconPlugins,
   IconSettings,
-  IconLayers,
 } from './components/Icons';
 import { getToken, getApiBase, api } from './api';
 
@@ -57,23 +55,11 @@ export default function App() {
   const pluginCategories = useMemo(() => {
     const groups = {};
     pluginTabs.forEach((tab) => {
-      let catKey = tab.category;
-      if (!catKey) {
-        if (
-          tab.plugin === 'docker-monitor' ||
-          tab.id === 'docker_containers' ||
-          tab.plugin === 'compose' ||
-          tab.id === 'compose_editor'
-        ) {
-          catKey = 'containers';
-        } else {
-          catKey = tab.plugin || tab.id;
-        }
-      }
+      let catKey = tab.category || tab.plugin || tab.id;
       if (!groups[catKey]) {
         groups[catKey] = {
           key: catKey,
-          title: tab.category_title || (catKey === 'containers' ? 'Containers' : tab.title),
+          title: tab.category_title || tab.title,
           order: tab.order || 50,
           tabs: []
         };
@@ -105,7 +91,7 @@ export default function App() {
           const currentSubTab = subTabs.find((t) => t.id === activeSubTabId) || subTabs[0];
 
           if (currentSubTab) {
-            const pluginName = currentSubTab.plugin || (currentSubTab.id === 'docker_containers' ? 'docker-monitor' : currentSubTab.id);
+            const pluginName = currentSubTab.plugin || currentSubTab.id;
             const pluginUrl = currentSubTab.url || `/plugins/${pluginName}/`;
             return (
               <div className="w-full h-full flex flex-col -m-6 md:-m-8" style={{ height: 'calc(100vh - 0px)' }}>
@@ -114,22 +100,6 @@ export default function App() {
                   <div className="bg-[#161b22] border-b border-[#30363d] px-6 py-2.5 flex items-center gap-2 flex-shrink-0">
                     {subTabs.map((sub) => {
                       const isSubActive = sub.id === currentSubTab.id;
-                      let displayTitle = sub.title;
-                      if (currentCat.key === 'containers') {
-                        if (
-                          sub.id === 'docker_containers' ||
-                          sub.plugin === 'docker-monitor' ||
-                          sub.title === 'Containers'
-                        ) {
-                          displayTitle = 'Fleet';
-                        } else if (
-                          sub.id === 'compose_editor' ||
-                          sub.plugin === 'compose' ||
-                          sub.title === 'Compose Editor'
-                        ) {
-                          displayTitle = 'Compose';
-                        }
-                      }
                       return (
                         <button
                           key={sub.id}
@@ -140,14 +110,7 @@ export default function App() {
                               : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
                           }`}
                         >
-                          {currentCat.key === 'containers' && (
-                            displayTitle === 'Fleet' ? (
-                              <IconContainers className="w-3.5 h-3.5 text-cyan-300" />
-                            ) : (
-                              <IconLayers className="w-3.5 h-3.5 text-cyan-300" />
-                            )
-                          )}
-                          <span>{displayTitle}</span>
+                          <span>{sub.title}</span>
                         </button>
                       );
                     })}
@@ -223,11 +186,7 @@ export default function App() {
                       : 'text-slate-400 hover:bg-[#21262d] hover:text-white'
                   }`}
                 >
-                  {cat.key === 'containers' ? (
-                    <IconContainers className="w-5 h-5 flex-shrink-0 text-cyan-400" />
-                  ) : (
-                    <IconPlugins className="w-5 h-5 flex-shrink-0 text-cyan-400" />
-                  )}
+                  <IconPlugins className="w-5 h-5 flex-shrink-0 text-cyan-400" />
                   <span>{cat.title}</span>
                   {cat.tabs.length > 1 && (
                     <span className="ml-auto text-[10px] font-bold bg-[#0d1117] text-slate-400 px-1.5 py-0.5 rounded border border-[#30363d]">
