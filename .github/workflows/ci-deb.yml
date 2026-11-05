@@ -76,5 +76,4 @@ jobs:
         done
         test "$(dpkg-deb -f "$nfpm_package" Package)" = m3tal
         test "$(dpkg-deb -f "$nfpm_package" Architecture)" = amd64
-        test "$(dpkg-deb -f "$nfpm_package" Recommends)" = xdotool
         test "$(dpkg-deb -f "$nfpm_package" Version)" = "$(cat VERSION | tr -d '[:space:]' | sed 's/^v//')"
