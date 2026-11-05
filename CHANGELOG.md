@@ -9,6 +9,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.4] - 2026-11-05
+
+### Overview & Release Highlights
+Release v0.24.4 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 📦 Packaging & Debian Distribution
+- **fix(ci): drop stale xdotool Recommends assertion from DEB compare step** (`a7f0883`):
+  - *What Changed*: The strip-core refactor removed recommends: xdotool from both packagers; the CI assertion was left behind and failed silently (test produces no output). Verified locally that nfpm and dpkg-deb packages are identical.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.3] - 2026-11-05
 
 ### Overview & Release Highlights
