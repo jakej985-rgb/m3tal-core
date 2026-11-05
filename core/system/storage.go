@@ -12,13 +12,12 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 )
 
-// getDeviceLabel resolves the volume label for a device by scanning /dev/disk/by-label symlinks.
-// If no label is found, it returns the base name of the device (e.g., sda4).
-func getDeviceLabel(devicePath string) string {
-	absDev, err := filepath.Abs(devicePath)
-	if err != nil {
-		absDev = devicePath
-	}
+// getDeviceLabelsMap scans /dev/disk/by-label symlinks once and builds a map of
+// resolved absolute device paths to volume label names.
+// Optimization: reading the directory once upfront avoids repeated O(N*M) directory reads
+// and os.Readlink syscalls for each partition.
+func getDeviceLabelsMap() map[string]string {
+	labels := make(map[string]string)
 	files, err := os.ReadDir("/dev/disk/by-label")
 	if err == nil {
 		for _, file := range files {
@@ -26,11 +25,23 @@ func getDeviceLabel(devicePath string) string {
 			target, err := os.Readlink(linkPath)
 			if err == nil {
 				resolvedTarget := filepath.Clean(filepath.Join("/dev/disk/by-label", target))
-				if resolvedTarget == absDev {
-					return file.Name()
-				}
+				labels[resolvedTarget] = file.Name()
 			}
 		}
+	}
+	return labels
+}
+
+// getDeviceLabel resolves the volume label for a device by looking up in /dev/disk/by-label.
+// If no label is found, it returns the base name of the device (e.g., sda4).
+func getDeviceLabel(devicePath string) string {
+	absDev, err := filepath.Abs(devicePath)
+	if err != nil {
+		absDev = devicePath
+	}
+	labels := getDeviceLabelsMap()
+	if label, ok := labels[absDev]; ok {
+		return label
 	}
 	return filepath.Base(devicePath)
 }
@@ -83,6 +94,9 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 
 	var list []models.DiskPartition
 	seenMounts := make(map[string]bool)
+
+	// Build label lookup map once upfront to avoid N+1 filesystem scans in the partition loop
+	deviceLabels := getDeviceLabelsMap()
 
 	for _, p := range partitions {
 		// Skip virtual mounts that look physical
@@ -139,12 +153,22 @@ func GetDiskPartitions() ([]models.DiskPartition, error) {
 			driveType = "system"
 		}
 
+		// Resolve volume label efficiently via pre-scanned map lookup
+		absDev, err := filepath.Abs(p.Device)
+		if err != nil {
+			absDev = p.Device
+		}
+		label, hasLabel := deviceLabels[absDev]
+		if !hasLabel {
+			label = filepath.Base(p.Device)
+		}
+
 		list = append(list, models.DiskPartition{
 			Device:      p.Device,
 			DiskName:    diskName,
 			DiskModel:   diskModel,
 			DriveType:   driveType,
-			Label:       getDeviceLabel(p.Device),
+			Label:       label,
 			Mountpoint:  p.Mountpoint,
 			FSType:      p.Fstype,
 			Total:       totalGB,
