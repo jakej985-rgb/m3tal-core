@@ -219,15 +219,17 @@ M3TAL Core provides a dedicated, full-screen **Settings page** (`/settings`) acc
 
 ## 5. Plugin IPC Protocol (JSON-RPC 2.0)
 
+> **Implementation status**: Core currently implements newline-delimited JSON-RPC 2.0 over `stdio` and supports `m3tal.init`, `m3tal.collect`, and `m3tal.action`. `m3tal.stream` and `m3tal.shutdown` are target-state protocol ideas, not implemented methods. See `docs/PLUGIN_AUTHORING.md` for the current contract.
+
 Plugins communicate with M3TAL Core over `stdio` or a local Unix socket using JSON-RPC 2.0:
 
 | Method | Initiator | Payload | Purpose |
 |---|---|---|---|
 | `m3tal.init` | Core -> Plugin | `{ core_version, config }` | Handshake; validates capabilities and config. |
-| `m3tal.collect` | Core -> Plugin | `{}` | Polls live metrics (CPU, RAM, container states). |
-| `m3tal.action` | Core -> Plugin | `{ action, params }` | Executes an operation (e.g., `stopContainer`). |
-| `m3tal.stream` | Plugin -> Core | `{ channel, data }` | Streams live events or logs to WebSocket clients. |
-| `m3tal.shutdown` | Core -> Plugin | `{ reason }` | Graceful termination signal. |
+| `m3tal.collect` | Core -> Plugin | `{ timestamp }` | Polls live metrics (CPU, RAM, container states). |
+| `m3tal.action` | Core -> Plugin | `{ action_id, target, args }` | Executes an operation (e.g., `stopContainer`). |
+| `m3tal.stream` | Plugin -> Core | `{ channel, data }` | Streams live events or logs to WebSocket clients. *(target state)* |
+| `m3tal.shutdown` | Core -> Plugin | `{ reason }` | Graceful termination signal. *(target state)* |
 
 ---
 

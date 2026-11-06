@@ -1,89 +1,103 @@
-name: M3tal Self-Documenting System
+name: M3tal Documentation Sync
 
 on:
   push:
     branches: [ main, dev ]
+    paths:
+      - README.md
+      - docs/GET_STARTED.md
+      - docs/ENVIRONMENT_VARIABLES.md
+      - docs/COMMAND_REFERENCE.md
+      - docs/OPERATIONS.md
+      - docs/PLUGIN_AUTHORING.md
+      - docs/SECURITY.md
+      - docs/DEVELOPMENT.md
+      - docs/RELEASE.md
   pull_request:
     branches: [ main ]
+    paths:
+      - README.md
+      - docs/GET_STARTED.md
+      - docs/ENVIRONMENT_VARIABLES.md
+      - docs/COMMAND_REFERENCE.md
+      - docs/OPERATIONS.md
+      - docs/PLUGIN_AUTHORING.md
+      - docs/SECURITY.md
+      - docs/DEVELOPMENT.md
+      - docs/RELEASE.md
 
 jobs:
   docs:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
-      - name: 📥 Checkout repo
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
-      - name: 🧰 Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 📦 Install dependencies
-        run: npm install js-yaml @google/generative-ai fs-extra
-
-      - name: 🔍 [1] Parse System State (Source of Truth)
+      - name: Verify curated documentation exists
         run: |
-          node .github/scripts/parse-docker.js
-          node .github/scripts/parse-env.js
-          node .github/scripts/parse-m3tal.js
+          set -euo pipefail
+          for file in \
+            README.md \
+            docs/GET_STARTED.md \
+            docs/ENVIRONMENT_VARIABLES.md \
+            docs/COMMAND_REFERENCE.md \
+            docs/OPERATIONS.md \
+            docs/PLUGIN_AUTHORING.md \
+            docs/SECURITY.md \
+            docs/DEVELOPMENT.md \
+            docs/RELEASE.md; do
+            test -s "$file"
+          done
 
-      - name: 🧱 [2] Assemble Deterministic README
-        run: |
-          node .github/scripts/build-readme.js
+  sync-docs-repo:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-      - name: 🧠 [3] AI Polish (Gemini)
-        env:
-          GOOGLE_AI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
-        run: |
-          node .github/scripts/docsmith.js
-
-      - name: 🧪 [4] AI QA Gate (DocCritic)
-        env:
-          GOOGLE_AI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
-        run: |
-          node .github/scripts/doccritic.js
-
-      - name: 📥 Checkout m3tal-docs repo
-        if: github.event_name == 'push'
+    steps:
+      - name: Check out m3tal-docs repo
         uses: actions/checkout@v4
         with:
           repository: jakej985-rgb/m3tal-docs
           token: ${{ secrets.GH_PAT }}
           path: m3tal-docs
+          fetch-depth: 0
 
-      - name: 📝 Commit Documentation Changes
-        if: github.event_name == 'push'
+      - name: Check out M3tal-core docs
+        uses: actions/checkout@v4
+        with:
+          path: m3tal-core
+
+      - name: Sync curated documentation
         run: |
-          # Create target folder inside m3tal-docs
+          set -euo pipefail
           mkdir -p m3tal-docs/projects/m3tal-core
+          cp m3tal-core/README.md m3tal-docs/projects/m3tal-core/README.md
+          cp m3tal-core/docs/GET_STARTED.md m3tal-docs/projects/m3tal-core/INSTALL.md
+          cp m3tal-core/docs/ENVIRONMENT_VARIABLES.md m3tal-docs/projects/m3tal-core/CONFIG.md
+          cp m3tal-core/docs/COMMAND_REFERENCE.md m3tal-docs/projects/m3tal-core/API.md
+          cp m3tal-core/docs/OPERATIONS.md m3tal-docs/projects/m3tal-core/OPERATIONS.md
+          cp m3tal-core/docs/PLUGIN_AUTHORING.md m3tal-docs/projects/m3tal-core/PLUGIN_AUTHORING.md
+          cp m3tal-core/docs/SECURITY.md m3tal-docs/projects/m3tal-core/SECURITY.md
+          cp m3tal-core/docs/DEVELOPMENT.md m3tal-docs/projects/m3tal-core/DEVELOPMENT.md
+          cp m3tal-core/docs/RELEASE.md m3tal-docs/projects/m3tal-core/RELEASE.md
 
-          # Copy files to m3tal-docs
-          cp README.md m3tal-docs/projects/m3tal-core/README.md
-          cp docs/GET_STARTED.md m3tal-docs/projects/m3tal-core/INSTALL.md
-          cp docs/ENVIRONMENT_VARIABLES.md m3tal-docs/projects/m3tal-core/CONFIG.md
-          cp docs/COMMAND_REFERENCE.md m3tal-docs/projects/m3tal-core/API.md
-          if [[ -f FIXES.md ]]; then
-            cp FIXES.md m3tal-docs/projects/m3tal-core/FIXES.md
-          fi
-
-          # Commit and Push to m3tal-docs repo
-          cd m3tal-docs
+      - name: Commit documentation changes
+        working-directory: m3tal-docs
+        run: |
+          set -euo pipefail
           git config user.name "m3tal-docs-bot"
           git config user.email "actions@github.com"
           git add projects/m3tal-core/
-
-          if [[ ! -f ../.doc-failed ]]; then
-            git commit -m "docs: auto-update from system state [skip ci]" || true
-          else
-            echo "[!] DocCritic BLOCKERS found. Pushing both README and FIXES per user instructions."
-            git commit -m "docs: update audit report and README (blockers detected) [skip ci]" || true
+          if git diff --staged --quiet; then
+            echo "No documentation changes to sync."
+            exit 0
           fi
-
+          git commit -m "docs: sync curated M3tal Core documentation [skip ci]"
           git pull --rebase
           git push

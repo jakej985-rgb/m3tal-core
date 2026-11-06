@@ -25,7 +25,7 @@ Distributed strictly as a native Debian package (`.deb`), M3TAL Core runs direct
 * **Zero Core Footprint**: `m3tal-core` contains zero plugin-specific UI components, API models, or bespoke database schemas. It acts solely as the Host Supervisor and Dynamic UI mount point (`/plugins/<name>/`).
 * **JSON-RPC 2.0 over Stdio**: External plugins run as independent subprocesses supervised by Core, communicating via standardized JSON-RPC 2.0 over stdin/stdout pipes.
 * **SIGHUP Rediscovery via Dpkg Triggers**: When new plugin packages are installed via `apt install m3tal-plugin-<name>`, Debian postinst triggers issue a `SIGHUP` to `m3tal-api`, initiating immediate, zero-downtime plugin discovery.
-* **Jellyfin-Style API Key Inheritance**: M3TAL Core generates cryptographically secure API keys and persists the active key to `/etc/m3tal/api_keys.json`. Core injects this key into all plugin subprocesses via `M3TAL_API_KEY`.
+* **Jellyfin-Style API Key Inheritance**: M3TAL Core generates cryptographically secure API keys and syncs the primary local key to `~/.config/m3tal/api_keys.json` (with `/etc/m3tal/api_keys.json` as a fallback). Core injects the resolved key into plugin subprocesses via `M3TAL_API_KEY` and `M3TAL_API_TOKEN`.
 
 ### 3. Workload Delegation to Plugins & Hub
 * **Strict Separation of Concerns**: Core does not bundle or manage Docker containers. Operators who desire container fleet monitoring or Compose deployment install the dedicated `m3tal-docker` and `m3tal-compose` plugins from `m3tal-plugins`.
@@ -43,8 +43,8 @@ Distributed strictly as a native Debian package (`.deb`), M3TAL Core runs direct
 | :--- | :--- |
 | **Debian Baseline** | Compiled with `GOAMD64=v1` and zero cgo dependencies for broad x86-64 CPU compatibility. |
 | **Process Isolation** | Plugin crashes or memory leaks in external modules do not crash the primary `m3tal-api` daemon. |
-| **Server-Side Key Generation** | Custom client-submitted API key tokens are prohibited; keys are strictly generated server-side. |
-| **Sudo-less Host Access** | User group `m3tal` allows non-root management of system state and configurations. |
+| **Scoped API Keys** | Custom client-submitted local API key tokens are prohibited; local keys are generated server-side. Keys may carry permission scopes and local/remote direction metadata. The static `API_TOKEN`, when configured, has full access. |
+| **Privileged Service Model** | The packaged `m3tal-api.service` currently runs as root so plugins and host telemetry can access system resources. The `m3tal` group and state directories support filesystem organization, but do not make the daemon sudo-less. |
 
 ---
 

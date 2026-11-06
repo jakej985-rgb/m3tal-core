@@ -33,8 +33,9 @@ This guide walks you through installing, configuring, and running **M3TAL Core**
 curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/install.sh | sudo bash
 
 # Or configure the repository manually:
-curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/public.key | sudo gpg --dearmor -o /usr/share/keyrings/m3tal-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/m3tal-archive-keyring.gpg] https://jakej985-rgb.github.io/m3tal-apt-key stable main" | sudo tee /etc/apt/sources.list.d/m3tal.list
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/public.key | sudo gpg --dearmor -o /etc/apt/keyrings/m3tal-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/m3tal-archive-keyring.gpg] https://jakej985-rgb.github.io/m3tal-apt-key stable main" | sudo tee /etc/apt/sources.list.d/m3tal.list
 sudo apt update && sudo apt install -y m3tal
 ```
 
@@ -53,9 +54,9 @@ sudo nano /etc/m3tal/.env
 Key variables:
 
 * **`API_PORT`**: Port for the Web GUI and REST API (default `5050`).
-* **`API_TOKEN`**: Optional static bootstrap token. You can also generate API keys later in **Settings → API Keys**.
-* **`M3TAL_STATE_DB`**: SQLite state path (default `/var/lib/m3tal/state.db`).
-* **`M3TAL_PLUGINS_DIR`**: Optional extra plugin search directory.
+* **`API_TOKEN`**: Optional static bootstrap token. You can also generate scoped API keys later in **Settings → API Keys**.
+* **`M3TAL_STATE_DB`**: SQLite state path (default `/var/lib/m3tal/state.db` when present, otherwise `./data/state.db`).
+* Plugin search paths are fixed: `./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, and `/etc/m3tal/plugins`. `M3TAL_PLUGINS_DIR` is not currently implemented.
 
 See [Environment Variables](ENVIRONMENT_VARIABLES.md) for the full list.
 
@@ -103,7 +104,7 @@ make build
 
 ## 7. API Access
 
-All API routes are under `/api/v2` and require authentication via the `X-API-Token` header (or `?token=` query param for WebSocket/downloads). Create keys in **Settings → API Keys**.
+All API routes are under `/api/v2` and require authentication via the `X-API-Token` or `Authorization: Bearer` header (or `?token=` query param for WebSocket/plugin UI loading). Create keys in **Settings → API Keys**.
 
 Quick smoke test:
 
