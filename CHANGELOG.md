@@ -9,6 +9,21 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
 
+## [0.24.7] - 2026-11-06
+
+### Overview & Release Highlights
+Release v0.24.7 delivers updates across 2 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 📚 Documentation & Specifications
+- **Merge pull request #147 from jakej985-rgb/docs/ecosystem-overhaul** (`3fb8f4d`):
+  - *What Changed*: docs: ecosystem-wide documentation overhaul
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **docs: ecosystem-wide documentation overhaul** (`88af6cc`):
+  - *What Changed*: Rewrite user/operator docs to match implemented behavior (API v2 on port 5050, m3tal-api.service, state.db, plugin env injection, SIGHUP discovery) and add OPERATIONS, SECURITY, DEVELOPMENT, PLUGIN_AUTHORING, and RELEASE guides. Sync plugin catalog generator, GUI fallback catalog, audit capabilities, and agent docs with the real plugin protocol. Disclaim unimplemented M3TAL_PLUGINS_DIR and Core-side m3tal.shutdown.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.24.6] - 2026-11-05
 
 ### Overview & Release Highlights
