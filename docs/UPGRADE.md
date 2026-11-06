@@ -8,10 +8,10 @@ M3TAL Core is distributed as a system-wide Debian package (`.deb`). This guide c
 | :--- | :--- |
 | **Binary** | `/usr/bin/m3tal-api` |
 | **Config** | `/etc/m3tal/.env` |
-| **State (API keys)** | `/var/lib/m3tal/state.db` |
-| **GUI assets** | `/usr/share/m3tal/gui` |
+| **State (API keys)** | `~/.config/m3tal/api_keys.json`, `/var/lib/m3tal/state.db`, or `./data/state.db` depending on runtime mode |
+| **GUI assets** | embedded in `/usr/bin/m3tal-api` |
 | **Systemd unit** | `/lib/systemd/system/m3tal-api.service` |
-| **Plugins** | `/usr/lib/m3tal/plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/etc/m3tal/plugins` |
+| **Plugins** | `./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, `/etc/m3tal/plugins` |
 
 ## 🚀 Upgrade Steps
 
@@ -49,6 +49,7 @@ journalctl -u m3tal-api -f
 * Legacy `/etc/m3tal/.env` keys for removed features (VPN credentials, Traefik ports, storage paths, etc.) are ignored by Core. Plugin-specific variables should be configured by the corresponding plugins.
 * Existing `state.db` files keep working; unused legacy tables are left in place but no longer written to.
 * API keys are preserved across upgrades.
+* The APT repository previously published a separate `1.x` package lineage. The current package stream is `0.x`; because Debian version ordering treats `0.x` as older than `1.x`, APT will not automatically replace a `1.x` installation with `0.x`. If you have an old `1.x` package installed, remove it explicitly before installing the current `m3tal` package.
 
 ## ❓ FAQ
 

@@ -41,8 +41,9 @@ Install via the official M3tal APT repository:
 curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/install.sh | sudo bash
 
 # Or configure the APT repository manually:
-curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/public.key | sudo gpg --dearmor -o /usr/share/keyrings/m3tal-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/m3tal-archive-keyring.gpg] https://jakej985-rgb.github.io/m3tal-apt-key stable main" | sudo tee /etc/apt/sources.list.d/m3tal.list
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://jakej985-rgb.github.io/m3tal-apt-key/public.key | sudo gpg --dearmor -o /etc/apt/keyrings/m3tal-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/m3tal-archive-keyring.gpg] https://jakej985-rgb.github.io/m3tal-apt-key stable main" | sudo tee /etc/apt/sources.list.d/m3tal.list
 sudo apt update && sudo apt install -y m3tal
 ```
 
@@ -88,19 +89,19 @@ The service has no Docker dependency; it only needs host access for telemetry an
 
 ## 🌐 API Surface
 
-All API routes live under `/api/v2` and require an API token (`X-API-Token` header or `?token=` query param):
+All API routes live under `/api/v2` and require an API token (`X-API-Token` or `Authorization: Bearer` header; `?token=` is also accepted for GUI/plugin UI use):
 
 | Endpoint | Description |
 | :--- | :--- |
 | `GET /api/v2/version` | Core version metadata (public). |
 | `GET /api/v2/system/stats` | Current host telemetry snapshot (CPU, RAM, GPU, disk, network). |
 | `GET /api/v2/system/metrics` | Sliding-window metrics history. |
-| `GET /api/v2/system/health` | Host and plugin-manager health. |
+| `GET /api/v2/system/health` | Host health (database and filesystem). |
 | `GET /api/v2/system/processes` | Top host processes. |
 | `POST /api/v2/system/processes/{pid}/kill` | Terminate a host process. |
 | `GET /api/v2/system/specs` | OS, kernel, CPU, memory, GPU, and NIC inventory. |
 | `GET /api/v2/system/network` | Network interface counters. |
-| `GET /api/v2/ws/events` | WebSocket event stream. |
+| `GET /api/v2/ws/events` | WebSocket endpoint (no production event producers yet). |
 | `GET/POST/DELETE /api/v2/auth/keys` | API key management. |
 | `GET /api/v2/plugins*` | Plugin discovery, lifecycle, collect, action, settings. |
 | `GET/POST /api/v2/settings*` | Core and plugin settings. |
@@ -118,15 +119,15 @@ Plugin UIs are served at `/plugins/{name}/`.
 | `/usr/share/applications/m3tal.desktop` | Desktop launcher menu entry. |
 | `/etc/m3tal/.env` | Primary configuration file. |
 | `/etc/m3tal/.env.example` | Default configuration template. |
-| `/var/lib/m3tal/state.db` | SQLite persistent state database (API keys). |
-| `/usr/lib/m3tal/plugins` | System-wide plugin directory. |
-| `~/.config/m3tal/plugins` | Per-user plugin directory. |
+| `/var/lib/m3tal/state.db` | SQLite state database when `/var/lib/m3tal` is present; otherwise `./data/state.db`. |
+| `./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, `/etc/m3tal/plugins` | Plugin search paths. |
 
 ---
 
 ## 📚 Documentation
 
 * [Getting Started Guide](docs/GET_STARTED.md)
+* [Command & API Reference](docs/COMMAND_REFERENCE.md)
 * [Environment Variables Reference](docs/ENVIRONMENT_VARIABLES.md)
 * [Port Configuration Guide](docs/PORT_CONFIGURATION.md)
 * [Diagnostics & Troubleshooting](docs/DIAGNOSTICS.md)
@@ -134,5 +135,11 @@ Plugin UIs are served at `/plugins/{name}/`.
 * [Build Configuration](docs/BUILD_CONFIGURATION.md)
 * [Debian CPU Baseline](docs/DEBIAN_CPU_BASELINE.md)
 * [Testing & Verification](docs/TESTING.md)
+* [Command & API Reference](docs/COMMAND_REFERENCE.md)
+* [Operations Guide](docs/OPERATIONS.md)
+* [Plugin Authoring](docs/PLUGIN_AUTHORING.md)
+* [Security Notes](docs/SECURITY.md)
+* [Development Guide](docs/DEVELOPMENT.md)
+* [Release Manual](docs/RELEASE.md)
 * [Architecture Vision](docs/ARCHITECTURE_VISION.md)
 * [System Upgrade Guide](docs/UPGRADE.md)

@@ -12,7 +12,7 @@ Quick programmatic checks against the running service:
 # Version (public, no auth)
 curl -s http://localhost:5050/api/v2/version
 
-# Host + plugin-manager health (requires token)
+# Host health (database and root filesystem; requires token)
 curl -H "X-API-Token: <key>" http://localhost:5050/api/v2/system/health
 
 # Live telemetry snapshot
@@ -50,9 +50,9 @@ Common log signals:
 
 ## 🧩 Plugin Diagnostics
 
-* **Plugin not appearing**: confirm the plugin directory is under a search path (`/usr/lib/m3tal/plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/etc/m3tal/plugins`, `./plugins`, or `M3TAL_PLUGINS_DIR`) and contains a valid manifest. Send `SIGHUP` to `m3tal-api` or restart the service to rediscover.
+* **Plugin not appearing**: confirm the plugin directory is under a search path (`./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, or `/etc/m3tal/plugins`) and contains a valid `plugin.yaml` or `plugin.yml`. Core rediscovers every 5 seconds and also refreshes on `SIGHUP`; restart `m3tal-api` if discovery still fails.
 * **Plugin UI 404 at `/plugins/<name>/`**: the plugin must ship `ui/dist` (or `ui/index.html`) inside its directory.
-* **Plugin auth failures**: verify `~/.config/m3tal/api_keys.json` exists and the plugin reads `M3TAL_API_KEY`.
+* **Plugin auth failures**: verify the API key file exists at `~/.config/m3tal/api_keys.json` (or `/etc/m3tal/api_keys.json` as a fallback) and that the plugin receives `M3TAL_API_KEY` or `M3TAL_API_TOKEN`.
 
 ---
 
@@ -73,6 +73,6 @@ go test ./...
 # Build everything (GUI + binary)
 make build
 
-# Run the API directly with debug logging
-LOG_LEVEL=debug ./m3tal-api
+# Run the API directly (there is no LOG_LEVEL variable)
+./m3tal-api
 ```
