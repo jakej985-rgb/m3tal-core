@@ -49,11 +49,15 @@ M3TAL_STATE_DB=/var/lib/m3tal/state.db ./m3tal-api
 
 ### `M3TAL_PLUGINS_DIR`
 
-Not implemented. Do not configure this variable; Core currently uses its fixed plugin search paths only.
+Optional additional directory scanned for plugins before the standard locations (`~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, `/etc/m3tal/plugins`). The process working directory is never searched.
+
+### `M3TAL_WS_ALLOWED_ORIGINS`
+
+Comma-separated extra `Origin` values allowed to open the `/api/v2/ws/events` WebSocket besides same-origin requests (for example `https://dashboard.example.com`). Requests with no `Origin` header (non-browser clients) are always allowed.
 
 ## Plugin-injected environment
 
-Core sets these variables when launching a plugin subprocess:
+Core launches plugin subprocesses with a filtered environment: only allowlisted variables (`PATH`, `HOME`, locale/`XDG_*`/`RUNTIME_DIRECTORY` settings, and non-secret `M3TAL_*` variables) are inherited — unrelated host secrets are not passed through. Core additionally sets:
 
 | Variable | Purpose |
 |---|---|

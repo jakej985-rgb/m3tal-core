@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -53,29 +54,29 @@ func parsePermissions(raw string) []string {
 	return perms
 }
 
-// NormalizePermissions validates and normalizes a permission list. Unknown
-// scopes are dropped; if nothing valid remains, full access is assumed only
-// when the input was empty (callers should pass explicit scopes otherwise).
-func NormalizePermissions(perms []string) []string {
+// NormalizePermissions validates and normalizes a permission list. Every
+// supplied scope must be a known permission; unknown or empty input is
+// rejected rather than silently upgraded to full access.
+func NormalizePermissions(perms []string) ([]string, error) {
 	if len(perms) == 0 {
-		return []string{ScopeFull}
+		return nil, fmt.Errorf("at least one permission scope is required")
 	}
 	out := make([]string, 0, len(perms))
 	seen := make(map[string]bool)
 	for _, p := range perms {
 		p = strings.TrimSpace(p)
-		if p == "" || seen[p] {
-			continue
+		if p == "" {
+			return nil, fmt.Errorf("permission scopes cannot be empty")
 		}
-		if ValidAPIKeyPermissions[p] {
+		if !ValidAPIKeyPermissions[p] {
+			return nil, fmt.Errorf("unknown permission scope %q", p)
+		}
+		if !seen[p] {
 			seen[p] = true
 			out = append(out, p)
 		}
 	}
-	if len(out) == 0 {
-		return []string{ScopeFull}
-	}
-	return out
+	return out, nil
 }
 
 // NormalizeDirection validates a direction value, defaulting to local.

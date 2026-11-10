@@ -98,8 +98,9 @@ func TestAPIKeysEndpoints(t *testing.T) {
 	}
 
 	// 4. Create server-generated API key
-	validBody, _ := json.Marshal(map[string]string{
-		"name": "Mesh Fleet",
+	validBody, _ := json.Marshal(map[string]any{
+		"name":        "Mesh Fleet",
+		"permissions": []string{"*"},
 	})
 	req = httptest.NewRequest("POST", "/api/v2/auth/keys", bytes.NewReader(validBody))
 	req.Header.Set("X-API-Token", "primary-token")
@@ -250,7 +251,7 @@ func TestRemoteAPIKeyCannotAuthenticateInbound(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	// Remote key stores a foreign credential
-	remote, err := db.CreateAPIKey("NAS Node", nil, state.DirectionRemote, "192.168.1.20", "foreign-token-abc123")
+	remote, err := db.CreateAPIKey("NAS Node", []string{state.ScopeFull}, state.DirectionRemote, "192.168.1.20", "foreign-token-abc123")
 	if err != nil {
 		t.Fatalf("CreateAPIKey remote: %v", err)
 	}

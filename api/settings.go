@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
 )
 
@@ -216,7 +215,10 @@ func (h *PluginHandlers) SaveCoreSettings(w http.ResponseWriter, r *http.Request
 // GetPluginSettings returns settings and stored values for a single plugin.
 // GET /api/v2/plugins/{name}/settings
 func (h *PluginHandlers) GetPluginSettings(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+	name, ok := pluginNameParam(w, r)
+	if !ok {
+		return
+	}
 	p := h.Manager.GetPlugin(name)
 	var sections []plugins.PluginSettingSection
 	if p != nil {
@@ -257,7 +259,10 @@ func (h *PluginHandlers) GetPluginSettings(w http.ResponseWriter, r *http.Reques
 // SavePluginSettings updates stored values for a plugin and notifies the daemon.
 // POST /api/v2/plugins/{name}/settings
 func (h *PluginHandlers) SavePluginSettings(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+	name, ok := pluginNameParam(w, r)
+	if !ok {
+		return
+	}
 	var req struct {
 		Config map[string]any `json:"config"`
 	}

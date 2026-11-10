@@ -56,7 +56,7 @@ Key variables:
 * **`API_PORT`**: Port for the Web GUI and REST API (default `5050`).
 * **`API_TOKEN`**: Optional static bootstrap token. You can also generate scoped API keys later in **Settings → API Keys**.
 * **`M3TAL_STATE_DB`**: SQLite state path (default `/var/lib/m3tal/state.db` when present, otherwise `./data/state.db`).
-* Plugin search paths are fixed: `./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, and `/etc/m3tal/plugins`. `M3TAL_PLUGINS_DIR` is not currently implemented.
+* Plugin search paths are `M3TAL_PLUGINS_DIR` (when set), `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, and `/etc/m3tal/plugins`. The process working directory is never searched.
 
 See [Environment Variables](ENVIRONMENT_VARIABLES.md) for the full list.
 

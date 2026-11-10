@@ -8,6 +8,14 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 
 ### Fixed
 - Build the CLI and API for the AMD64 v1 baseline with cgo disabled, and gate Debian releases on package installation and AVX-less API startup checks.
+- Validate plugin names and package/mode parameters against path traversal before filesystem and `dpkg` operations (`api/validate.go`); reject `..`, separators, and oversized names at every `{name}` endpoint.
+- `findPluginDeb` rejects traversal names and no longer searches the process working directory (`./plugins`); `M3TAL_PLUGINS_DIR` is now the supported override for extra plugin directories.
+- Plugin discovery no longer scans `./plugins`, so running the binary from a repository checkout cannot auto-start planted plugins.
+- Plugin subprocesses inherit a filtered environment (allowlisted variables only) instead of `os.Environ()`.
+- `NormalizePermissions` rejects empty or unknown scopes instead of silently granting `*` full access.
+- `KillProcess` refuses PID 1, the API's own PID, and protected system processes.
+- HTTP server now sets `ReadHeaderTimeout`, `ReadTimeout`, and `IdleTimeout`; WebSocket `CheckOrigin` validates same-origin and `M3TAL_WS_ALLOWED_ORIGINS` instead of accepting any origin.
+- API token comparisons use constant-time comparison.
 
 ## [0.24.7] - 2026-11-06
 

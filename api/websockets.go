@@ -3,17 +3,45 @@ package api
 import (
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/jakej985-rgb/m3tal-core/core/events"
 )
 
+// wsAllowedOrigins parses M3TAL_WS_ALLOWED_ORIGINS (comma-separated origins
+// such as https://dashboard.example.com) into a lookup set.
+func wsAllowedOrigins() map[string]bool {
+	allowed := make(map[string]bool)
+	for _, o := range strings.Split(os.Getenv("M3TAL_WS_ALLOWED_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			allowed[strings.ToLower(o)] = true
+		}
+	}
+	return allowed
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			// Non-browser clients send no Origin header.
+			return true
+		}
+		u, err := url.Parse(origin)
+		if err != nil || u.Host == "" {
+			return false
+		}
+		// Same-origin requests (the bundled GUI) are always allowed.
+		if strings.EqualFold(u.Host, r.Host) {
+			return true
+		}
+		return wsAllowedOrigins()[strings.ToLower(origin)]
 	},
 }
 

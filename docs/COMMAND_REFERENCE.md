@@ -213,10 +213,10 @@ Core resolves the injected API key in this order:
 
 Plugin search paths are:
 
-1. `./plugins`
+1. `M3TAL_PLUGINS_DIR` (when set)
 2. `~/.config/m3tal/plugins`
 3. `/var/lib/m3tal/plugins`
 4. `/usr/lib/m3tal/plugins`
 5. `/etc/m3tal/plugins`
 
-`M3TAL_PLUGINS_DIR` is not currently implemented; do not rely on it.
+The process working directory is never searched, so running the binary from a repository checkout cannot auto-start planted plugins.

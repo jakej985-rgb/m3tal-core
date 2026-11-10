@@ -81,10 +81,14 @@ func NewManager(coreVersion string, customPaths ...string) *Manager {
 	if len(customPaths) > 0 {
 		paths = customPaths
 	} else {
-		home, _ := os.UserHomeDir()
-		paths = []string{
-			"./plugins",
+		// M3TAL_PLUGINS_DIR is the explicit operator override for additional
+		// plugin locations. Never search the process working directory: a
+		// repo checkout or attacker-writable CWD must not be able to plant
+		// plugins that auto-start.
+		if dir := strings.TrimSpace(os.Getenv("M3TAL_PLUGINS_DIR")); dir != "" {
+			paths = append(paths, dir)
 		}
+		home, _ := os.UserHomeDir()
 		if home != "" {
 			paths = append(paths, filepath.Join(home, ".config", "m3tal", "plugins"))
 		}
@@ -318,7 +322,7 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 	cmd := exec.CommandContext(pCtx, cmdPath, p.Manifest.Spec.Args...)
 	cmd.Dir = p.Manifest.Dir
 	coreKey := resolveCoreAPIKey()
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(pluginBaseEnv(),
 		"M3TAL_CORE_VERSION="+coreVersion,
 		"M3TAL_PLUGIN_DIR="+p.Manifest.Dir,
 		"M3TAL_PROCESS_NAME="+procName,
@@ -797,6 +801,36 @@ func (m *Manager) StopPlugin(name string) error {
 	}
 	p.ExplicitlyStopped = true
 	return p.Stop()
+}
+
+// pluginEnvAllowlist limits which host environment variables are inherited
+// by plugin subprocesses. Unrelated secrets (cloud credentials, tokens for
+// other services) must not leak into plugin processes.
+var pluginEnvAllowlist = map[string]bool{
+	"PATH": true, "HOME": true, "USER": true, "LOGNAME": true,
+	"SHELL": true, "LANG": true, "LC_ALL": true, "LC_CTYPE": true,
+	"TZ": true, "TMPDIR": true,
+	"XDG_RUNTIME_DIR": true, "XDG_CONFIG_HOME": true,
+	"XDG_CACHE_HOME": true, "XDG_DATA_HOME": true,
+	"RUNTIME_DIRECTORY": true,
+}
+
+// pluginBaseEnv returns the filtered environment passed to plugin
+// subprocesses: only allowlisted variables plus non-secret M3TAL_* settings.
+func pluginBaseEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		key, _, _ := strings.Cut(e, "=")
+		if pluginEnvAllowlist[key] ||
+			(strings.HasPrefix(key, "M3TAL_") &&
+				!strings.Contains(strings.ToUpper(key), "KEY") &&
+				!strings.Contains(strings.ToUpper(key), "TOKEN") &&
+				!strings.Contains(strings.ToUpper(key), "SECRET") &&
+				!strings.Contains(strings.ToUpper(key), "PASSWORD")) {
+			env = append(env, e)
+		}
+	}
+	return env
 }
 
 func resolveCoreAPIKey() string {

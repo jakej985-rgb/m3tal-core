@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -49,7 +52,7 @@ func (s *Server) ValidateToken(token string) bool {
 	if token == "" {
 		return false
 	}
-	if s.APIToken != "" && token == s.APIToken {
+	if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
 		return true
 	}
 	if s.Store != nil && s.Store.ValidateAPIKey(token) {
@@ -70,7 +73,7 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
-		if s.APIToken != "" && token == s.APIToken {
+		if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, (*state.APIKeyRecord)(nil))))
 			return
 		}
@@ -166,6 +169,11 @@ func (s *Server) KillProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if reason := protectedKillReason(int32(pid64)); reason != "" {
+		sendError(w, http.StatusForbidden, "PID_PROTECTED", reason, nil)
+		return
+	}
+
 	if err := system.KillProcess(int32(pid64)); err != nil {
 		sendError(w, http.StatusInternalServerError, "KILL_FAILED", err.Error(), nil)
 		return
@@ -175,6 +183,36 @@ func (s *Server) KillProcess(w http.ResponseWriter, r *http.Request) {
 		"killed": true,
 		"pid":    pid64,
 	}, nil)
+}
+
+// protectedKillNames lists process comm names that must never be killed via
+// the API, even by an authenticated system:write key. Killing PID 1 or the
+// service manager would take down the host.
+var protectedKillNames = map[string]bool{
+	"systemd": true, "init": true, "sshd": true, "sudo": true,
+	"dbus-daemon": true, "dbus-broker": true, "networkd-dispatcher": true,
+	"systemd-logind": true, "systemd-resolved": true, "systemd-networkd": true,
+	"systemd-timesyncd": true, "systemd-udevd": true, "cron": true,
+	"crond": true, "atd": true, "rsyslogd": true, "login": true,
+	"agetty": true, "getty": true, "m3tal-api": true,
+}
+
+// protectedKillReason returns a human-readable reason when pid refers to a
+// process the API must not terminate, or "" when the kill is allowed.
+func protectedKillReason(pid int32) string {
+	if pid <= 1 {
+		return "refusing to kill kernel/init process"
+	}
+	if int(pid) == os.Getpid() {
+		return "refusing to kill the API server itself"
+	}
+	if comm, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid)); err == nil {
+		name := strings.TrimSpace(string(comm))
+		if protectedKillNames[name] {
+			return fmt.Sprintf("refusing to kill protected system process %q", name)
+		}
+	}
+	return ""
 }
 
 // GetSystemSpecs returns host hardware and OS specifications.

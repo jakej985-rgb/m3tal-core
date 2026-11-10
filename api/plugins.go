@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
 )
 
@@ -112,9 +111,8 @@ func (h *PluginHandlers) ListPlugins(w http.ResponseWriter, r *http.Request) {
 // StartPlugin starts a plugin subprocess.
 // POST /api/v2/plugins/{name}/start
 func (h *PluginHandlers) StartPlugin(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -136,9 +134,8 @@ func (h *PluginHandlers) StartPlugin(w http.ResponseWriter, r *http.Request) {
 // StopPlugin stops a plugin subprocess.
 // POST /api/v2/plugins/{name}/stop
 func (h *PluginHandlers) StopPlugin(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -157,7 +154,10 @@ func (h *PluginHandlers) StopPlugin(w http.ResponseWriter, r *http.Request) {
 // CollectPlugin requests live telemetry from a running plugin over JSON-RPC 2.0.
 // GET /api/v2/plugins/{name}/collect
 func (h *PluginHandlers) CollectPlugin(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+	name, ok := pluginNameParam(w, r)
+	if !ok {
+		return
+	}
 	p := h.Manager.GetPlugin(name)
 	if p == nil {
 		sendError(w, http.StatusNotFound, "PLUGIN_NOT_FOUND", "plugin not found: "+name, nil)
@@ -176,7 +176,10 @@ func (h *PluginHandlers) CollectPlugin(w http.ResponseWriter, r *http.Request) {
 // ExecuteAction executes a declared action on a running plugin.
 // POST /api/v2/plugins/{name}/action
 func (h *PluginHandlers) ExecuteAction(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+	name, ok := pluginNameParam(w, r)
+	if !ok {
+		return
+	}
 	p := h.Manager.GetPlugin(name)
 	if p == nil {
 		sendError(w, http.StatusNotFound, "PLUGIN_NOT_FOUND", "plugin not found: "+name, nil)
@@ -444,13 +447,16 @@ var pluginMetadataMap = map[string]pluginMeta{
 
 // findPluginDeb searches candidate locations for a built .deb package.
 func findPluginDeb(name string) (string, string) {
+	// Never let a caller-supplied name escape the candidate directories.
+	if _, err := sanitizePluginName(name); err != nil {
+		return "", ""
+	}
 	home, _ := os.UserHomeDir()
 	candidateDirs := []string{
 		"/home/m3tal/apps/m3tal-plugins",
 		filepath.Join(home, "apps", "m3tal-plugins"),
 		"/home/m3tal/apps/m3tal-plugins/dist/packages",
 		"/var/lib/m3tal/packages",
-		"./plugins",
 	}
 
 	clean := strings.TrimPrefix(name, "m3tal-")
@@ -835,9 +841,8 @@ func CompareSemVer(v1, v2 string) (int, string) {
 // GetPluginChangelog returns the changelog for a specific plugin.
 // GET /api/v2/plugins/{name}/changelog
 func (h *PluginHandlers) GetPluginChangelog(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -856,9 +861,8 @@ func (h *PluginHandlers) GetPluginChangelog(w http.ResponseWriter, r *http.Reque
 // DownloadPluginDeb streams the compiled .deb file.
 // GET /api/v2/plugins/{name}/download
 func (h *PluginHandlers) DownloadPluginDeb(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -876,9 +880,8 @@ func (h *PluginHandlers) DownloadPluginDeb(w http.ResponseWriter, r *http.Reques
 // InstallPlugin installs a plugin package via sudo confirmation or user profile extraction.
 // POST /api/v2/plugins/{name}/install
 func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -893,6 +896,18 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Method == "" {
 		req.Method = "sudo"
+	}
+	if req.Package != "" {
+		if _, err := sanitizePluginName(req.Package); err != nil {
+			sendError(w, http.StatusBadRequest, "INVALID_PACKAGE", "invalid package name", nil)
+			return
+		}
+	}
+	if req.Mode != "" {
+		if _, err := sanitizePluginName(req.Mode); err != nil {
+			sendError(w, http.StatusBadRequest, "INVALID_MODE", "invalid install mode", nil)
+			return
+		}
 	}
 
 	searchTargets := []string{name}
@@ -1048,9 +1063,8 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 // UninstallPlugin uninstalls a plugin.
 // POST /api/v2/plugins/{name}/uninstall
 func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		sendError(w, http.StatusBadRequest, "INVALID_NAME", "plugin name required", nil)
+	name, ok := pluginNameParam(w, r)
+	if !ok {
 		return
 	}
 

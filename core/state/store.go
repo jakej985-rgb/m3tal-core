@@ -212,7 +212,10 @@ func (s *Store) CreateAPIKey(name string, permissions []string, direction, targe
 	}
 
 	direction = NormalizeDirection(direction)
-	perms := NormalizePermissions(permissions)
+	perms, err := NormalizePermissions(permissions)
+	if err != nil {
+		return nil, err
+	}
 	permsJSON, err := json.Marshal(perms)
 	if err != nil {
 		return nil, err
@@ -339,7 +342,7 @@ func (s *Store) GetPrimaryAPIKey() string {
 	if err := s.db.QueryRow(`SELECT token FROM api_keys WHERE direction = 'local' ORDER BY last_used_at DESC, id ASC LIMIT 1`).Scan(&token); err == nil && token != "" {
 		return token
 	}
-	if rec, err := s.CreateAPIKey("Default Key", nil, DirectionLocal, "", ""); err == nil && rec != nil {
+	if rec, err := s.CreateAPIKey("Default Key", []string{ScopeFull}, DirectionLocal, "", ""); err == nil && rec != nil {
 		return rec.Token
 	}
 	return ""

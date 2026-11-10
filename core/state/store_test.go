@@ -53,7 +53,7 @@ func TestAPIKeysCRUD(t *testing.T) {
 	}
 
 	// Create new key for mesh
-	newKey, err := db.CreateAPIKey("Mesh Fleet", nil, DirectionLocal, "", "")
+	newKey, err := db.CreateAPIKey("Mesh Fleet", []string{ScopeFull}, DirectionLocal, "", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestAPIKeysCRUD(t *testing.T) {
 func TestRecordAPIKeyUsage(t *testing.T) {
 	db := tempDB(t)
 
-	rec, err := db.CreateAPIKey("Usage Key", nil, DirectionLocal, "", "")
+	rec, err := db.CreateAPIKey("Usage Key", []string{ScopeFull}, DirectionLocal, "", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestGetPrimaryAPIKey(t *testing.T) {
 	}
 
 	// Create a new key and validate it to update last_used_at
-	meshKey, err := db.CreateAPIKey("Mesh Fleet", nil, DirectionLocal, "", "")
+	meshKey, err := db.CreateAPIKey("Mesh Fleet", []string{ScopeFull}, DirectionLocal, "", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}

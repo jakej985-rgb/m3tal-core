@@ -107,7 +107,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 
 	servePluginUI := func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
-		if name == "" {
+		if _, err := sanitizePluginName(name); err != nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -134,7 +134,6 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 				"/home/m3tal/apps/m3tal-plugins",
 				"/usr/lib/m3tal/plugins",
 				filepath.Join(home, ".config", "m3tal", "plugins"),
-				"./plugins",
 			}
 			for _, base := range baseDirs {
 				for _, c := range candidates {
@@ -170,6 +169,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		}
 
 		filePath := filepath.Join(uiDir, subPath)
+		if rel, err := filepath.Rel(uiDir, filePath); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			http.NotFound(w, r)
+			return
+		}
 		info, err := os.Stat(filePath)
 		if err == nil && info.IsDir() {
 			filePath = filepath.Join(filePath, "index.html")
@@ -191,6 +194,10 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 
 	r.Get("/plugins/{name}", func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
+		if _, err := sanitizePluginName(name); err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		http.Redirect(w, r, "/plugins/"+name+"/", http.StatusMovedPermanently)
 	})
 	r.Get("/plugins/{name}/*", servePluginUI)
@@ -245,7 +252,14 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		r.Get("/ws/events", srv.requireScope(state.ScopeSystemRead, srv.GetWSEvents))
 	})
 
-	return http.ListenAndServe(":"+port, r)
+	httpSrv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return httpSrv.ListenAndServe()
 }
 
 // GetMetricsHistory returns the sliding window history of system metrics.
