@@ -236,7 +236,7 @@ Release v0.20.5 delivers updates across 5 commits, providing system orchestratio
   - *What Changed*: Implemented changes described in commit.
   - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
 - **fix(deb): build API for AMD64 v1 baseline** (`0da3fe4`):
-  - *What Changed*: Entire-Checkpoint: 01M5Y0TRXSKZWGDKBNRXZZ6HBR
+  - *What Changed*: Implemented changes described in commit.
   - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
 
 ### 📦 Packaging & Debian Distribution

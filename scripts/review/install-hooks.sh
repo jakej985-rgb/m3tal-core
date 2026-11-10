@@ -61,11 +61,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     esac
 done
 
-# Entire CLI hooks (if installed)
-if command -v entire >/dev/null 2>&1; then
-    entire hooks git pre-push "$1" || true
-fi
-
 exit 0
 '
 
@@ -114,11 +109,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             ;;
     esac
 done
-
-# Entire CLI hooks (if installed)
-if command -v entire >/dev/null 2>&1; then
-    entire hooks git pre-push "$1" || true
-fi
 
 exit 0
 EOF
