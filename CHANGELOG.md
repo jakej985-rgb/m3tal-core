@@ -17,6 +17,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 - HTTP server now sets `ReadHeaderTimeout`, `ReadTimeout`, and `IdleTimeout`; WebSocket `CheckOrigin` validates same-origin and `M3TAL_WS_ALLOWED_ORIGINS` instead of accepting any origin.
 - API token comparisons use constant-time comparison.
 
+## [0.25.1] - 2026-11-10
+
+### Overview & Release Highlights
+Release v0.25.1 delivers updates across 1 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### ⚠️ Breaking Changes & Migrations
+- **chore: remove leftover Entire CLI hook template and checkpoint ref from changelog** (`6683b06`):
+  - *What Changed*: Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.25.0] - 2026-11-10
 
 ### Overview & Release Highlights
