@@ -61,20 +61,52 @@ func decodeCookieToken(v string) string {
 	return v
 }
 
-// cookieToken resolves a credential cookie value. A "b64."-prefixed value is
-// ambiguous: it is either an encoded token or a raw legacy token that itself
-// begins with "b64.". Prefer the decoded form when it validates; otherwise
-// fall back to the raw value so legacy cookies keep authenticating.
+// cookieToken resolves a credential cookie value to its primary candidate:
+// the decoded token for "b64."-prefixed values, else the raw value. It does
+// no validation (avoiding a duplicate key lookup); callers that fail to
+// authenticate the decoded form retry with legacyCookieCandidate.
 func (s *Server) cookieToken(v string) string {
 	v = strings.TrimSpace(v)
-	dec := decodeCookieToken(v)
-	if dec == v {
-		return v
-	}
-	if dec != "" && s.ValidateToken(dec) {
+	if dec := decodeCookieToken(v); dec != "" {
 		return dec
 	}
 	return v
+}
+
+// legacyCookieCandidate returns the raw value of the named cookie when it
+// differs from the decoded candidate — i.e. a legacy raw token that itself
+// begins with "b64.". Returns "" when there is no alternate candidate or the
+// request carries an explicit header credential.
+func legacyCookieCandidate(r *http.Request, name, tried string) string {
+	if !requestUsedSessionCookie(r) && name == sessionCookieName {
+		return ""
+	}
+	c, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	raw := strings.TrimSpace(c.Value)
+	if raw == "" || raw == tried || !strings.HasPrefix(raw, cookieValuePrefix) {
+		return ""
+	}
+	return raw
+}
+
+// lookupToken resolves token to (record, static, ok) with a single store
+// lookup. A static match returns a nil record.
+func (s *Server) lookupToken(token string) (*state.APIKeyRecord, bool, bool) {
+	if token == "" {
+		return nil, false, false
+	}
+	if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
+		return nil, true, true
+	}
+	if s.Store != nil {
+		if rec, ok := s.Store.LookupAPIKey(token); ok {
+			return rec, false, true
+		}
+	}
+	return nil, false, false
 }
 
 // sessionCookieSecure reports whether credential cookies get the Secure flag:
@@ -164,27 +196,27 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
-		if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
-			if !requestUsedSessionCookie(r) {
-				setSessionCookie(w, token)
+		rec, static, ok := s.lookupToken(token)
+		if !ok {
+			// Legacy raw cookie whose token itself starts with "b64.".
+			if raw := legacyCookieCandidate(r, sessionCookieName, token); raw != "" {
+				token = raw
+				rec, static, ok = s.lookupToken(token)
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, (*state.APIKeyRecord)(nil))))
+		}
+		if !ok {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
-		if s.Store != nil {
-			if rec, ok := s.Store.LookupAPIKey(token); ok {
-				// rec is already loaded — stamp usage directly instead of
-				// re-running the lookup inside ValidateAPIKey (saves a SELECT
-				// on every authenticated request).
-				s.Store.RecordAPIKeyUsage(rec)
-				if !requestUsedSessionCookie(r) {
-					setSessionCookie(w, token)
-				}
-				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
-				return
-			}
+		if !static {
+			// rec is already loaded — stamp usage directly instead of
+			// re-running the lookup inside ValidateAPIKey.
+			s.Store.RecordAPIKeyUsage(rec)
 		}
-		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+		if !requestUsedSessionCookie(r) {
+			setSessionCookie(w, token)
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
 	})
 }
 
@@ -201,33 +233,35 @@ func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := s.ExtractToken(r)
 		viaCookie := requestUsedSessionCookie(r)
+		cookieName := sessionCookieName
 		if token == "" {
 			if c, err := r.Cookie(pluginUICookieName); err == nil {
 				token = s.cookieToken(c.Value)
 				viaCookie = true
+				cookieName = pluginUICookieName
 			}
 		}
 		if token == "" {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
+		rec, static, ok := s.lookupToken(token)
+		if !ok && viaCookie {
+			// Legacy raw cookie whose token itself starts with "b64.".
+			if raw := legacyCookieCandidate(r, cookieName, token); raw != "" {
+				token = raw
+				rec, static, ok = s.lookupToken(token)
+			}
+		}
+		if !ok {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
 		// Static bootstrap token has full access; dynamic keys must carry
 		// plugins:read, matching the plugin API route guards.
-		staticOK := s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1
-		if !staticOK {
-			var rec *state.APIKeyRecord
-			ok := false
-			if s.Store != nil {
-				rec, ok = s.Store.LookupAPIKey(token)
-			}
-			if !ok {
-				sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
-				return
-			}
-			if !state.KeyAllows(rec, state.ScopePluginsRead) {
-				sendError(w, http.StatusForbidden, "FORBIDDEN", "API key lacks plugins:read", nil)
-				return
-			}
+		if !static && !state.KeyAllows(rec, state.ScopePluginsRead) {
+			sendError(w, http.StatusForbidden, "FORBIDDEN", "API key lacks plugins:read", nil)
+			return
 		}
 		if !viaCookie {
 			http.SetCookie(w, &http.Cookie{
