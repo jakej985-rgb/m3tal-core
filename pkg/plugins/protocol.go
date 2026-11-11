@@ -87,6 +87,10 @@ type PluginSpec struct {
 	UI           PluginUISpec           `yaml:"ui,omitempty" json:"ui,omitempty"`
 	Widgets      []PluginWidget         `yaml:"widgets,omitempty" json:"widgets,omitempty"`
 	Settings     []PluginSettingSection `yaml:"settings,omitempty" json:"settings,omitempty"`
+	// Autostart opts a plugin out of automatic startup when set to false;
+	// plugins can still be started explicitly via the API/GUI. nil means
+	// autostart is allowed (subject to M3TAL_PLUGINS_AUTOSTART).
+	Autostart *bool `yaml:"autostart,omitempty" json:"autostart,omitempty"`
 }
 
 // PluginUISpec declares static web UI configuration in plugin.yaml.

@@ -217,9 +217,7 @@ export default function Plugins() {
   const [selectedChangelog, setSelectedChangelog] = useState(null);
   const [installTarget, setInstallTarget] = useState(null);
   const [uninstallTarget, setUninstallTarget] = useState(null);
-  const [sudoPassword, setSudoPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [installMethod, setInstallMethod] = useState('sudo'); // 'sudo' or 'user'
+  const [installMethod, setInstallMethod] = useState('system'); // 'system' or 'user'
   const [installLoading, setInstallLoading] = useState(false);
   const [installError, setInstallError] = useState(null);
 
@@ -314,14 +312,12 @@ export default function Plugins() {
 
   const openInstallModal = (item) => {
     setInstallTarget(item);
-    setSudoPassword('');
     setInstallError(null);
-    setInstallMethod('sudo');
+    setInstallMethod('system');
   };
 
   const closeInstallModal = () => {
     setInstallTarget(null);
-    setSudoPassword('');
     setInstallError(null);
     setInstallLoading(false);
   };
@@ -337,7 +333,6 @@ export default function Plugins() {
     try {
       const res = await api.installPlugin(installTarget.name, {
         method: installMethod,
-        password: sudoPassword,
         package: targetPkg,
         mode: activeMode?.id,
       });
@@ -363,8 +358,7 @@ export default function Plugins() {
     setError(null);
     try {
       const res = await api.uninstallPlugin(uninstallTarget.name, {
-        method: 'sudo',
-        password: sudoPassword,
+        method: 'system',
       });
       if (res?.status === 'success') {
         setSuccess(`Plugin "${uninstallTarget.name}" uninstalled.`);
@@ -951,7 +945,7 @@ export default function Plugins() {
                 <div className="flex justify-between items-center text-slate-400">
                   <span>Target Destination:</span>
                   <span className="font-mono text-slate-300">
-                    {installMethod === 'sudo' ? `/usr/lib/m3tal/plugins/${installTarget.name}/` : `~/.config/m3tal/plugins/${installTarget.name}/`}
+                    {installMethod === 'system' ? `/usr/lib/m3tal/plugins/${installTarget.name}/` : `~/.config/m3tal/plugins/${installTarget.name}/`}
                   </span>
                 </div>
               </div>
@@ -962,7 +956,7 @@ export default function Plugins() {
                 <div className="grid grid-cols-1 gap-2">
                   <label
                     className={`p-3 rounded-xl border cursor-pointer flex items-start gap-3 transition-colors ${
-                      installMethod === 'sudo'
+                      installMethod === 'system'
                         ? 'bg-emerald-950/30 border-emerald-700 text-white'
                         : 'bg-[#0d1117] border-[#30363d] text-slate-400 hover:border-slate-600'
                     }`}
@@ -970,13 +964,13 @@ export default function Plugins() {
                     <input
                       type="radio"
                       name="installMethod"
-                      value="sudo"
-                      checked={installMethod === 'sudo'}
-                      onChange={() => setInstallMethod('sudo')}
+                      value="system"
+                      checked={installMethod === 'system'}
+                      onChange={() => setInstallMethod('system')}
                       className="mt-0.5 text-emerald-500 focus:ring-emerald-500"
                     />
                     <div>
-                      <div className="font-bold text-white">System Debian Package via Sudo (Recommended)</div>
+                      <div className="font-bold text-white">System Debian Package (root service)</div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
                         Installs to system directory <code className="text-slate-300">/usr/lib/m3tal/plugins/</code> via <code className="text-slate-300">dpkg</code>.
                       </div>
@@ -999,7 +993,7 @@ export default function Plugins() {
                       className="mt-0.5 text-emerald-500 focus:ring-emerald-500"
                     />
                     <div>
-                      <div className="font-bold text-white">User-Space Profile (No Sudo)</div>
+                      <div className="font-bold text-white">User-Space Profile</div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
                         Extracts payload directly into <code className="text-slate-300">~/.config/m3tal/plugins/</code>.
                       </div>
@@ -1008,35 +1002,6 @@ export default function Plugins() {
                 </div>
               </div>
 
-              {/* Sudo Password Input */}
-              {installMethod === 'sudo' && (
-                <div className="space-y-1.5 pt-1">
-                  <label className="font-semibold text-white flex items-center justify-between">
-                    <span>Sudo Password Confirmation:</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Passed securely to sudo -S</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={sudoPassword}
-                      onChange={(e) => setSudoPassword(e.target.value)}
-                      placeholder="Enter your Linux sudo password"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#0d1117] border border-[#30363d] focus:border-emerald-500 focus:outline-none text-white text-xs font-mono"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleConfirmInstall();
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs"
-                    >
-                      {showPassword ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Modal Actions */}
@@ -1050,9 +1015,9 @@ export default function Plugins() {
               </button>
               <button
                 onClick={handleConfirmInstall}
-                disabled={installLoading || (installMethod === 'sudo' && !sudoPassword)}
+                disabled={installLoading}
                 className={`px-5 py-2 text-xs font-bold rounded-lg text-white shadow-md transition-all flex items-center gap-2 ${
-                  installLoading || (installMethod === 'sudo' && !sudoPassword)
+                  installLoading
                     ? 'bg-slate-700 cursor-not-allowed opacity-60'
                     : installTarget.isUpdate
                       ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black'

@@ -90,6 +90,7 @@ Recognized manifest fields:
 - `spec.ui` — static UI mount metadata.
 - `spec.widgets` — fallback dashboard widget declarations.
 - `spec.settings` — fallback settings sections.
+- `spec.autostart` — set `false` to keep the plugin from starting automatically on discovery; it can still be started explicitly via the API/GUI. Omit or set `true` to allow autostart (also disabled globally by `M3TAL_PLUGINS_AUTOSTART=0`).
 - `config` — arbitrary configuration passed to `m3tal.init`.
 
 Fields such as `metadata.title`, `metadata.license`, `spec.rpc`, `spec.requirements`, and `spec.poll_interval` may appear in plugin manifests for future use or packaging metadata, but the current Core Go structs do not consume them. Do not rely on them for Core behavior.

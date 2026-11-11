@@ -2,21 +2,17 @@
 
 package system
 
-import (
-	"syscall"
-	"unsafe"
-)
+import "os"
 
-// SetProcessName sets the current process comm name in /proc/self/comm (visible in top, ps, and task managers).
+// SetProcessName sets the current process comm name in /proc/self/comm
+// (visible in top, ps, and task managers). TASK_COMM_LEN is 16 bytes
+// including the NUL terminator, so at most 15 characters are retained.
 func SetProcessName(name string) {
 	if len(name) == 0 {
 		return
 	}
-	bytes := append([]byte(name), 0)
-	if len(bytes) > 16 {
-		bytes = bytes[:16]
-		bytes[15] = 0
+	if len(name) > 15 {
+		name = name[:15]
 	}
-	// PR_SET_NAME = 15
-	_, _, _ = syscall.RawSyscall(syscall.SYS_PRCTL, 15, uintptr(unsafe.Pointer(&bytes[0])), 0)
+	_ = os.WriteFile("/proc/self/comm", []byte(name), 0)
 }

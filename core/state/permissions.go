@@ -40,16 +40,12 @@ const (
 )
 
 // parsePermissions decodes the permissions column. Empty or unparseable
-// values normalize to full access for backward compatibility with keys
-// created before scoped permissions existed.
+// values yield no scopes (fail closed); legacy rows are normalized to
+// full access by Store.migrateLegacyAPIKeyPermissions at open time.
 func parsePermissions(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return []string{ScopeFull}
-	}
 	var perms []string
-	if err := json.Unmarshal([]byte(raw), &perms); err != nil || len(perms) == 0 {
-		return []string{ScopeFull}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &perms); err != nil {
+		return nil
 	}
 	return perms
 }

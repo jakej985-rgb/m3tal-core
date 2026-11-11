@@ -1,19 +1,25 @@
 const DEFAULT_TOKEN = 'change_me_api_token';
 
-export const getToken = () => {
-  if (typeof window !== 'undefined' && window.location) {
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
-    if (urlToken) {
-      setToken(urlToken);
-      return urlToken;
-    }
+// The session credential lives in memory only — it is never written to
+// localStorage/sessionStorage (XSS-readable). The server converts it into an
+// HttpOnly SameSite=Strict session cookie on the first authenticated request;
+// afterwards fetch, WebSocket and iframe requests authenticate via that
+// cookie automatically. A ?token= URL parameter seeds the in-memory token for
+// this page load only (used to bootstrap a session on a new browser).
+let sessionToken = (() => {
+  try {
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken) return urlToken;
+  } catch {
+    // Non-browser/test environments: fall through to the default.
   }
-  return localStorage.getItem('m3tal_token') || DEFAULT_TOKEN;
-};
+  return DEFAULT_TOKEN;
+})();
+
+export const getToken = () => sessionToken;
 
 export const setToken = (token) => {
-  localStorage.setItem('m3tal_token', token);
+  sessionToken = token || '';
 };
 
 export const getApiBase = () => {
@@ -33,8 +39,10 @@ const fetchAPI = async (method, path, body = null) => {
   const url = `${getApiBase()}${path}`;
   const headers = {
     'Content-Type': 'application/json',
-    'X-API-Token': getToken(),
   };
+  if (sessionToken) {
+    headers['X-API-Token'] = sessionToken;
+  }
 
   const options = {
     method,
@@ -54,6 +62,13 @@ const fetchAPI = async (method, path, body = null) => {
   try {
     const res = await fetch(url, options);
     if (res.status === 401) {
+      if (sessionToken === DEFAULT_TOKEN) {
+        // The factory-default token was rejected — the HttpOnly session
+        // cookie may still be valid. Drop the header and retry once so
+        // cookie-based auth can proceed.
+        sessionToken = '';
+        return fetchAPI(method, path, body);
+      }
       return { status: 'error', error: 'Unauthorized API Access' };
     }
     if (!res.ok) {
@@ -84,7 +99,7 @@ export const api = {
   getPluginChangelog: (name) => fetchAPI('GET', `/api/v2/plugins/${name}/changelog`),
   installPlugin: (name, payload = {}) => fetchAPI('POST', `/api/v2/plugins/${name}/install`, payload),
   uninstallPlugin: (name, payload = {}) => fetchAPI('POST', `/api/v2/plugins/${name}/uninstall`, payload),
-  getPluginDownloadUrl: (name) => `${getApiBase()}/api/v2/plugins/${name}/download?token=${getToken()}`,
+  getPluginDownloadUrl: (name) => `${getApiBase()}/api/v2/plugins/${name}/download`,
   startPlugin: (name) => fetchAPI('POST', `/api/v2/plugins/${name}/start`),
   stopPlugin: (name) => fetchAPI('POST', `/api/v2/plugins/${name}/stop`),
   collectPlugin: (name) => fetchAPI('GET', `/api/v2/plugins/${name}/collect`),
@@ -108,8 +123,9 @@ export const api = {
 };
 
 export const subscribeWS = (path, onMessage, onError = null) => {
-  const token = getToken();
-  const url = `${getWsBase()}${path}?token=${token}`;
+  // The session cookie is sent automatically on same-origin WebSocket
+  // handshakes; browsers cannot attach headers to WS connections.
+  const url = `${getWsBase()}${path}`;
   let ws = new WebSocket(url);
   let isClosed = false;
 

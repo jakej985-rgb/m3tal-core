@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -62,6 +63,12 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	system.StartMetricsAggregator()
 	srv := NewServerWithStore(token, db)
 
+	if db != nil {
+		// Plugins receive a dedicated scoped API key instead of the primary
+		// full-access credential.
+		plugins.SetAPIKeyProvider(func() string { return pluginRuntimeAPIKey(db) })
+	}
+
 	GlobalPluginManager.StartAutoDiscovery(context.Background(), 5*time.Second)
 	defer GlobalPluginManager.StopAll()
 
@@ -106,8 +113,8 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 	}
 
 	servePluginUI := func(w http.ResponseWriter, r *http.Request) {
-		name := chi.URLParam(r, "name")
-		if _, err := sanitizePluginName(name); err != nil {
+		name, err := sanitizePluginName(chi.URLParam(r, "name"))
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -163,9 +170,14 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 			}
 		}
 
-		subPath := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
-		if subPath == "" {
-			subPath = "index.html"
+		subPath := "index.html"
+		if raw := strings.TrimPrefix(chi.URLParam(r, "*"), "/"); raw != "" {
+			var err error
+			subPath, err = validatePluginUISubPath(raw)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 		}
 
 		filePath := filepath.Join(uiDir, subPath)
@@ -192,7 +204,12 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		http.ServeFile(w, r, filePath)
 	}
 
-	r.Get("/plugins/{name}", func(w http.ResponseWriter, r *http.Request) {
+	// Plugin UI static assets require the same credential as the API. The
+	// bundled GUI loads them in same-origin iframes; the Path=/ session
+	// cookie (set by Authenticate on the first header-authenticated request)
+	// covers document and subresource loads that cannot carry headers.
+	pluginUI := r.With(srv.pluginUIAuth)
+	pluginUI.Get("/plugins/{name}", func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
 		if _, err := sanitizePluginName(name); err != nil {
 			http.NotFound(w, r)
@@ -200,7 +217,7 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		}
 		http.Redirect(w, r, "/plugins/"+name+"/", http.StatusMovedPermanently)
 	})
-	r.Get("/plugins/{name}/*", servePluginUI)
+	pluginUI.Get("/plugins/{name}/*", servePluginUI)
 
 	// Public version metadata
 	r.Get("/version", srv.GetVersion)
@@ -259,6 +276,17 @@ func StartServerWithStore(port string, token string, db *state.Store) error {
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+
+	certFile := os.Getenv("M3TAL_TLS_CERT")
+	keyFile := os.Getenv("M3TAL_TLS_KEY")
+	if (certFile == "") != (keyFile == "") {
+		return fmt.Errorf("M3TAL_TLS_CERT and M3TAL_TLS_KEY must be set together")
+	}
+	if certFile != "" {
+		log.Printf("🔒 TLS enabled for API listener (cert: %s)", certFile)
+		return httpSrv.ListenAndServeTLS(certFile, keyFile)
+	}
+	log.Printf("⚠️  API listener on :%s is plaintext HTTP — authentication material traverses the network unencrypted. Set M3TAL_TLS_CERT/M3TAL_TLS_KEY or front the API with a TLS-terminating proxy. See docs/SECURITY.md.", port)
 	return httpSrv.ListenAndServe()
 }
 

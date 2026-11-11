@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jakej985-rgb/m3tal-core/pkg/plugins"
@@ -451,13 +453,7 @@ func findPluginDeb(name string) (string, string) {
 	if _, err := sanitizePluginName(name); err != nil {
 		return "", ""
 	}
-	home, _ := os.UserHomeDir()
-	candidateDirs := []string{
-		"/home/m3tal/apps/m3tal-plugins",
-		filepath.Join(home, "apps", "m3tal-plugins"),
-		"/home/m3tal/apps/m3tal-plugins/dist/packages",
-		"/var/lib/m3tal/packages",
-	}
+	candidateDirs := pluginDebCandidateDirs()
 
 	clean := strings.TrimPrefix(name, "m3tal-")
 	nameVariations := []string{
@@ -877,7 +873,51 @@ func (h *PluginHandlers) DownloadPluginDeb(w http.ResponseWriter, r *http.Reques
 	http.ServeFile(w, r, debPath)
 }
 
-// InstallPlugin installs a plugin package via sudo confirmation or user profile extraction.
+// pluginStageDir is the private staging directory for package payloads
+// before they reach dpkg/dpkg-deb. Exec call sites use the literal paths
+// below so package-manager argv contains no request-derived values.
+const pluginStageDir = "/tmp/m3tal-plugin-install"
+
+// ensurePluginStageDir creates (or verifies) a private staging directory owned
+// by the service user with no group/other access. A pre-existing directory
+// with wrong ownership or permissions is rejected rather than reused, which
+// prevents symlink/planting attacks in the shared temp dir.
+func ensurePluginStageDir() error {
+	if err := os.MkdirAll(pluginStageDir, 0700); err != nil {
+		return err
+	}
+	info, err := os.Stat(pluginStageDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+		return fmt.Errorf("plugin staging dir %s has unsafe permissions", pluginStageDir)
+	}
+	if st, ok := info.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Geteuid() {
+		return fmt.Errorf("plugin staging dir %s is not owned by the service user", pluginStageDir)
+	}
+	return nil
+}
+
+// stagePluginDeb copies a validated .deb into the staging directory under a
+// fixed name so downstream package-manager invocations use constant argv.
+func stagePluginDeb(debPath string) error {
+	src, err := os.Open(debPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(pluginStageDir+"/install.deb", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+// InstallPlugin installs a plugin package via system dpkg (root service) or
+// user profile extraction.
 // POST /api/v2/plugins/{name}/install
 func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 	name, ok := pluginNameParam(w, r)
@@ -886,16 +926,18 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Method   string `json:"method"`   // "sudo" (default) or "user"
-		Password string `json:"password"` // sudo password
-		Mode     string `json:"mode"`     // optional mode e.g. "cluster", "node", "mesh"
-		Package  string `json:"package"`  // optional explicit package name
+		Method  string `json:"method"`  // "system" (default, root service) or "user"; "sudo" accepted as alias
+		Mode    string `json:"mode"`    // optional mode e.g. "cluster", "node", "mesh"
+		Package string `json:"package"` // optional explicit package name
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 	if req.Method == "" {
-		req.Method = "sudo"
+		req.Method = "system"
+	}
+	if req.Method == "sudo" {
+		req.Method = "system"
 	}
 	if req.Package != "" {
 		if _, err := sanitizePluginName(req.Package); err != nil {
@@ -936,6 +978,23 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusNotFound, "DEB_NOT_FOUND", "Debian package not found for "+name, nil)
 		return
 	}
+	// Re-verify containment before the path reaches the filesystem or
+	// package manager: the glob result must be a regular .deb inside a
+	// trusted package directory.
+	debPath, err := validatePluginDebPath(debPath)
+	if err != nil {
+		sendError(w, http.StatusForbidden, "UNTRUSTED_PACKAGE", err.Error(), nil)
+		return
+	}
+	if err := ensurePluginStageDir(); err != nil {
+		sendError(w, http.StatusInternalServerError, "STAGING_FAILED", err.Error(), nil)
+		return
+	}
+	defer os.RemoveAll(pluginStageDir)
+	if err := stagePluginDeb(debPath); err != nil {
+		sendError(w, http.StatusInternalServerError, "STAGING_FAILED", err.Error(), nil)
+		return
+	}
 
 	// Gracefully stop plugin subprocess if currently running before updating binary
 	var wasRunning bool
@@ -947,14 +1006,18 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.Method == "sudo" {
-		// Run sudo -S dpkg -i <debPath>
-		cmd := exec.Command("sudo", "-S", "-p", "", "dpkg", "-i", debPath)
-		var stdinBuf bytes.Buffer
-		if req.Password != "" {
-			stdinBuf.WriteString(req.Password + "\n")
+	if req.Method == "system" {
+		// System installs require the API service itself to run as root
+		// (the systemd unit does). No sudo/ is accepted over the API.
+		if os.Geteuid() != 0 {
+			sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
+				"system installs require the API service to run as root; use method \"user\" for user-space installs", nil)
+			return
 		}
-		cmd.Stdin = &stdinBuf
+		// dpkg/apt-get argv uses only literal paths: the validated payload
+		// was staged under a fixed private name, so no request-derived value
+		// reaches the privileged command line.
+		cmd := exec.Command("dpkg", "-i", "/tmp/m3tal-plugin-install/install.deb")
 
 		var stdoutBuf, stderrBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf
@@ -963,36 +1026,25 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		err := cmd.Run()
 		if err != nil {
 			errStr := stderrBuf.String()
-			if strings.Contains(strings.ToLower(errStr), "incorrect password") ||
-				strings.Contains(strings.ToLower(errStr), "a password is required") ||
-				strings.Contains(strings.ToLower(errStr), "sorry, try again") {
-				sendError(w, http.StatusUnauthorized, "AUTH_FAILED", "Sudo authentication failed. Incorrect password.", nil)
-				return
-			}
 
 			// If dpkg encountered dependency problems, automatically resolve and configure via apt-get install -f -y
 			if strings.Contains(errStr, "dependency problems") || strings.Contains(errStr, "depends on") || strings.Contains(errStr, "unmet dependencies") {
-				fixCmd := exec.Command("sudo", "-S", "-p", "", "apt-get", "install", "-f", "-y")
-				var fixStdin bytes.Buffer
-				if req.Password != "" {
-					fixStdin.WriteString(req.Password + "\n")
-				}
-				fixCmd.Stdin = &fixStdin
+				fixCmd := exec.Command("apt-get", "install", "-f", "-y")
 				var fixOut, fixErr bytes.Buffer
 				fixCmd.Stdout = &fixOut
 				fixCmd.Stderr = &fixErr
 
 				if fixCode := fixCmd.Run(); fixCode == nil {
 					// Dependencies cleanly auto-resolved from APT keyring!
-					goto SudoInstalled
+					goto SystemInstalled
 				}
 			}
 
-			sendError(w, http.StatusInternalServerError, "INSTALL_FAILED", fmt.Sprintf("sudo dpkg failed: %v: %s", err, errStr), nil)
+			sendError(w, http.StatusInternalServerError, "INSTALL_FAILED", fmt.Sprintf("dpkg failed: %v: %s", err, errStr), nil)
 			return
 		}
 
-	SudoInstalled:
+	SystemInstalled:
 	} else {
 		// User space installation to ~/.config/m3tal/plugins/<name>
 		home, err := os.UserHomeDir()
@@ -1005,21 +1057,21 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		_ = os.RemoveAll(targetPluginDir)
 		_ = os.MkdirAll(filepath.Dir(targetPluginDir), 0755)
 
-		// Extract using dpkg-deb -x
-		tempExtract, err := os.MkdirTemp("", "m3tal-extract-*")
-		if err != nil {
+		// Extract the staged payload with constant argv.
+		extractDir := pluginStageDir + "/extract"
+		_ = os.RemoveAll(extractDir)
+		if err := os.MkdirAll(extractDir, 0700); err != nil {
 			sendError(w, http.StatusInternalServerError, "TEMP_FAILED", err.Error(), nil)
 			return
 		}
-		defer os.RemoveAll(tempExtract)
 
-		extractCmd := exec.Command("dpkg-deb", "-x", debPath, tempExtract)
+		extractCmd := exec.Command("dpkg-deb", "-x", "/tmp/m3tal-plugin-install/install.deb", "/tmp/m3tal-plugin-install/extract")
 		if out, err := extractCmd.CombinedOutput(); err != nil {
 			sendError(w, http.StatusInternalServerError, "EXTRACT_FAILED", string(out), nil)
 			return
 		}
 
-		sourceDir := filepath.Join(tempExtract, "usr", "lib", "m3tal", "plugins", name)
+		sourceDir := filepath.Join(extractDir, "usr", "lib", "m3tal", "plugins", name)
 		if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
 			sendError(w, http.StatusInternalServerError, "PAYLOAD_NOT_FOUND", "Extracted package does not contain plugin directory", nil)
 			return
@@ -1069,8 +1121,7 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Method   string `json:"method"`
-		Password string `json:"password"`
+		Method string `json:"method"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -1083,12 +1134,16 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	userPluginDir := filepath.Join(home, ".config", "m3tal", "plugins", name)
 	_ = os.RemoveAll(userPluginDir)
 
-	if req.Method == "sudo" || req.Password != "" {
-		// Run sudo dpkg -r
-		cmd := exec.Command("sudo", "-S", "-p", "", "dpkg", "-r", fmt.Sprintf("m3tal-plugin-%s", name))
-		var stdinBuf bytes.Buffer
-		stdinBuf.WriteString(req.Password + "\n")
-		cmd.Stdin = &stdinBuf
+	// System package removal runs dpkg directly — the service executes as
+	// root, so no sudo/ password channel exists. "sudo" is accepted as an
+	// alias for "system" for API compatibility.
+	if req.Method == "system" || req.Method == "sudo" || req.Method == "" {
+		if os.Geteuid() != 0 {
+			sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
+				"system uninstalls require the API service to run as root", nil)
+			return
+		}
+		cmd := exec.Command("dpkg", "-r", "m3tal-plugin-"+name)
 		_ = cmd.Run()
 	}
 

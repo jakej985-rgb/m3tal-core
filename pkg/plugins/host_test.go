@@ -437,3 +437,43 @@ func TestResolveCoreAPIKey(t *testing.T) {
 		t.Errorf("expected file-token-12345, got %s", k)
 	}
 }
+
+func TestValidateManifestName(t *testing.T) {
+	valid := []string{"docker", "mesh-node", "ai.bridge_2", "m3tal-plugin-x"}
+	for _, n := range valid {
+		if err := validateManifestName(n); err != nil {
+			t.Errorf("validateManifestName(%q) = %v; want nil", n, err)
+		}
+	}
+	invalid := []string{"", ".", "..", "a/b", `a\b`, "../evil", "a..b", "a b", "a;b", string([]byte{0}) + "x", "a\x7fb"}
+	for _, n := range invalid {
+		if err := validateManifestName(n); err == nil {
+			t.Errorf("validateManifestName(%q) = nil; want error", n)
+		}
+	}
+}
+
+func TestDiscoverSkipsUnsafeManifestName(t *testing.T) {
+	tempDir := t.TempDir()
+	searchDir := filepath.Join(tempDir, "plugins")
+
+	for _, name := range []string{"evil/../escape", "bad name", ".."} {
+		dir := filepath.Join(searchDir, "p"+name[:1])
+		_ = os.MkdirAll(dir, 0755)
+		manifest := "apiVersion: m3tal.io/v1alpha1\nkind: Plugin\nmetadata:\n  name: " + name + "\nspec:\n  command: ./run.sh\n"
+		if err := os.WriteFile(filepath.Join(dir, "plugin.yaml"), []byte(manifest), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := NewManager("test", searchDir)
+	discovered, err := m.Discover()
+	if err != nil {
+		t.Fatalf("Discover failed: %v", err)
+	}
+	for _, man := range discovered {
+		if err := validateManifestName(man.Metadata.Name); err != nil {
+			t.Errorf("discovered unsafe manifest name %q", man.Metadata.Name)
+		}
+	}
+}

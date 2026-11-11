@@ -104,7 +104,7 @@ make build
 
 ## 7. API Access
 
-All API routes are under `/api/v2` and require authentication via the `X-API-Token` or `Authorization: Bearer` header (or `?token=` query param for WebSocket/plugin UI loading). Create keys in **Settings → API Keys**.
+All API routes are under `/api/v2` and require authentication via the `X-API-Token` or `Authorization: Bearer` header. Browsers authenticate via an HttpOnly `m3tal_session` cookie that the server sets automatically after the first header-authenticated request (used for WebSocket/plugin UI loading). Create keys in **Settings → API Keys**.
 
 Quick smoke test:
 

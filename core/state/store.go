@@ -93,6 +93,9 @@ func (s *Store) Migrate() error {
 	if err := s.migrateAPIKeyColumns(); err != nil {
 		return err
 	}
+	if err := s.migrateLegacyAPIKeyPermissions(); err != nil {
+		return err
+	}
 
 	var keyCount int
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM api_keys").Scan(&keyCount); err == nil && keyCount == 0 {
@@ -161,6 +164,58 @@ func (s *Store) migrateAPIKeyColumns() error {
 		}
 	}
 	return nil
+}
+
+// migrateLegacyAPIKeyPermissions rewrites empty, missing, or unparseable
+// permissions values to the legacy full-access default (["*"]). This runs
+// once so parsePermissions can afterwards fail closed on corrupt data
+// instead of silently granting wildcard access.
+func (s *Store) migrateLegacyAPIKeyPermissions() error {
+	rows, err := s.db.Query(`SELECT id, permissions FROM api_keys`)
+	if err != nil {
+		return fmt.Errorf("cannot inspect api_keys permissions: %w", err)
+	}
+	type fix struct {
+		id  int64
+		raw string
+	}
+	var fixes []fix
+	for rows.Next() {
+		var f fix
+		var raw sql.NullString
+		if err := rows.Scan(&f.id, &raw); err != nil {
+			rows.Close()
+			return err
+		}
+		f.raw = raw.String
+		if !storedPermissionsValid(f.raw) {
+			fixes = append(fixes, f)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, f := range fixes {
+		if _, err := s.db.Exec(`UPDATE api_keys SET permissions = '["*"]' WHERE id = ?`, f.id); err != nil {
+			return fmt.Errorf("api_keys permissions migration failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// storedPermissionsValid reports whether raw holds a non-empty JSON array of
+// permission strings, matching what NormalizePermissions produces.
+func storedPermissionsValid(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+	var perms []string
+	if err := json.Unmarshal([]byte(raw), &perms); err != nil || len(perms) == 0 {
+		return false
+	}
+	return true
 }
 
 // ListAPIKeys returns all stored API keys.

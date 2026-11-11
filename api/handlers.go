@@ -32,16 +32,71 @@ func NewServerWithStore(token string, store *state.Store) *Server {
 	return &Server{APIToken: token, Store: store}
 }
 
-// ExtractToken extracts authentication token from header, query, or Bearer auth.
+// sessionCookieName carries the API credential for browser clients that
+// cannot attach headers to every request (iframe subresources, WebSocket
+// handshakes, plain navigation such as plugin .deb downloads). It is
+// HttpOnly + SameSite=Strict; Secure is set when TLS is configured.
+const sessionCookieName = "m3tal_session"
+
+// cookieSafeToken reports whether token can be stored in a cookie value.
+func cookieSafeToken(token string) bool {
+	if token == "" || len(token) > 256 {
+		return false
+	}
+	for _, c := range token {
+		if c < 0x21 || c > 0x7e || c == '"' || c == ',' || c == ';' || c == '\\' {
+			return false
+		}
+	}
+	return true
+}
+
+func sessionCookieSecure() bool {
+	return os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != ""
+}
+
+// setSessionCookie refreshes the browser session cookie after a successful
+// header/Bearer authentication.
+func setSessionCookie(w http.ResponseWriter, token string) {
+	if !cookieSafeToken(token) {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   sessionCookieSecure(),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   12 * 3600,
+	})
+}
+
+// requestUsedSessionCookie reports whether the request authenticated via the
+// session cookie rather than an explicit header/Bearer credential.
+func requestUsedSessionCookie(r *http.Request) bool {
+	if strings.TrimSpace(r.Header.Get("X-API-Token")) != "" ||
+		strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ") {
+		return false
+	}
+	c, err := r.Cookie(sessionCookieName)
+	return err == nil && strings.TrimSpace(c.Value) != ""
+}
+
+// ExtractToken extracts authentication token from header, Bearer auth, or the
+// session cookie. URL query parameters are intentionally not accepted:
+// credentials in URLs leak via logs, history, and Referer headers.
 func (s *Server) ExtractToken(r *http.Request) string {
 	token := strings.TrimSpace(r.Header.Get("X-API-Token"))
-	if token == "" {
-		token = strings.TrimSpace(r.URL.Query().Get("token"))
-	}
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			token = strings.TrimSpace(authHeader[7:])
+		}
+	}
+	if token == "" {
+		if c, err := r.Cookie(sessionCookieName); err == nil {
+			token = strings.TrimSpace(c.Value)
 		}
 	}
 	return token
@@ -74,6 +129,9 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 		if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
+			if !requestUsedSessionCookie(r) {
+				setSessionCookie(w, token)
+			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, (*state.APIKeyRecord)(nil))))
 			return
 		}
@@ -83,11 +141,53 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 				// re-running the lookup inside ValidateAPIKey (saves a SELECT
 				// on every authenticated request).
 				s.Store.RecordAPIKeyUsage(rec)
+				if !requestUsedSessionCookie(r) {
+					setSessionCookie(w, token)
+				}
 				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
 				return
 			}
 		}
 		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+	})
+}
+
+// pluginUICookieName carries the API credential for plugin UI subresource
+// requests (CSS/JS inside the iframe) that cannot attach headers. It is scoped
+// to Path=/plugins/ and HttpOnly.
+const pluginUICookieName = "m3tal_ui_token"
+
+// pluginUIAuth guards the plugin UI static routes. It accepts the same
+// credentials as the API (header, Bearer, or the Path=/ session cookie sent
+// automatically on same-origin iframe/subresource requests) plus the legacy
+// Path=/plugins/ scoped cookie.
+func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := s.ExtractToken(r)
+		viaCookie := requestUsedSessionCookie(r)
+		if token == "" {
+			if c, err := r.Cookie(pluginUICookieName); err == nil {
+				token = c.Value
+				viaCookie = true
+			}
+		}
+		if token == "" || !s.ValidateToken(token) {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
+		if !viaCookie {
+			secure := os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != ""
+			http.SetCookie(w, &http.Cookie{
+				Name:     pluginUICookieName,
+				Value:    token,
+				Path:     "/plugins/",
+				HttpOnly: true,
+				Secure:   secure,
+				SameSite: http.SameSiteStrictMode,
+				MaxAge:   12 * 3600,
+			})
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

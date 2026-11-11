@@ -22,9 +22,9 @@ Core accepts tokens through:
 
 - `X-API-Token`
 - `Authorization: Bearer`
-- `?token=`
+- `m3tal_session` cookie (HttpOnly, SameSite=Strict; `Secure` when TLS is configured)
 
-Prefer headers. Query tokens can appear in browser history, proxy logs, and referrer headers.
+`?token=` query parameters are **not** accepted — tokens in URLs leak via browser history, proxy logs, and referrer headers. The bundled GUI keeps its token in memory only (never web storage) and relies on the session cookie for subsequent requests; seed a new browser session once via `?token=` on the GUI page URL.
 
 The static `API_TOKEN` has full access and bypasses permission scopes. Server-generated API keys can be restricted with scopes:
 
@@ -52,20 +52,24 @@ Plugins are subprocesses running with the permissions of `m3tal-api`. In the pac
 
 Only install plugins from trusted sources. Review plugin manifests, source code, Debian package contents, and required host permissions before enabling them.
 
-Core injects `M3TAL_API_KEY`/`M3TAL_API_TOKEN` into plugin environments. Plugins must not log or expose these credentials.
+Core injects `M3TAL_API_KEY`/`M3TAL_API_TOKEN` into plugin environments. When the SQLite state store is active, plugins receive a dedicated scoped credential (`m3tal-plugin-runtime`: `system:read`, `plugins:read`, `plugins:write`) instead of the primary full-access key; `M3TAL_API_KEY`/`M3TAL_API_TOKEN`/`API_TOKEN` environment overrides and the `api_keys.json` fallbacks still take precedence for operators who need them. Plugins must not log or expose these credentials. Note that plugins run with the service user's privileges and can read the same credential files, so the scoped key limits accidental exposure and remote blast radius — it is not a sandbox.
 
 ## Plugin installation risk
 
-`POST /api/v2/plugins/{name}/install` supports a sudo mode that accepts a sudo password in the request body. This is convenient but sensitive:
+`POST /api/v2/plugins/{name}/install` with `method: "system"` runs `dpkg -i` directly because the API service executes as root — no sudo password is accepted over the API. The resolved `.deb` must live inside a trusted package directory, is re-validated and staged under a private directory, and package-manager argv contains only literal paths. Consider:
 
-- use it only over trusted networks;
+- keep the API on localhost or behind a trusted reverse proxy;
 - prefer `method: "user"` for testing;
 - prefer direct `apt install` for routine administration;
 - avoid exposing the API beyond localhost unless authentication and transport are strong.
 
 ## WebSocket origin behavior
 
-The WebSocket handler currently allows cross-origin connections. If you expose Core remotely, enforce origin restrictions at your reverse proxy or VPN boundary.
+The WebSocket handler accepts same-origin requests and origins listed in `M3TAL_WS_ALLOWED_ORIGINS`; other cross-origin connections are rejected. Non-browser clients without an `Origin` header are still allowed — if you expose Core remotely, enforce origin restrictions at your reverse proxy or VPN boundary as well.
+
+## Transport security
+
+The API listener serves plaintext HTTP unless `M3TAL_TLS_CERT` and `M3TAL_TLS_KEY` are both set (or a TLS-terminating reverse proxy fronts it). Plain HTTP exposes `X-API-Token` headers and session cookies to network observers — do not expose the port remotely without TLS.
 
 ## Filesystem permissions
 
@@ -77,7 +81,7 @@ Review permissions for:
 - plugin directories
 - `/usr/lib/m3tal/plugins`
 
-Plugin UI assets are served without API authentication at `/plugins/{name}/`; do not place secrets in plugin UI bundles.
+Plugin UI assets at `/plugins/{name}/` require API authentication (header, Bearer, or the `m3tal_session`/`m3tal_ui_token` cookies set after the first authenticated request); do not place secrets in plugin UI bundles.
 
 ## Reporting issues
 

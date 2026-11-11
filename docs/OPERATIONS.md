@@ -36,11 +36,13 @@ The service loads `/etc/m3tal/.env` when present and listens on `API_PORT` (defa
 
 Core scans these directories for `plugin.yaml` or `plugin.yml`:
 
-1. `./plugins`
+1. `M3TAL_PLUGINS_DIR` (optional operator override, scanned first)
 2. `~/.config/m3tal/plugins`
 3. `/var/lib/m3tal/plugins`
 4. `/usr/lib/m3tal/plugins`
 5. `/etc/m3tal/plugins`
+
+The process working directory is never searched. Set `M3TAL_PLUGINS_AUTOSTART=0` to require explicit plugin starts, or `spec.autostart: false` per plugin.
 
 Discovery runs automatically and also runs on `SIGHUP`. Debian plugin packages use a dpkg trigger to request a SIGHUP after installation.
 

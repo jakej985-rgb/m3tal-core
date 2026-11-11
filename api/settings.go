@@ -81,6 +81,9 @@ func getPluginConfigFile(pluginName string) string {
 }
 
 func loadPluginConfig(pluginName string) map[string]any {
+	if _, err := sanitizePluginName(pluginName); err != nil {
+		return make(map[string]any)
+	}
 	file := getPluginConfigFile(pluginName)
 	data, err := os.ReadFile(file)
 	if err != nil {
@@ -94,6 +97,9 @@ func loadPluginConfig(pluginName string) map[string]any {
 }
 
 func savePluginConfig(pluginName string, config map[string]any) error {
+	if _, err := sanitizePluginName(pluginName); err != nil {
+		return err
+	}
 	dir := filepath.Join(getSettingsDir(), "plugins", pluginName)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
