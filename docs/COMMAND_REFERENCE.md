@@ -17,9 +17,9 @@ Every `/api/v2/*` route requires a token. Core accepts the token in this order:
 
 1. `X-API-Token: <token>` header
 2. `Authorization: Bearer <token>` header
-3. `?token=<token>` query parameter
+3. `m3tal_session` cookie (HttpOnly, SameSite=Strict) — set automatically by the server after the first header-authenticated request; covers browser contexts that cannot attach headers (WebSocket handshakes, plugin UI iframes, `.deb` downloads)
 
-The query parameter is primarily for the embedded GUI and browser-based plugin UI loading. Prefer headers for scripts and integrations because URLs can be logged by proxies and browsers.
+URL query parameters are not accepted: tokens in URLs leak via logs, browser history, and Referer headers. Prefer headers for scripts and integrations.
 
 Accepted credentials are:
 
@@ -61,8 +61,8 @@ Errors use the same envelope with `status: "error"` and an `error` object:
 |---|---|---:|---|
 | GET | `/` | No | Redirects to `/gui/`. |
 | GET/HEAD | `/gui/*` | No | Embedded Web GUI assets. |
-| GET | `/plugins/{name}` | No | Redirects to `/plugins/{name}/`. |
-| GET | `/plugins/{name}/*` | No | Static plugin UI files. |
+| GET | `/plugins/{name}` | Yes (`plugins:read`) | Redirects to `/plugins/{name}/`. |
+| GET | `/plugins/{name}/*` | Yes (`plugins:read`) | Static plugin UI files (header, Bearer, or `m3tal_session`/`m3tal_ui_token` cookie). |
 | GET | `/version` | No | Core version metadata. |
 | GET | `/api/v2/version` | No | Core version metadata. |
 
@@ -145,18 +145,17 @@ Plugin routes use the manifest `metadata.name` or a supported alias such as the 
 
 ```json
 {
-  "method": "sudo",
-  "password": "optional sudo password",
+  "method": "system",
   "mode": "optional package mode",
   "package": "optional explicit package name"
 }
 ```
 
-- `method: "sudo"` runs `sudo -S dpkg -i <deb>` and can resolve dependencies with `apt-get install -f -y`.
-- `method: "user"` extracts the package into `~/.config/m3tal/plugins/<name>` without system installation.
+- `method: "system"` (default; `"sudo"` accepted as an alias) runs `dpkg -i` directly — the API service executes as root, so no sudo password is accepted or needed. Requires the service to run as root; dependencies are auto-resolved with `apt-get install -f -y`.
+- `method: "user"` extracts the staged package into `~/.config/m3tal/plugins/<name>` without system installation.
 - `mode` and `package` help select alternate artifacts such as mesh node versus mesh cluster packages.
 
-Security note: the sudo method accepts a password over the authenticated API. Use it only on trusted networks or behind a trusted reverse proxy, and prefer `user` mode or direct `apt install` when possible.
+Security note: package payloads are validated and staged under a private directory before `dpkg`/`apt-get` run with constant argv — no request-derived value reaches the privileged command line, and no password traverses the API.
 
 ### Plugin action request
 

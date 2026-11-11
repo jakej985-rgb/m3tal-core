@@ -16,6 +16,18 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 - `KillProcess` refuses PID 1, the API's own PID, and protected system processes.
 - HTTP server now sets `ReadHeaderTimeout`, `ReadTimeout`, and `IdleTimeout`; WebSocket `CheckOrigin` validates same-origin and `M3TAL_WS_ALLOWED_ORIGINS` instead of accepting any origin.
 - API token comparisons use constant-time comparison.
+- API listener supports direct TLS via `M3TAL_TLS_CERT`/`M3TAL_TLS_KEY` and warns on plaintext startup.
+- Plugin UI static routes (`/plugins/{name}/...`) now require API authentication; an `m3tal_ui_token` cookie scoped to `/plugins/` covers iframe subresources.
+- Plugin subprocesses receive a dedicated scoped API key (`m3tal-plugin-runtime`) instead of the primary full-access key when the state store is active.
+- Request logger sanitizes control characters in URL paths to prevent log forging.
+- GitHub Actions pinned to commit SHAs; `push-m3tal-api` authenticates via ephemeral `http.extraheader` (token no longer embedded in the remote URL) and uses `--force-with-lease` against the observed remote tip.
+- API token is no longer accepted via `?token=` query parameter; browsers authenticate through an HttpOnly `m3tal_session` cookie (SameSite=Strict, `Secure` under TLS) that the server sets after the first header-authenticated request. The GUI keeps its token in memory only — `localStorage` is no longer used.
+- Plugin manifest `metadata.name`, `spec.process_name`, and relative `spec.command` paths are validated at discovery/start; unsafe names are rejected instead of flowing into filesystem paths, symlink targets, and URLs.
+- Legacy API keys with empty/unparseable permission columns are migrated to full access once at startup; `parsePermissions` now fails closed on corrupt data.
+- Process naming uses `/proc/self/comm` instead of `unsafe`+`prctl`.
+- Plugin install/uninstall no longer accepts sudo passwords over the API: `method: "system"` (alias `"sudo"`) runs `dpkg`/`apt-get` directly since the service executes as root; payloads are re-validated and staged under a private directory so package-manager argv contains only literal paths. `method: "user"` is unchanged.
+- Plugin manifests may set `spec.autostart: false` to opt out of automatic startup (global `M3TAL_PLUGINS_AUTOSTART=0` also disables it).
+- Plugin manifest `spec.command` and UI wildcard paths are validated before filesystem/exec use.
 
 ## [0.25.1] - 2026-11-10
 

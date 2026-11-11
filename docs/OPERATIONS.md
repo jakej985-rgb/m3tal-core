@@ -36,11 +36,13 @@ The service loads `/etc/m3tal/.env` when present and listens on `API_PORT` (defa
 
 Core scans these directories for `plugin.yaml` or `plugin.yml`:
 
-1. `./plugins`
+1. `M3TAL_PLUGINS_DIR` (optional operator override, scanned first)
 2. `~/.config/m3tal/plugins`
 3. `/var/lib/m3tal/plugins`
 4. `/usr/lib/m3tal/plugins`
 5. `/etc/m3tal/plugins`
+
+The process working directory is never searched. Set `M3TAL_PLUGINS_AUTOSTART=0` to require explicit plugin starts, or `spec.autostart: false` per plugin.
 
 Discovery runs automatically and also runs on `SIGHUP`. Debian plugin packages use a dpkg trigger to request a SIGHUP after installation.
 
@@ -87,10 +89,10 @@ sudo apt install m3tal-plugin-<name>
 
 Core can also install a discovered `.deb` through `POST /api/v2/plugins/{name}/install`:
 
-- `method: "sudo"` runs `sudo -S dpkg -i` and resolves dependencies with `apt-get install -f -y` when needed.
+- `method: "system"` (default; `"sudo"` accepted as an alias) runs `dpkg -i` directly and resolves dependencies with `apt-get install -f -y` when needed. Requires the API service to run as root; otherwise it returns `ROOT_REQUIRED`.
 - `method: "user"` extracts the package into `~/.config/m3tal/plugins/<name>` for per-user testing.
 
-The sudo method accepts an optional password in the request body. Treat this as sensitive and prefer direct `apt install` on untrusted networks.
+No password is accepted over the API. Packages must live in a trusted package directory and are staged privately before `dpkg` runs.
 
 ## State database and backups
 

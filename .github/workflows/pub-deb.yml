@@ -136,7 +136,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: Publish to Central APT Repository (m3tal-apt-key)
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3
         with:
           token: ${{ secrets.GH_PAT }}
           repository: jakej985-rgb/m3tal-apt-key

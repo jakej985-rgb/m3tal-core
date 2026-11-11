@@ -50,7 +50,7 @@ Common log signals:
 
 ## 🧩 Plugin Diagnostics
 
-* **Plugin not appearing**: confirm the plugin directory is under a search path (`./plugins`, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, or `/etc/m3tal/plugins`) and contains a valid `plugin.yaml` or `plugin.yml`. Core rediscovers every 5 seconds and also refreshes on `SIGHUP`; restart `m3tal-api` if discovery still fails.
+* **Plugin not appearing**: confirm the plugin directory is under a search path (`M3TAL_PLUGINS_DIR` if set, `~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, or `/etc/m3tal/plugins` — the process working directory is never searched) and contains a valid `plugin.yaml` or `plugin.yml` whose `metadata.name`/`spec.process_name`/`spec.command` pass validation. Core rediscovers every 5 seconds and also refreshes on `SIGHUP`; restart `m3tal-api` if discovery still fails.
 * **Plugin UI 404 at `/plugins/<name>/`**: the plugin must ship `ui/dist` (or `ui/index.html`) inside its directory.
 * **Plugin auth failures**: verify the API key file exists at `~/.config/m3tal/api_keys.json` (or `/etc/m3tal/api_keys.json` as a fallback) and that the plugin receives `M3TAL_API_KEY` or `M3TAL_API_TOKEN`.
 

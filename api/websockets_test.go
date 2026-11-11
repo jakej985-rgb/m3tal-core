@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -44,11 +45,12 @@ func TestGetWSEvents_Upgrade(t *testing.T) {
 	server := httptest.NewServer(r)
 	defer server.Close()
 
-	// Convert http URL to ws URL
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v2/ws/events?token=test-token"
+	// Convert http URL to ws URL; browsers cannot set WS headers, so auth
+	// relies on the session cookie — non-browser clients use X-API-Token.
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v2/ws/events"
 
 	dialer := websocket.Dialer{}
-	conn, resp, err := dialer.Dial(wsURL, nil)
+	conn, resp, err := dialer.Dial(wsURL, http.Header{"X-API-Token": []string{"test-token"}})
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v (response status: %v)", err, resp.Status)
 	}

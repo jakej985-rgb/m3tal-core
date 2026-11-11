@@ -29,7 +29,7 @@ API_PORT=5050 ./m3tal-api
 
 ### `API_TOKEN`
 
-Static bootstrap credential accepted by `X-API-Token`, `Authorization: Bearer`, or `?token=`. If empty, authentication relies on server-generated API keys.
+Static bootstrap credential accepted by `X-API-Token`, `Authorization: Bearer`, or the `m3tal_session` cookie. If empty, authentication relies on server-generated API keys.
 
 The primary key material used for plugin injection is resolved in this order:
 
@@ -47,9 +47,17 @@ Overrides the SQLite path used for persisted API keys. If unset, Core uses `/var
 M3TAL_STATE_DB=/var/lib/m3tal/state.db ./m3tal-api
 ```
 
+### `M3TAL_TLS_CERT` / `M3TAL_TLS_KEY`
+
+Optional paths to a TLS certificate and private key. When both are set, the API listener serves HTTPS directly via `ListenAndServeTLS` (and the session cookie gains the `Secure` flag). When unset, Core serves plaintext HTTP and logs a startup warning — tokens and session cookies then traverse the network unencrypted, so front the API with a TLS-terminating proxy or set these variables before remote exposure.
+
 ### `M3TAL_PLUGINS_DIR`
 
 Optional additional directory scanned for plugins before the standard locations (`~/.config/m3tal/plugins`, `/var/lib/m3tal/plugins`, `/usr/lib/m3tal/plugins`, `/etc/m3tal/plugins`). The process working directory is never searched.
+
+### `M3TAL_PLUGINS_AUTOSTART`
+
+Optional. Set to `0`, `false`, `no`, or `off` to disable automatic startup of discovered plugins — plugins remain listed and can be started explicitly via the API/GUI. Defaults to enabled.
 
 ### `M3TAL_WS_ALLOWED_ORIGINS`
 
@@ -64,7 +72,7 @@ Core launches plugin subprocesses with a filtered environment: only allowlisted 
 | `M3TAL_CORE_VERSION` | Core version string. |
 | `M3TAL_PLUGIN_DIR` | Absolute plugin directory containing `plugin.yaml`. |
 | `M3TAL_PROCESS_NAME` | Canonical process name such as `m3tal-docker`. |
-| `M3TAL_API_KEY` | API credential injected for Core API access. |
+| `M3TAL_API_KEY` | Scoped API credential injected for Core API access (dedicated `m3tal-plugin-runtime` key: `system:read`, `plugins:read`, `plugins:write`; env overrides and file fallbacks take precedence when no store is active). |
 | `M3TAL_API_TOKEN` | Compatibility alias for the same credential. |
 
 ## Other environment notes

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/jakej985-rgb/m3tal-core/pkg/models"
@@ -29,6 +30,17 @@ func (w *responseWriterWrapper) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// sanitizeLogField strips control characters so request-derived values
+// (URL paths contain percent-decoded bytes) cannot forge log lines.
+func sanitizeLogField(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return '?'
+		}
+		return r
+	}, s)
+}
+
 // RequestLogger is a middleware that logs incoming requests and processing duration.
 // The GUI polls several endpoints every few seconds, so fast successful requests
 // would emit several log lines per second of pure noise. Only errors (>=400) and
@@ -47,7 +59,7 @@ func RequestLogger(next http.Handler) http.Handler {
 			if status < http.StatusBadRequest && duration < 200*time.Millisecond {
 				return
 			}
-			log.Printf("[API] %d %s %s (took %v)", status, r.Method, r.URL.Path, duration)
+			log.Printf("[API] %d %s %s (took %v)", status, r.Method, sanitizeLogField(r.URL.Path), duration)
 		}()
 
 		next.ServeHTTP(wrapper, r)

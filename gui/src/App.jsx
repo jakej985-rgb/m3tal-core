@@ -9,12 +9,11 @@ import {
   IconPlugins,
   IconSettings,
 } from './components/Icons';
-import { getToken, getApiBase, api } from './api';
+import { getApiBase, api } from './api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeSubTabs, setActiveSubTabs] = useState({});
-  const [tokenInput] = useState(getToken());
   const [pluginTabs, setPluginTabs] = useState([]);
   const [coreVersion, setCoreVersion] = useState('v0.18.0');
 
@@ -118,7 +117,7 @@ export default function App() {
                 )}
                 <iframe
                   key={currentSubTab.id}
-                  src={`${pluginUrl}?token=${tokenInput}`}
+                  src={pluginUrl}
                   title={currentSubTab.title}
                   className="w-full h-full flex-1 border-0 bg-[#0d1117]"
                 />

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,41 @@ import (
 	"gopkg.in/yaml.v3"
 	"strings"
 )
+
+// manifestNameRe constrains manifest-declared plugin identifiers to a single
+// safe path/URL segment. Names flow into filepath.Join calls (plugin dirs,
+// canonical symlink names, /plugins/<name>/ URLs), so '/', '\', '..' and
+// control characters must be rejected at discovery time.
+var manifestNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// validateManifestName reports whether name is safe to use as a plugin
+// identifier in filesystem paths and URLs.
+func validateManifestName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." ||
+		strings.ContainsAny(name, "/\\") || strings.Contains(name, "..") ||
+		!manifestNameRe.MatchString(name) {
+		return fmt.Errorf("unsafe plugin name %q", name)
+	}
+	return nil
+}
+
+// validatePluginCommandPath resolves a manifest spec.command against the
+// plugin directory and verifies relative commands cannot escape it.
+func validatePluginCommandPath(pluginDir, command string) (string, error) {
+	if command == "" || strings.ContainsRune(command, 0) {
+		return "", errors.New("plugin manifest spec.command is empty or invalid")
+	}
+	cmdPath := command
+	if !filepath.IsAbs(cmdPath) {
+		cmdPath = filepath.Join(pluginDir, cmdPath)
+		if rel, err := filepath.Rel(pluginDir, cmdPath); err != nil ||
+			rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("plugin command %q escapes plugin directory", command)
+		}
+	}
+	return cmdPath, nil
+}
 
 // PluginState represents runtime state of a plugin subprocess.
 type PluginState string
@@ -144,8 +180,12 @@ func (m *Manager) Discover() ([]PluginManifest, error) {
 			name := manifest.Metadata.Name
 			if name == "" {
 				name = entry.Name()
-				manifest.Metadata.Name = name
 			}
+			if err := validateManifestName(name); err != nil {
+				log.Printf("[plugins] Skipping %s: %v", manifestPath, err)
+				continue
+			}
+			manifest.Metadata.Name = name
 
 			if !seen[name] {
 				seen[name] = true
@@ -219,6 +259,17 @@ func (m *Manager) StartAutoDiscovery(ctx context.Context, interval time.Duration
 	}()
 }
 
+// pluginAutostartEnabled reports whether discovered plugins may start
+// automatically. Defaults to true; set M3TAL_PLUGINS_AUTOSTART=0 to require
+// explicit starts via the API (useful in hardened deployments).
+func pluginAutostartEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("M3TAL_PLUGINS_AUTOSTART"))) {
+	case "0", "false", "no", "off":
+		return false
+	}
+	return true
+}
+
 // DiscoverAndAutoStart scans all search paths and automatically starts any newly
 // discovered plugins that have not been explicitly stopped by the operator.
 func (m *Manager) DiscoverAndAutoStart(ctx context.Context) ([]PluginManifest, error) {
@@ -227,6 +278,7 @@ func (m *Manager) DiscoverAndAutoStart(ctx context.Context) ([]PluginManifest, e
 		return nil, err
 	}
 
+	autostart := pluginAutostartEnabled()
 	for _, manifest := range discovered {
 		name := manifest.Metadata.Name
 		m.mu.Lock()
@@ -240,7 +292,8 @@ func (m *Manager) DiscoverAndAutoStart(ctx context.Context) ([]PluginManifest, e
 		}
 		m.mu.Unlock()
 
-		if inst.State == StateStopped && !inst.ExplicitlyStopped {
+		manifestAutostart := manifest.Spec.Autostart == nil || *manifest.Spec.Autostart
+		if autostart && manifestAutostart && inst.State == StateStopped && !inst.ExplicitlyStopped {
 			if err := inst.Start(ctx, m.coreVersion); err != nil {
 				log.Printf("[plugins] Auto-start skipped or failed for %q: %v", name, err)
 			} else {
@@ -267,9 +320,9 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 		return nil
 	}
 
-	cmdPath := p.Manifest.Spec.Command
-	if !filepath.IsAbs(cmdPath) {
-		cmdPath = filepath.Join(p.Manifest.Dir, cmdPath)
+	cmdPath, err := validatePluginCommandPath(p.Manifest.Dir, p.Manifest.Spec.Command)
+	if err != nil {
+		return err
 	}
 
 	if _, err := os.Stat(cmdPath); err != nil {
@@ -285,6 +338,11 @@ func (p *PluginInstance) Start(ctx context.Context, coreVersion string) error {
 	}
 	if !strings.HasPrefix(procName, "m3tal-") {
 		procName = "m3tal-" + procName
+	}
+	// procName becomes a filename in the canonical symlink directory and the
+	// process comm name — reject anything that is not a single safe segment.
+	if err := validateManifestName(procName); err != nil {
+		return fmt.Errorf("unsafe process_name %q in plugin manifest", p.Manifest.Spec.ProcessName)
 	}
 
 	if absCmdPath, err := filepath.Abs(cmdPath); err == nil {
@@ -833,6 +891,21 @@ func pluginBaseEnv() []string {
 	return env
 }
 
+// apiKeyProvider, when registered via SetAPIKeyProvider, supplies the Core
+// API credential injected into plugin subprocess environments (e.g. a scoped
+// runtime key provisioned by the API daemon). It stores func() string.
+var apiKeyProvider atomic.Value
+
+// SetAPIKeyProvider registers the resolver for the plugin API credential.
+// Passing nil clears the provider and restores file/env-based resolution.
+func SetAPIKeyProvider(fn func() string) {
+	if fn == nil {
+		apiKeyProvider.Store(func() string { return "" })
+		return
+	}
+	apiKeyProvider.Store(fn)
+}
+
 func resolveCoreAPIKey() string {
 	if k := os.Getenv("M3TAL_API_KEY"); k != "" {
 		return k
@@ -842,6 +915,13 @@ func resolveCoreAPIKey() string {
 	}
 	if k := os.Getenv("API_TOKEN"); k != "" {
 		return k
+	}
+	// Prefer the daemon-provisioned scoped runtime key over the primary
+	// full-access key when the API server registered a provider.
+	if fn, ok := apiKeyProvider.Load().(func() string); ok {
+		if k := fn(); k != "" {
+			return k
+		}
 	}
 	// Check user config directory
 	home, err := os.UserHomeDir()

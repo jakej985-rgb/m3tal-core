@@ -40,16 +40,12 @@ const (
 )
 
 // parsePermissions decodes the permissions column. Empty or unparseable
-// values normalize to full access for backward compatibility with keys
-// created before scoped permissions existed.
+// values yield no scopes (fail closed); legacy rows are normalized to
+// full access by Store.migrateLegacyAPIKeyPermissions at open time.
 func parsePermissions(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return []string{ScopeFull}
-	}
 	var perms []string
-	if err := json.Unmarshal([]byte(raw), &perms); err != nil || len(perms) == 0 {
-		return []string{ScopeFull}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &perms); err != nil {
+		return nil
 	}
 	return perms
 }
@@ -91,14 +87,15 @@ func NormalizeDirection(d string) string {
 
 // KeyAllows reports whether a key record grants the given scope. The "*"
 // scope grants everything; "<area>:write" implies "<area>:read"; an empty
-// permission list is treated as full access for legacy compatibility.
+// permission list grants nothing (fail closed); legacy rows are migrated to
+// full access at store open time.
 func KeyAllows(rec *APIKeyRecord, scope string) bool {
 	if rec == nil {
 		return false
 	}
 	perms := rec.Permissions
 	if len(perms) == 0 {
-		perms = []string{ScopeFull}
+		return false
 	}
 	for _, p := range perms {
 		if p == ScopeFull || p == scope {

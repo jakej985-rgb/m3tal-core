@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout m3tal-core
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
@@ -29,5 +29,17 @@ jobs:
         env:
           TOKEN: ${{ secrets.API_PUSH_TOKEN }}
         run: |
-          git remote add api https://x-access-token:${TOKEN}@github.com/jakej985-rgb/m3tal-api.git || true
-          git push api api-publish:main --force
+          set -euo pipefail
+          REMOTE=https://github.com/jakej985-rgb/m3tal-api.git
+          # Authenticate via an ephemeral extraheader so the token never lands
+          # in the remote URL or .git/config.
+          AUTH=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          # Force-with-lease against the observed remote tip: the push fails
+          # if m3tal-api main moved between the check and the update.
+          REMOTE_SHA=$(git -c "http.extraheader=Authorization: Basic $AUTH" ls-remote "$REMOTE" refs/heads/main | awk '{print $1}')
+          if [ -n "$REMOTE_SHA" ]; then
+            LEASE="--force-with-lease=refs/heads/main:$REMOTE_SHA"
+          else
+            LEASE="--force-with-lease=refs/heads/main:"
+          fi
+          git -c "http.extraheader=Authorization: Basic $AUTH" push "$LEASE" "$REMOTE" api-publish:main

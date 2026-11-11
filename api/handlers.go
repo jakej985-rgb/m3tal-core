@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -32,16 +33,143 @@ func NewServerWithStore(token string, store *state.Store) *Server {
 	return &Server{APIToken: token, Store: store}
 }
 
-// ExtractToken extracts authentication token from header, query, or Bearer auth.
+// sessionCookieName carries the API credential for browser clients that
+// cannot attach headers to every request (iframe subresources, WebSocket
+// handshakes, plain navigation such as plugin .deb downloads). It is
+// HttpOnly + SameSite=Strict; Secure is set when TLS is configured.
+const sessionCookieName = "m3tal_session"
+
+// cookieValuePrefix marks base64url-encoded cookie values so any accepted
+// token (including ones with ',', ';', spaces, etc.) round-trips safely.
+const cookieValuePrefix = "b64."
+
+// encodeCookieToken encodes token into a standards-compliant cookie value.
+func encodeCookieToken(token string) string {
+	return cookieValuePrefix + base64.RawURLEncoding.EncodeToString([]byte(token))
+}
+
+// decodeCookieToken reverses encodeCookieToken; unprefixed values are
+// returned as-is for compatibility with cookies set by earlier builds.
+func decodeCookieToken(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, cookieValuePrefix) {
+		if b, err := base64.RawURLEncoding.DecodeString(v[len(cookieValuePrefix):]); err == nil {
+			return string(b)
+		}
+		return ""
+	}
+	return v
+}
+
+// cookieToken resolves a credential cookie value to its primary candidate:
+// the decoded token for "b64."-prefixed values, else the raw value. It does
+// no validation (avoiding a duplicate key lookup); callers that fail to
+// authenticate the decoded form retry with legacyCookieCandidate.
+func (s *Server) cookieToken(v string) string {
+	v = strings.TrimSpace(v)
+	if dec := decodeCookieToken(v); dec != "" {
+		return dec
+	}
+	return v
+}
+
+// legacyCookieCandidate returns the raw value of the named cookie when it
+// differs from the decoded candidate — i.e. a legacy raw token that itself
+// begins with "b64.". Returns "" when there is no alternate candidate or the
+// request carries an explicit header credential.
+func legacyCookieCandidate(r *http.Request, name, tried string) string {
+	if !requestUsedSessionCookie(r) && name == sessionCookieName {
+		return ""
+	}
+	c, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	raw := strings.TrimSpace(c.Value)
+	if raw == "" || raw == tried || !strings.HasPrefix(raw, cookieValuePrefix) {
+		return ""
+	}
+	return raw
+}
+
+// lookupToken resolves token to (record, static, ok) with a single store
+// lookup. A static match returns a nil record.
+func (s *Server) lookupToken(token string) (*state.APIKeyRecord, bool, bool) {
+	if token == "" {
+		return nil, false, false
+	}
+	if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
+		return nil, true, true
+	}
+	if s.Store != nil {
+		if rec, ok := s.Store.LookupAPIKey(token); ok {
+			return rec, false, true
+		}
+	}
+	return nil, false, false
+}
+
+// sessionCookieSecure reports whether credential cookies get the Secure flag:
+// when TLS is served directly, or when M3TAL_COOKIE_SECURE is enabled for
+// deployments behind a TLS-terminating reverse proxy.
+func sessionCookieSecure() bool {
+	if os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != "" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("M3TAL_COOKIE_SECURE"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// setSessionCookie refreshes the browser session cookie after a successful
+// header/Bearer authentication.
+func setSessionCookie(w http.ResponseWriter, token string) {
+	if token == "" || len(token) > 512 {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    encodeCookieToken(token),
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   sessionCookieSecure(),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   12 * 3600,
+	})
+}
+
+// requestUsedSessionCookie reports whether the request authenticated via the
+// session cookie rather than an explicit header/Bearer credential.
+func requestUsedSessionCookie(r *http.Request) bool {
+	if strings.TrimSpace(r.Header.Get("X-API-Token")) != "" {
+		return false
+	}
+	// Mirror ExtractToken precedence: only a non-empty Bearer credential
+	// overrides the cookie.
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(auth), "bearer ") &&
+		strings.TrimSpace(auth[7:]) != "" {
+		return false
+	}
+	c, err := r.Cookie(sessionCookieName)
+	return err == nil && strings.TrimSpace(c.Value) != ""
+}
+
+// ExtractToken extracts authentication token from header, Bearer auth, or the
+// session cookie. URL query parameters are intentionally not accepted:
+// credentials in URLs leak via logs, history, and Referer headers.
 func (s *Server) ExtractToken(r *http.Request) string {
 	token := strings.TrimSpace(r.Header.Get("X-API-Token"))
-	if token == "" {
-		token = strings.TrimSpace(r.URL.Query().Get("token"))
-	}
 	if token == "" {
 		authHeader := r.Header.Get("Authorization")
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 			token = strings.TrimSpace(authHeader[7:])
+		}
+	}
+	if token == "" {
+		if c, err := r.Cookie(sessionCookieName); err == nil {
+			token = s.cookieToken(c.Value)
 		}
 	}
 	return token
@@ -73,21 +201,89 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
-		if s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1 {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, (*state.APIKeyRecord)(nil))))
-			return
-		}
-		if s.Store != nil {
-			if rec, ok := s.Store.LookupAPIKey(token); ok {
-				// rec is already loaded — stamp usage directly instead of
-				// re-running the lookup inside ValidateAPIKey (saves a SELECT
-				// on every authenticated request).
-				s.Store.RecordAPIKeyUsage(rec)
-				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
-				return
+		rec, static, ok := s.lookupToken(token)
+		if !ok {
+			// Legacy raw cookie whose token itself starts with "b64.".
+			if raw := legacyCookieCandidate(r, sessionCookieName, token); raw != "" {
+				token = raw
+				rec, static, ok = s.lookupToken(token)
 			}
 		}
-		sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+		if !ok {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
+		if !static {
+			// rec is already loaded — stamp usage directly instead of
+			// re-running the lookup inside ValidateAPIKey.
+			s.Store.RecordAPIKeyUsage(rec)
+		}
+		if !requestUsedSessionCookie(r) {
+			setSessionCookie(w, token)
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), apiKeyContextKey{}, rec)))
+	})
+}
+
+// pluginUICookieName carries the API credential for plugin UI subresource
+// requests (CSS/JS inside the iframe) that cannot attach headers. It is scoped
+// to Path=/plugins/ and HttpOnly.
+const pluginUICookieName = "m3tal_ui_token"
+
+// pluginUIAuth guards the plugin UI static routes. It accepts the same
+// credentials as the API (header, Bearer, or the Path=/ session cookie sent
+// automatically on same-origin iframe/subresource requests) plus the legacy
+// Path=/plugins/ scoped cookie.
+func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := s.ExtractToken(r)
+		viaCookie := requestUsedSessionCookie(r)
+		cookieName := sessionCookieName
+		if token == "" {
+			if c, err := r.Cookie(pluginUICookieName); err == nil {
+				token = s.cookieToken(c.Value)
+				viaCookie = true
+				cookieName = pluginUICookieName
+			}
+		}
+		if token == "" {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
+		rec, static, ok := s.lookupToken(token)
+		if !ok && viaCookie {
+			// Legacy raw cookie whose token itself starts with "b64.".
+			if raw := legacyCookieCandidate(r, cookieName, token); raw != "" {
+				token = raw
+				rec, static, ok = s.lookupToken(token)
+			}
+		}
+		if !ok {
+			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+			return
+		}
+		// Static bootstrap token has full access; dynamic keys must carry
+		// plugins:read, matching the plugin API route guards.
+		if !static && !state.KeyAllows(rec, state.ScopePluginsRead) {
+			sendError(w, http.StatusForbidden, "FORBIDDEN", "API key lacks plugins:read", nil)
+			return
+		}
+		if !static {
+			// Stamp last_used_at like Authenticate (record already loaded).
+			s.Store.RecordAPIKeyUsage(rec)
+		}
+		if !viaCookie {
+			http.SetCookie(w, &http.Cookie{
+				Name:     pluginUICookieName,
+				Value:    encodeCookieToken(token),
+				Path:     "/plugins/",
+				HttpOnly: true,
+				Secure:   sessionCookieSecure(),
+				SameSite: http.SameSiteStrictMode,
+				MaxAge:   12 * 3600,
+			})
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

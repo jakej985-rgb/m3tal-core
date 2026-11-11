@@ -6,7 +6,7 @@ M3TAL Core exposes real-time host telemetry, health, and event endpoints for mon
 
 ## 📊 Telemetry Endpoints
 
-All endpoints are served by `m3tal-api` on `API_PORT` (default `5050`) under `/api/v2` and require an API token (`X-API-Token` header or `?token=` query param):
+All endpoints are served by `m3tal-api` on `API_PORT` (default `5050`) under `/api/v2` and require an API token (`X-API-Token` header, `Authorization: Bearer`, or the `m3tal_session` cookie):
 
 | Endpoint | Description |
 |---|---|

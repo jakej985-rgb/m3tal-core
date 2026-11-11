@@ -89,7 +89,7 @@ The service has no Docker dependency; it only needs host access for telemetry an
 
 ## 🌐 API Surface
 
-All API routes live under `/api/v2` and require an API token (`X-API-Token` or `Authorization: Bearer` header; `?token=` is also accepted for GUI/plugin UI use):
+All API routes live under `/api/v2` and require an API token (`X-API-Token` or `Authorization: Bearer` header; browsers use the HttpOnly `m3tal_session` cookie set automatically after the first authenticated request):
 
 | Endpoint | Description |
 | :--- | :--- |
