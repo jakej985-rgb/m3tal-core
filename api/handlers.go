@@ -143,8 +143,13 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 // requestUsedSessionCookie reports whether the request authenticated via the
 // session cookie rather than an explicit header/Bearer credential.
 func requestUsedSessionCookie(r *http.Request) bool {
-	if strings.TrimSpace(r.Header.Get("X-API-Token")) != "" ||
-		strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ") {
+	if strings.TrimSpace(r.Header.Get("X-API-Token")) != "" {
+		return false
+	}
+	// Mirror ExtractToken precedence: only a non-empty Bearer credential
+	// overrides the cookie.
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(auth), "bearer ") &&
+		strings.TrimSpace(auth[7:]) != "" {
 		return false
 	}
 	c, err := r.Cookie(sessionCookieName)
@@ -262,6 +267,10 @@ func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
 		if !static && !state.KeyAllows(rec, state.ScopePluginsRead) {
 			sendError(w, http.StatusForbidden, "FORBIDDEN", "API key lacks plugins:read", nil)
 			return
+		}
+		if !static {
+			// Stamp last_used_at like Authenticate (record already loaded).
+			s.Store.RecordAPIKeyUsage(rec)
 		}
 		if !viaCookie {
 			http.SetCookie(w, &http.Cookie{
