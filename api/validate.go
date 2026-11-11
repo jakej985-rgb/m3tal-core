@@ -61,8 +61,13 @@ func validatePluginDebPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Resolve symlinks so a link inside a trusted dir cannot point outside it.
+	abs, err = filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
 	for _, dir := range pluginDebCandidateDirs() {
-		absDir, err := filepath.Abs(dir)
+		absDir, err := filepath.EvalSymlinks(dir)
 		if err != nil {
 			continue
 		}

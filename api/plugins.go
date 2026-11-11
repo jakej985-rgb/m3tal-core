@@ -878,6 +878,10 @@ func (h *PluginHandlers) DownloadPluginDeb(w http.ResponseWriter, r *http.Reques
 // below so package-manager argv contains no request-derived values.
 const pluginStageDir = "/tmp/m3tal-plugin-install"
 
+// pluginInstallMu serializes the whole stage → dpkg → cleanup sequence so
+// concurrent installs cannot overwrite or delete each other's staged payload.
+var pluginInstallMu sync.Mutex
+
 // ensurePluginStageDir creates (or verifies) a private staging directory owned
 // by the service user with no group/other access. A pre-existing directory
 // with wrong ownership or permissions is rejected rather than reused, which
@@ -886,11 +890,12 @@ func ensurePluginStageDir() error {
 	if err := os.MkdirAll(pluginStageDir, 0700); err != nil {
 		return err
 	}
-	info, err := os.Stat(pluginStageDir)
+	// Lstat: a pre-planted symlink (e.g. to /root) must be rejected, not followed.
+	info, err := os.Lstat(pluginStageDir)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return fmt.Errorf("plugin staging dir %s has unsafe permissions", pluginStageDir)
 	}
 	if st, ok := info.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Geteuid() {
@@ -986,6 +991,14 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusForbidden, "UNTRUSTED_PACKAGE", err.Error(), nil)
 		return
 	}
+	// Check privileges before staging or stopping the running plugin.
+	if req.Method == "system" && os.Geteuid() != 0 {
+		sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
+			"system installs require the API service to run as root; use method \"user\" for user-space installs", nil)
+		return
+	}
+	pluginInstallMu.Lock()
+	defer pluginInstallMu.Unlock()
 	if err := ensurePluginStageDir(); err != nil {
 		sendError(w, http.StatusInternalServerError, "STAGING_FAILED", err.Error(), nil)
 		return
@@ -1008,12 +1021,7 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if req.Method == "system" {
 		// System installs require the API service itself to run as root
-		// (the systemd unit does). No sudo/ is accepted over the API.
-		if os.Geteuid() != 0 {
-			sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
-				"system installs require the API service to run as root; use method \"user\" for user-space installs", nil)
-			return
-		}
+		// (the systemd unit does); root was verified before staging.
 		// dpkg/apt-get argv uses only literal paths: the validated payload
 		// was staged under a fixed private name, so no request-derived value
 		// reaches the privileged command line.
@@ -1137,12 +1145,10 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	// System package removal runs dpkg directly — the service executes as
 	// root, so no sudo/ password channel exists. "sudo" is accepted as an
 	// alias for "system" for API compatibility.
-	if req.Method == "system" || req.Method == "sudo" || req.Method == "" {
-		if os.Geteuid() != 0 {
-			sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
-				"system uninstalls require the API service to run as root", nil)
-			return
-		}
+	// On a non-root service only the user-space removal above applies; the
+	// GUI always sends "system", so skip dpkg rather than failing after the
+	// user plugin was already removed.
+	if (req.Method == "system" || req.Method == "sudo" || req.Method == "") && os.Geteuid() == 0 {
 		cmd := exec.Command("dpkg", "-r", "m3tal-plugin-"+name)
 		_ = cmd.Run()
 	}
