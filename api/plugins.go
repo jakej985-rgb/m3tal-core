@@ -1138,19 +1138,37 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	// Stop plugin if running
 	_ = h.Manager.StopPlugin(name)
 
+	// System package removal runs dpkg directly — the service executes as
+	// root, so no sudo/password channel exists. "sudo" is accepted as an
+	// alias for "system" for API compatibility.
+	systemMethod := req.Method == "system" || req.Method == "sudo" || req.Method == ""
+	pkgName := "m3tal-plugin-" + name
+	systemInstalled := false
+	if systemMethod {
+		out, err := exec.Command("dpkg-query", "-W", "-f=${Status}", pkgName).Output()
+		systemInstalled = err == nil && strings.Contains(string(out), "install ok installed")
+	}
+	// Refuse before touching anything if a system package exists but the
+	// service cannot remove it.
+	if systemInstalled && os.Geteuid() != 0 {
+		sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
+			"system package "+pkgName+" is installed; removing it requires the API service to run as root", nil)
+		return
+	}
+
 	home, _ := os.UserHomeDir()
 	userPluginDir := filepath.Join(home, ".config", "m3tal", "plugins", name)
-	_ = os.RemoveAll(userPluginDir)
+	_, statErr := os.Stat(userPluginDir)
+	userRemoved := statErr == nil && os.RemoveAll(userPluginDir) == nil
 
-	// System package removal runs dpkg directly — the service executes as
-	// root, so no sudo/ password channel exists. "sudo" is accepted as an
-	// alias for "system" for API compatibility.
-	// On a non-root service only the user-space removal above applies; the
-	// GUI always sends "system", so skip dpkg rather than failing after the
-	// user plugin was already removed.
-	if (req.Method == "system" || req.Method == "sudo" || req.Method == "") && os.Geteuid() == 0 {
-		cmd := exec.Command("dpkg", "-r", "m3tal-plugin-"+name)
-		_ = cmd.Run()
+	systemRemoved := false
+	if systemInstalled {
+		if out, err := exec.Command("dpkg", "-r", pkgName).CombinedOutput(); err != nil {
+			sendError(w, http.StatusInternalServerError, "UNINSTALL_FAILED",
+				fmt.Sprintf("dpkg -r failed: %v: %s", err, out), nil)
+			return
+		}
+		systemRemoved = true
 	}
 
 	// Re-discover
@@ -1158,7 +1176,9 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	invalidatePluginCatalogCache()
 
 	sendSuccess(w, http.StatusOK, map[string]any{
-		"name":        name,
-		"uninstalled": true,
+		"name":           name,
+		"uninstalled":    userRemoved || systemRemoved,
+		"user_removed":   userRemoved,
+		"system_removed": systemRemoved,
 	}, nil)
 }

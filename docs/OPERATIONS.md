@@ -89,10 +89,10 @@ sudo apt install m3tal-plugin-<name>
 
 Core can also install a discovered `.deb` through `POST /api/v2/plugins/{name}/install`:
 
-- `method: "sudo"` runs `sudo -S dpkg -i` and resolves dependencies with `apt-get install -f -y` when needed.
+- `method: "system"` (default; `"sudo"` accepted as an alias) runs `dpkg -i` directly and resolves dependencies with `apt-get install -f -y` when needed. Requires the API service to run as root; otherwise it returns `ROOT_REQUIRED`.
 - `method: "user"` extracts the package into `~/.config/m3tal/plugins/<name>` for per-user testing.
 
-The sudo method accepts an optional password in the request body. Treat this as sensitive and prefer direct `apt install` on untrusted networks.
+No password is accepted over the API. Packages must live in a trusted package directory and are staged privately before `dpkg` runs.
 
 ## State database and backups
 

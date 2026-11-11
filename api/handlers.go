@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -38,32 +39,51 @@ func NewServerWithStore(token string, store *state.Store) *Server {
 // HttpOnly + SameSite=Strict; Secure is set when TLS is configured.
 const sessionCookieName = "m3tal_session"
 
-// cookieSafeToken reports whether token can be stored in a cookie value.
-func cookieSafeToken(token string) bool {
-	if token == "" || len(token) > 256 {
-		return false
-	}
-	for _, c := range token {
-		if c < 0x21 || c > 0x7e || c == '"' || c == ',' || c == ';' || c == '\\' {
-			return false
-		}
-	}
-	return true
+// cookieValuePrefix marks base64url-encoded cookie values so any accepted
+// token (including ones with ',', ';', spaces, etc.) round-trips safely.
+const cookieValuePrefix = "b64."
+
+// encodeCookieToken encodes token into a standards-compliant cookie value.
+func encodeCookieToken(token string) string {
+	return cookieValuePrefix + base64.RawURLEncoding.EncodeToString([]byte(token))
 }
 
+// decodeCookieToken reverses encodeCookieToken; unprefixed values are
+// returned as-is for compatibility with cookies set by earlier builds.
+func decodeCookieToken(v string) string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, cookieValuePrefix) {
+		if b, err := base64.RawURLEncoding.DecodeString(v[len(cookieValuePrefix):]); err == nil {
+			return string(b)
+		}
+		return ""
+	}
+	return v
+}
+
+// sessionCookieSecure reports whether credential cookies get the Secure flag:
+// when TLS is served directly, or when M3TAL_COOKIE_SECURE is enabled for
+// deployments behind a TLS-terminating reverse proxy.
 func sessionCookieSecure() bool {
-	return os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != ""
+	if os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != "" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("M3TAL_COOKIE_SECURE"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 // setSessionCookie refreshes the browser session cookie after a successful
 // header/Bearer authentication.
 func setSessionCookie(w http.ResponseWriter, token string) {
-	if !cookieSafeToken(token) {
+	if token == "" || len(token) > 512 {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
-		Value:    token,
+		Value:    encodeCookieToken(token),
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   sessionCookieSecure(),
@@ -96,7 +116,7 @@ func (s *Server) ExtractToken(r *http.Request) string {
 	}
 	if token == "" {
 		if c, err := r.Cookie(sessionCookieName); err == nil {
-			token = strings.TrimSpace(c.Value)
+			token = decodeCookieToken(c.Value)
 		}
 	}
 	return token
@@ -167,22 +187,39 @@ func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
 		viaCookie := requestUsedSessionCookie(r)
 		if token == "" {
 			if c, err := r.Cookie(pluginUICookieName); err == nil {
-				token = c.Value
+				token = decodeCookieToken(c.Value)
 				viaCookie = true
 			}
 		}
-		if token == "" || !s.ValidateToken(token) {
+		if token == "" {
 			sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 			return
 		}
+		// Static bootstrap token has full access; dynamic keys must carry
+		// plugins:read, matching the plugin API route guards.
+		staticOK := s.APIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.APIToken)) == 1
+		if !staticOK {
+			var rec *state.APIKeyRecord
+			ok := false
+			if s.Store != nil {
+				rec, ok = s.Store.LookupAPIKey(token)
+			}
+			if !ok {
+				sendError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
+				return
+			}
+			if !state.KeyAllows(rec, state.ScopePluginsRead) {
+				sendError(w, http.StatusForbidden, "FORBIDDEN", "API key lacks plugins:read", nil)
+				return
+			}
+		}
 		if !viaCookie {
-			secure := os.Getenv("M3TAL_TLS_CERT") != "" && os.Getenv("M3TAL_TLS_KEY") != ""
 			http.SetCookie(w, &http.Cookie{
 				Name:     pluginUICookieName,
-				Value:    token,
+				Value:    encodeCookieToken(token),
 				Path:     "/plugins/",
 				HttpOnly: true,
-				Secure:   secure,
+				Secure:   sessionCookieSecure(),
 				SameSite: http.SameSiteStrictMode,
 				MaxAge:   12 * 3600,
 			})

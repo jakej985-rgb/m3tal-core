@@ -166,30 +166,35 @@ func (s *Store) migrateAPIKeyColumns() error {
 	return nil
 }
 
-// migrateLegacyAPIKeyPermissions rewrites empty, missing, or unparseable
-// permissions values to the legacy full-access default (["*"]). This runs
-// once so parsePermissions can afterwards fail closed on corrupt data
-// instead of silently granting wildcard access.
+// migrateLegacyAPIKeyPermissions rewrites empty/NULL permissions (pre-scope
+// legacy rows) to full access (["*"]) and quarantines unparseable values as
+// [] (no access), so corrupt data never escalates to wildcard access.
 func (s *Store) migrateLegacyAPIKeyPermissions() error {
 	rows, err := s.db.Query(`SELECT id, permissions FROM api_keys`)
 	if err != nil {
 		return fmt.Errorf("cannot inspect api_keys permissions: %w", err)
 	}
 	type fix struct {
-		id  int64
-		raw string
+		id    int64
+		value string
 	}
 	var fixes []fix
 	for rows.Next() {
-		var f fix
+		var id int64
 		var raw sql.NullString
-		if err := rows.Scan(&f.id, &raw); err != nil {
+		if err := rows.Scan(&id, &raw); err != nil {
 			rows.Close()
 			return err
 		}
-		f.raw = raw.String
-		if !storedPermissionsValid(f.raw) {
-			fixes = append(fixes, f)
+		trimmed := strings.TrimSpace(raw.String)
+		switch {
+		case trimmed == "":
+			// Provably pre-scope legacy row: keep historical full access.
+			fixes = append(fixes, fix{id, `["*"]`})
+		case !storedPermissionsValid(trimmed) && trimmed != "[]":
+			// Malformed data: quarantine with no scopes rather than
+			// escalating to wildcard access.
+			fixes = append(fixes, fix{id, `[]`})
 		}
 	}
 	rows.Close()
@@ -197,7 +202,7 @@ func (s *Store) migrateLegacyAPIKeyPermissions() error {
 		return err
 	}
 	for _, f := range fixes {
-		if _, err := s.db.Exec(`UPDATE api_keys SET permissions = '["*"]' WHERE id = ?`, f.id); err != nil {
+		if _, err := s.db.Exec(`UPDATE api_keys SET permissions = ? WHERE id = ?`, f.value, f.id); err != nil {
 			return fmt.Errorf("api_keys permissions migration failed: %w", err)
 		}
 	}

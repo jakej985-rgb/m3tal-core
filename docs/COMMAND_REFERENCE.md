@@ -61,8 +61,8 @@ Errors use the same envelope with `status: "error"` and an `error` object:
 |---|---|---:|---|
 | GET | `/` | No | Redirects to `/gui/`. |
 | GET/HEAD | `/gui/*` | No | Embedded Web GUI assets. |
-| GET | `/plugins/{name}` | No | Redirects to `/plugins/{name}/`. |
-| GET | `/plugins/{name}/*` | No | Static plugin UI files. |
+| GET | `/plugins/{name}` | Yes (`plugins:read`) | Redirects to `/plugins/{name}/`. |
+| GET | `/plugins/{name}/*` | Yes (`plugins:read`) | Static plugin UI files (header, Bearer, or `m3tal_session`/`m3tal_ui_token` cookie). |
 | GET | `/version` | No | Core version metadata. |
 | GET | `/api/v2/version` | No | Core version metadata. |
 
