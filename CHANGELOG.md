@@ -29,6 +29,40 @@ All notable changes to **M3TAL Core** are documented in this file following the 
 - Plugin manifests may set `spec.autostart: false` to opt out of automatic startup (global `M3TAL_PLUGINS_AUTOSTART=0` also disables it).
 - Plugin manifest `spec.command` and UI wildcard paths are validated before filesystem/exec use.
 
+## [0.25.2] - 2026-11-11
+
+### Overview & Release Highlights
+Release v0.25.2 delivers updates across 7 commits, providing system orchestration primitives, Debian distribution, and ecosystem automation.
+
+### 🚀 New Features & Capabilities
+- **Apply 2 edits across 1 file** (`56b5e6e`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **Apply 3 edits across 1 file** (`d02a416`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **Apply 6 edits across 3 files** (`7a40daa`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **Apply 10 edits across 6 files** (`fe54c4d`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+- **Apply 8 edits across 2 files** (`b1b83b5`):
+  - *What Changed*: Implemented changes described in commit.
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🏗️ Architecture & Core System Primitives
+- **security: harden API auth, plugin trust, and install paths** (`59ea38a`):
+  - *What Changed*: Cross-validated against independent manual audit plus m3tal-review; residual findings reduced from 28 to 6 (all true/by-design).  Auth & transport: - Session cookie (m3tal_session) set on token auth; WS + plugin UI +   downloads authenticate via cookie/headers; ?token= query auth removed - Constant-time token compare; HTTP timeouts on server - Native TLS via M3TAL_TLS_CERT/M3TAL_TLS_KEY + plaintext warning - Plugin UI routes (/plugins/{name}/*) now behind auth middleware - WebSocket origins restricted (M3TAL_WS_ALLOWED_ORIGINS)  Plugin trust: - Discovery restricted to trusted dirs (no ./plugins); manifest name,   process_name, and command validated with containment checks - Dedicated scoped plugin runtime key replaces injected primary API key - spec.autostart: false per-plugin opt-out + M3TAL_PLUGINS_AUTOSTART=0 - Plugin env restricted to allowlist - Sanitize request paths and panic output before logging  Package management: - Remove sudo/password channel; dpkg/apt-get exec directly as root - Install payloads re-validated and staged to fixed private path so   privileged argv is literal; literal-vector dpkg-deb usage - KillProcess PID/comm guards; unsafe prctl replaced with   /proc/self/comm write  Permissions: - Legacy empty-scope API key permissions migrated once at startup;   parsePermissions fails closed on bad data  CI/CD: - All GitHub Actions pinned to commit SHAs - push-m3tal-api no longer embeds token in git remote URL; uses   guarded --force-with-lease  GUI: - Token kept in module memory only (no localStorage); ?token= page   param bootstraps session once; WS URLs carry no credentials  Docs updated across README, SECURITY, OPERATIONS, PLUGIN_AUTHORING, DIAGNOSTICS, ENVIRONMENT_VARIABLES, COMMAND_REFERENCE, CHANGELOG.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+### 🐛 Bug Fixes & Stability
+- **Merge pull request #148 from jakej985-rgb/security/hardening-audit-fixes** (`7fdc29e`):
+  - *What Changed*: * security: harden API auth, plugin trust, and install paths  Cross-validated against independent manual audit plus m3tal-review; residual findings reduced from 28 to 6 (all true/by-design).  Auth & transport: - Session cookie (m3tal_session) set on token auth; WS + plugin UI +   downloads authenticate via cookie/headers; ?token= query auth removed - Constant-time token compare; HTTP timeouts on server - Native TLS via M3TAL_TLS_CERT/M3TAL_TLS_KEY + plaintext warning - Plugin UI routes (/plugins/{name}/*) now behind auth middleware - WebSocket origins restricted (M3TAL_WS_ALLOWED_ORIGINS)  Plugin trust: - Discovery restricted to trusted dirs (no ./plugins); manifest name,   process_name, and command validated with containment checks - Dedicated scoped plugin runtime key replaces injected primary API key - spec.autostart: false per-plugin opt-out + M3TAL_PLUGINS_AUTOSTART=0 - Plugin env restricted to allowlist - Sanitize request paths and panic output before logging  Package management: - Remove sudo/password channel; dpkg/apt-get exec directly as root - Install payloads re-validated and staged to fixed private path so   privileged argv is literal; literal-vector dpkg-deb usage - KillProcess PID/comm guards; unsafe prctl replaced with   /proc/self/comm write  Permissions: - Legacy empty-scope API key permissions migrated once at startup;   parsePermissions fails closed on bad data  CI/CD: - All GitHub Actions pinned to commit SHAs - push-m3tal-api no longer embeds token in git remote URL; uses   guarded --force-with-lease  GUI: - Token kept in module memory only (no localStorage); ?token= page   param bootstraps session once; WS URLs carry no credentials  Docs updated across README, SECURITY, OPERATIONS, PLUGIN_AUTHORING, DIAGNOSTICS, ENVIRONMENT_VARIABLES, COMMAND_REFERENCE, CHANGELOG.  Generated with [Devin](https://devin.ai)  Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>  * Apply 8 edits across 2 files  * Apply 10 edits across 6 files  * Apply 6 edits across 3 files  * Apply 3 edits across 1 file  * Apply 2 edits across 1 file  ---------  Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+  - *Why*: Enhanced system reliability, packaging compliance, or workflow automation.
+
+---
+
 ## [0.25.1] - 2026-11-10
 
 ### Overview & Release Highlights
