@@ -61,6 +61,22 @@ func decodeCookieToken(v string) string {
 	return v
 }
 
+// cookieToken resolves a credential cookie value. A "b64."-prefixed value is
+// ambiguous: it is either an encoded token or a raw legacy token that itself
+// begins with "b64.". Prefer the decoded form when it validates; otherwise
+// fall back to the raw value so legacy cookies keep authenticating.
+func (s *Server) cookieToken(v string) string {
+	v = strings.TrimSpace(v)
+	dec := decodeCookieToken(v)
+	if dec == v {
+		return v
+	}
+	if dec != "" && s.ValidateToken(dec) {
+		return dec
+	}
+	return v
+}
+
 // sessionCookieSecure reports whether credential cookies get the Secure flag:
 // when TLS is served directly, or when M3TAL_COOKIE_SECURE is enabled for
 // deployments behind a TLS-terminating reverse proxy.
@@ -116,7 +132,7 @@ func (s *Server) ExtractToken(r *http.Request) string {
 	}
 	if token == "" {
 		if c, err := r.Cookie(sessionCookieName); err == nil {
-			token = decodeCookieToken(c.Value)
+			token = s.cookieToken(c.Value)
 		}
 	}
 	return token
@@ -187,7 +203,7 @@ func (s *Server) pluginUIAuth(next http.Handler) http.Handler {
 		viaCookie := requestUsedSessionCookie(r)
 		if token == "" {
 			if c, err := r.Cookie(pluginUICookieName); err == nil {
-				token = decodeCookieToken(c.Value)
+				token = s.cookieToken(c.Value)
 				viaCookie = true
 			}
 		}

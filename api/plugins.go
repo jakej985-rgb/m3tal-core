@@ -1120,6 +1120,19 @@ func (h *PluginHandlers) InstallPlugin(w http.ResponseWriter, r *http.Request) {
 	}, nil)
 }
 
+// dpkgStatusRemovable reports whether a dpkg package status (the
+// db:Status-Status field) still has package files or pending configuration,
+// i.e. `dpkg -r` has something to remove. "not-installed" and
+// "config-files" (already removed, conffiles only) are not removable.
+func dpkgStatusRemovable(status string) bool {
+	switch status {
+	case "installed", "unpacked", "half-configured", "half-installed",
+		"triggers-awaited", "triggers-pending":
+		return true
+	}
+	return false
+}
+
 // UninstallPlugin uninstalls a plugin.
 // POST /api/v2/plugins/{name}/uninstall
 func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request) {
@@ -1135,9 +1148,6 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 
-	// Stop plugin if running
-	_ = h.Manager.StopPlugin(name)
-
 	// System package removal runs dpkg directly — the service executes as
 	// root, so no sudo/password channel exists. "sudo" is accepted as an
 	// alias for "system" for API compatibility.
@@ -1145,16 +1155,19 @@ func (h *PluginHandlers) UninstallPlugin(w http.ResponseWriter, r *http.Request)
 	pkgName := "m3tal-plugin-" + name
 	systemInstalled := false
 	if systemMethod {
-		out, err := exec.Command("dpkg-query", "-W", "-f=${Status}", pkgName).Output()
-		systemInstalled = err == nil && strings.Contains(string(out), "install ok installed")
+		out, err := exec.Command("dpkg-query", "-W", "-f=${db:Status-Status}", pkgName).Output()
+		systemInstalled = err == nil && dpkgStatusRemovable(strings.TrimSpace(string(out)))
 	}
-	// Refuse before touching anything if a system package exists but the
-	// service cannot remove it.
+	// Refuse before touching anything (including stopping the plugin) if a
+	// system package exists but the service cannot remove it.
 	if systemInstalled && os.Geteuid() != 0 {
 		sendError(w, http.StatusForbidden, "ROOT_REQUIRED",
 			"system package "+pkgName+" is installed; removing it requires the API service to run as root", nil)
 		return
 	}
+
+	// Stop plugin if running
+	_ = h.Manager.StopPlugin(name)
 
 	home, _ := os.UserHomeDir()
 	userPluginDir := filepath.Join(home, ".config", "m3tal", "plugins", name)

@@ -361,7 +361,12 @@ export default function Plugins() {
         method: 'system',
       });
       if (res?.status === 'success') {
-        setSuccess(`Plugin "${uninstallTarget.name}" uninstalled.`);
+        const removed = res?.data?.uninstalled ?? res?.uninstalled;
+        if (removed === false) {
+          setSuccess(`Plugin "${uninstallTarget.name}" was not installed; nothing was removed.`);
+        } else {
+          setSuccess(`Plugin "${uninstallTarget.name}" uninstalled.`);
+        }
         setUninstallTarget(null);
         await reloadAll();
       } else {
